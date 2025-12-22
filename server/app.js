@@ -17,7 +17,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
-const xss = require("xss-clean");
+const xss = require("xss");
 const hpp = require("hpp");
 const morgan = require("morgan");
 const compression = require("compression");
@@ -349,7 +349,25 @@ app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
 
 // Data sanitization against XSS
-app.use(xss());
+app.use((req, res, next) => {
+  const sanitize = (obj) => {
+    if (typeof obj === 'string') return xss.filterXSS(obj);
+    if (Array.isArray(obj)) return obj.map(sanitize);
+    if (obj && typeof obj === 'object') {
+      const sanitized = {};
+      for (const key in obj) {
+        sanitized[xss.filterXSS(key)] = sanitize(obj[key]);
+      }
+      return sanitized;
+    }
+    return obj;
+  };
+
+  if (req.body) req.body = sanitize(req.body);
+  if (req.query) req.query = sanitize(req.query);
+  if (req.params) req.params = sanitize(req.params);
+  next();
+});
 
 // Prevent parameter pollution
 app.use(
