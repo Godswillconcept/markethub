@@ -1,0 +1,239 @@
+const { permissionMap, publicRoutes } = require("./permission");
+
+/**
+ * Route mapping rules - defines how to convert actual paths to permission map keys
+ * This ensures consistency between what's in the URL and what's in your permission map
+ */
+const ROUTE_PATTERNS = [
+  // Specific patterns first (most specific to least specific)
+  { pattern: /^\/feedback$/, template: '/feedback' },
+  { pattern: /^\/products\/recent\/stats$/, template: '/products/recent/stats' },
+  { pattern: /^\/products\/recent\/anonymize$/, template: '/products/recent/anonymize' },
+  { pattern: /^\/products\/recent$/, template: '/products/recent' },
+  { pattern: /^\/inventory\/product\/[\w-]+$/, template: '/inventory/product/:productId' },
+  { pattern: /^\/categories\/([\w-]+)$/, template: '/categories/:identifier' },
+  { pattern: /^\/categories\/([\w-]+)\/products$/, template: '/categories/:identifier/products' },
+  { pattern: /^\/products\/([\w-]+)\/reviews$/, template: '/products/:productId/reviews' },
+  { pattern: /^\/products\/([\w-]+)\/analytics$/, template: '/products/:id/analytics' },
+  { pattern: /^\/inventory\/product$/, template: '/inventory/product' },
+  { pattern: /^\/vendors\/([\w-]+)\/products$/, template: '/vendors/:id/products' },
+  { pattern: /^\/vendors\/vendor\/profile$/, template: '/vendors/vendor/profile' },
+  { pattern: /^\/vendors\/([\w-]+)\/logo\/approve$/, template: '/vendors/:id/logo/approve' },
+  { pattern: /^\/vendors\/([\w-]+)\/logo\/reject$/, template: '/vendors/:id/logo/reject' },
+  { pattern: /^\/vendors\/([\w-]+)\/follow$/, template: '/vendors/:vendorId/follow' },
+  { pattern: /^\/vendors\/vendor\/([\w-]+)\/followers$/, template: '/vendors/vendor/:vendorId/followers' },
+  { pattern: /^\/vendors\/vendor\/([\w-]+)\/follow-status$/, template: '/vendors/vendor/:vendorId/follow-status' },
+  { pattern: /^\/vendors\/user\/([\w-]+)\/following$/, template: '/vendors/user/:userId/following' },
+  { pattern: /^\/messages\/([\w-]+)$/, template: '/messages/:id' },
+  { pattern: /^\/messages\/admin\/all$/, template: '/messages/admin/all' },
+  { pattern: /^\/messages\/vendor\/([\w-]+)$/, template: '/messages/vendor/:id' },
+  { pattern: /^\/messages\/admin\/([\w-]+)$/, template: '/messages/admin/:id' },
+  { pattern: /^\/collections\/([\w-]+)\/products$/, template: '/collections/:id/products' },
+  { pattern: /^\/cart\/items\/([\w-]+)$/, template: '/cart/items/:itemId' },
+  { pattern: /^\/wishlist\/items\/([\w-]+)$/, template: '/wishlist/items/:itemId' },
+  { pattern: /^\/wishlist\/items$/, template: '/wishlist/items' },
+  { pattern: /^\/wishlist\/summary$/, template: '/wishlist/summary' },
+  { pattern: /^\/wishlist\/move-to-cart$/, template: '/wishlist/move-to-cart' },
+  { pattern: /^\/wishlist$/, template: '/wishlist' },
+  { pattern: /^\/orders\/verify-payment\/([\w-]+)$/, template: '/orders/verify-payment/:reference' },
+  { pattern: /^\/orders\/items\/([\w-]+)\/status$/, template: '/orders/items/:id/status' },
+  { pattern: /^\/auth\/verify-phone-change\/([\w-]+)$/, template: '/auth/verify-phone-change/:token' },
+  { pattern: /^\/auth\/approve-phone-change\/([\w-]+)$/, template: '/auth/approve-phone-change/:userId' },
+  { pattern: /^\/auth\/reject-phone-change\/([\w-]+)$/, template: '/auth/reject-phone-change/:userId' },
+  { pattern: /^\/auth\/verify-reset-token\/([\w-]+)$/, template: '/auth/verify-reset-token/:token' },
+  { pattern: /^\/auth\/reset-password\/([\w-]+)$/, template: '/auth/reset-password/:token' },
+  { pattern: /^\/inventory\/history\/([\w-]+)$/, template: '/inventory/history/:productId' },
+  { pattern: /^\/inventory\/product\/([\w-]+)$/, template: '/inventory/product/:productId' },
+  { pattern: /^\/supply\/vendor\/([\w-]+)$/, template: '/supply/vendor/:vendorId' },
+  // FIXED: Dashboard product pattern - more flexible to handle query parameters and trailing slashes
+  { pattern: /^\/dashboard\/product\/([\w-]+)(?:\/|\?|$)/, template: '/dashboard/product/:id' },
+  { pattern: /\/journals\/tags\/suggestions$/, template: "/journals/tags/suggestions" },
+  { pattern: /\/journals\/tags\/check$/, template: "/journals/tags/check" },
+  { pattern: /\/journals\/tags\/popular$/, template: "/journals/tags/popular" },
+  { pattern: /\/journals\/tags$/, template: "/journals/tags" },
+  { pattern: /\/journals\/categories$/, template: "/journals/categories" },
+  { pattern: /\/admin\/journals$/, template: "/admin/journals" },
+  { pattern: /^\/admin\/products$/, template: '/admin/products' },
+  { pattern: /^\/admin\/products\/([\w-]+)\/approve$/, template: '/admin/products/:id/approve' },
+  { pattern: /^\/admin\/products\/([\w-]+)\/reject$/, template: '/admin/products/:id/reject' },
+  { pattern: /^\/admin\/products\/([\w-]+)\/status$/, template: '/admin/products/:id/status' },
+  { pattern: /^\/admin\/products\/([\w-]+)\/analytics$/, template: '/admin/products/:id/analytics' },
+  { pattern: /^\/admin\/products\/status\/([\w-]+)$/, template: '/admin/products/status/:status' },
+  { pattern: /^\/admin\/inventory\/product\/([\w-]+)$/, template: '/admin/inventory/product/:productId' },
+  { pattern: /^\/admin\/inventory\/history\/([\w-]+)$/, template: '/admin/inventory/history/:productId' },
+  { pattern: /^\/admin\/inventory\/vendor\/([\w-]+)$/, template: '/admin/inventory/vendor/:vendorId' },
+  { pattern: /^\/admin\/supply\/vendor\/([\w-]+)$/, template: '/admin/supply/vendor/:vendorId' },
+  { pattern: /^\/admin\/supply\/product\/([\w-]+)$/, template: '/admin/supply/product/:productId' },
+  { pattern: /^\/admin\/orders\/([\w-]+)\/status$/, template: '/admin/orders/:id/status' },
+  { pattern: /^\/admin\/collections\/([\w-]+)\/products$/, template: '/admin/collections/:id/products' },
+  { pattern: /^\/admin\/dashboard\/vendor-overview\/([\w-]+)$/, template: '/admin/dashboard/vendor-overview/:vendorId' },
+  { pattern: /^\/admin\/subadmins\/([\w-]+)\/permissions$/, template: '/admin/subadmins/:id/permissions' },
+  { pattern: /^\/vendors\/([\w-]+)\/approve$/, template: '/vendors/:id/approve' },
+  { pattern: /^\/vendors\/([\w-]+)\/reject$/, template: '/vendors/:id/reject' },
+  { pattern: /^\/vendors\/initialize-onboarding$/, template: '/vendors/initialize-onboarding' },
+
+  // Suggestion routes
+  { pattern: /^\/suggestions$/, template: '/suggestions' },
+  { pattern: /^\/suggestions\/([\w-]+)$/, template: '/suggestions/:algorithm' },
+  { pattern: /^\/suggestions\/popular$/, template: '/suggestions/popular' },
+  { pattern: /^\/suggestions\/random$/, template: '/suggestions/random' },
+  { pattern: /^\/suggestions\/followed-vendors$/, template: '/suggestions/followed-vendors' },
+  { pattern: /^\/suggestions\/recently-viewed$/, template: '/suggestions/recently-viewed' },
+  { pattern: /^\/suggestions\/stats$/, template: '/suggestions/stats' },
+  
+  // Generic patterns (catch-all for remaining routes)
+  { pattern: /^\/filters\/products$/, template: '/filters/products' },
+  { pattern: /^\/filters\/products\/([\w-]+)\/combinations$/, template: '/filters/products/:productId/combinations' },
+  { pattern: /^\/filters\/categories$/, template: '/filters/categories' },
+  { pattern: /^\/filters\/price-range$/, template: '/filters/price-range' },
+  { pattern: /^\/filters\/colors$/, template: '/filters/colors' },
+  { pattern: /^\/filters\/sizes$/, template: '/filters/sizes' },
+  { pattern: /^\/filters\/dress-styles$/, template: '/filters/dress-styles' },
+  { pattern: /^\/users\/([\w-]+)\/roles$/, template: '/users/:id/roles' },
+  { pattern: /^\/products\/vendor\/([\w-]+)$/, template: '/products/vendor/:id' },
+  { pattern: /^\/products\/([\w-]+)$/, template: '/products/:identifier' },
+  { pattern: /^\/vendors\/([\w-]+)$/, template: '/vendors/:id' },
+  { pattern: /^\/categories\/([\w-]+)$/, template: '/categories/:id' },
+  { pattern: /^\/collections\/([\w-]+)$/, template: '/collections/:id' },
+  { pattern: /^\/orders\/([\w-]+)\/cancel$/, template: '/orders/:id/cancel' },
+  { pattern: /^\/orders\/([\w-]+)$/, template: '/orders/:id' },
+  { pattern: /^\/addresses\/([\w-]+)$/, template: '/addresses/:id' },
+  { pattern: /^\/inventory\/([\w-]+)$/, template: '/inventory/:id' },
+  { pattern: /^\/supply\/([\w-]+)$/, template: '/supply/:id' },
+  { pattern: /^\/reviews\/([\w-]+)$/, template: '/reviews/:id' },
+  { pattern: /^\/journals\/([\w-]+)$/, template: '/journals/:id' },
+  { pattern: /^\/variants\/([\w-]+)$/, template: '/variants/:id' },
+  { pattern: /^\/variants\/products\/([\w-]+)\/colors$/, template: '/variants/products/:productId/colors' },
+  { pattern: /^\/webhooks\/([\w-]+)$/, template: '/webhooks/:id' },
+  { pattern: /^\/users\/([\w-]+)$/, template: '/users/:id' },
+  { pattern: /^\/roles\/([\w-]+)$/, template: '/roles/:id' },
+  { pattern: /^\/admin\/categories\/([\w-]+)$/, template: '/admin/categories/:id' },
+  { pattern: /^\/admin\/collections\/([\w-]+)$/, template: '/admin/collections/:id' },
+  { pattern: /^\/admin\/products\/([\w-]+)$/, template: '/admin/products/:id' },
+  { pattern: /^\/admin\/inventory\/([\w-]+)$/, template: '/admin/inventory/:id' },
+  { pattern: /^\/admin\/journal\/([\w-]+)$/, template: '/admin/journal/:id' },
+  { pattern: /^\/admin\/orders\/([\w-]+)$/, template: '/admin/orders/:id' },
+  { pattern: /^\/admin\/supplies\/([\w-]+)$/, template: '/admin/supplies/:id' },
+  { pattern: /^\/admin\/webhooks\/([\w-]+)$/, template: '/admin/webhooks/:id' },
+  { pattern: /^\/admin\/subadmins\/([\w-]+)$/, template: '/admin/subadmins/:id' },
+  { pattern: /^\/payouts\/initiate$/, template: '/payouts/initiate' },
+  
+  // Catch-all pattern for production React app routes
+  { pattern: /^\/\{.*\}$/, template: '/{*any}' },
+  { pattern: /^\/products\/\{.*\}$/, template: '/products/{*any}' },
+];
+
+/**
+ * Generate route key from method and path using pattern matching
+ * @param {string} method - HTTP method
+ * @param {string} path - Route path
+ * @returns {string} Route key
+ */
+function generateRouteKey(method, path) {
+  // Remove /api/v1 prefix if present
+  let normalizedPath = path.replace(/^\/api\/v1/, "");
+  
+  // Remove query parameters and trailing slashes
+  normalizedPath = normalizedPath.split("?")[0].replace(/\/$/, "");
+  // Remove URL-encoded newline characters if present
+  normalizedPath = normalizedPath.replace(/%0A/g, "");
+  
+  // Apply pattern matching to convert dynamic routes to parameterized format
+  for (const { pattern, template } of ROUTE_PATTERNS) {
+    if (pattern.test(normalizedPath)) {
+      // Replace the matched part with the template
+      normalizedPath = normalizedPath.replace(pattern, template);
+      break;
+    }
+  }
+  
+  return `${method.toUpperCase()} ${normalizedPath}`;
+}
+
+/**
+ * Check if a route is public (doesn't require authentication)
+ * @param {string} method - HTTP method
+ * @param {string} path - Route path
+ * @returns {boolean} True if route is public
+ */
+function isPublicRoute(method, path) {
+  const routeKey = generateRouteKey(method, path);
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log("[Public Route Check]");
+    console.log("  Original Path:", path);
+    console.log("  Generated Route Key:", routeKey);
+    console.log("  Is Public:", publicRoutes.includes(routeKey));
+  }
+  
+  return publicRoutes.includes(routeKey);
+}
+
+/**
+ * Get required permission for a route
+ * @param {string} method - HTTP method
+ * @param {string} path - Route path
+ * @returns {string|null} Required permission or null if public/no permission
+ */
+function getRequiredPermission(method, path) {
+  const routeKey = generateRouteKey(method, path);
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log("[Permission Check]");
+    console.log("  Original Path:", path);
+    console.log("  Generated Route Key:", routeKey);
+    console.log("  Required Permission:", permissionMap[routeKey] || "none");
+  }
+  
+  return permissionMap[routeKey] || null;
+}
+
+/**
+ * Get all routes with their required permissions
+ * @returns {Object} Object with route keys as keys and permissions as values
+ */
+function getAllRoutes() {
+  return { ...permissionMap };
+}
+
+/**
+ * Get public routes
+ * @returns {Array} Array of public route keys
+ */
+function getPublicRoutes() {
+  return [...publicRoutes];
+}
+
+/**
+ * Get routes by permission
+ * @param {string} permission - Permission name
+ * @returns {Array} Array of route keys that require this permission
+ */
+function getRoutesByPermission(permission) {
+  return Object.entries(permissionMap)
+    .filter(([, perm]) => perm === permission)
+    .map(([route]) => route);
+}
+
+/**
+ * Get routes by resource
+ * @param {string} resource - Resource name
+ * @returns {Array} Array of route keys for the resource
+ */
+function getRoutesByResource(resource) {
+  return Object.entries(permissionMap)
+    .filter(([route]) => route.includes(`/${resource}`))
+    .map(([route]) => route);
+}
+
+module.exports = {
+  permissionMap,
+  publicRoutes,
+  generateRouteKey,
+  isPublicRoute,
+  getRequiredPermission,
+  getAllRoutes,
+  getPublicRoutes,
+  getRoutesByPermission,
+  getRoutesByResource,
+};

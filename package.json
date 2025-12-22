@@ -1,0 +1,18 @@
+{
+  "name": "markethub",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client && npm run migrate --prefix server && npm run seed --prefix server",
+    "start": "npm run build --prefix client && npm run start --prefix server",
+    "migrate": "npm run migrate --prefix server",
+    "migrate:run": "npx sequelize-cli db:migrate --prefix server",
+    "seed": "npm run seed --prefix server",
+    "seed:run": "npx sequelize-cli db:seed:all --prefix server"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

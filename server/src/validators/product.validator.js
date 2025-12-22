@@ -1,0 +1,782 @@
+const { body, param, query } = require('express-validator');
+const { Vendor } = require('../models');
+const { Op } = require('sequelize');
+const { Product, Category, ProductVariant, ProductImage } = require('../models');
+
+// Common validation messages
+const messages = {
+  required: field => `Please provide a ${field}`,
+  string: field => `${field} must be a valid text`,
+  numeric: field => `${field} must be a valid number`,
+  minLength: (field, length) => `${field} should be at least ${length} characters`,
+  maxLength: (field, length) => `${field} cannot be longer than ${length} characters`,
+  isUrl: field => `Please provide a valid URL for ${field}`,
+  isIn: (field, values) => `Please choose a valid ${field.toLowerCase()} (${values.join(', ')})`,
+  exists: field => `The selected ${field.toLowerCase()} does not exist`
+};
+
+// Product validation rules
+/**
+ * Validation rules for creating a new product.
+ * Comprehensive validation including name, description, pricing, category, variants, images, and business rules.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} name - Required, 2-100 chars, trimmed
+ * @property {ValidationChain} description - Optional, max 2000 chars, trimmed
+ * @property {ValidationChain} price - Required, float 0.01-1,000,000
+ * @property {ValidationChain} category_id - Required, positive integer, validates category exists
+ * @property {ValidationChain} sku - Optional, max 100 chars, trimmed
+ * @property {ValidationChain} variants - Optional array with detailed variant validation
+ * @property {ValidationChain} images - Optional array with URL and featured image validation
+ * @returns {Array} Express validator middleware array for product creation
+ * @example
+ * // Use in route:
+ * router.post('/products', createProductValidation, createProduct);
+ */
+exports.createProductValidation = [
+  // Basic product info
+  // Product name
+  body('name')
+    .trim()
+    .notEmpty().withMessage(messages.required('product name'))
+    .isString().withMessage(messages.string('Product name'))
+    .isLength({ min: 2 }).withMessage(messages.minLength('Product name', 2))
+    .isLength({ max: 100 }).withMessage(messages.maxLength('Product name', 100)),
+    
+  // Product description
+  body('description')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('Description'))
+    .isLength({ max: 2000 }).withMessage(messages.maxLength('Description', 2000)),
+    
+  // Price validation
+  body('price')
+    .notEmpty().withMessage(messages.required('price'))
+    .isFloat({ min: 0.01, max: 1000000 })
+    .withMessage('Price must be between $0.01 and $1,000,000')
+    .toFloat(),
+    
+  // Category validation
+  body('category_id')
+    .notEmpty().withMessage(messages.required('category'))
+    .isInt({ min: 1 }).withMessage('Please select a valid category')
+    .custom(async (value) => {
+      try {
+        const category = await Category.findByPk(value);
+        if (!category) {
+          throw new Error('Selected category does not exist');
+        }
+        return true;
+      } catch (error) {
+        throw new Error('Error validating category');
+      }
+    }),
+    
+  body('sku')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('SKU'))
+    .isLength({ max: 100 }).withMessage(messages.maxLength('SKU', 100)),
+    
+  // Variants validation
+  body('variants')
+    .optional()
+    .custom(async (value) => {
+      let variants = value;
+      if (typeof value === 'string') {
+        try {
+          variants = JSON.parse(value);
+        } catch (e) {
+          throw new Error('Variants must be a valid JSON array');
+        }
+      }
+      if (!Array.isArray(variants)) {
+        throw new Error('Variants must be an array');
+      }
+
+      // Validate variant structure based on ProductVariant model
+      const validVariantTypes = ['Size', 'Color', 'Material', 'Style', 'Fit'];
+
+      for (const [index, variant] of variants.entries()) {
+        const { type: name, value, additional_price, stock } = variant;
+
+        // Check required fields
+        if (!name || typeof name !== 'string' || !name.trim()) {
+          throw new Error(`Variant at index ${index}: Name is required`);
+        }
+
+        if (name.length > 100) {
+          throw new Error(`Variant at index ${index}: Name cannot exceed 100 characters`);
+        }
+
+        // Debug logging to validate our assumptions
+        console.log(`[DEBUG] Variant validation - Index: ${index}, Name: "${name}", Type: ${typeof name}, Valid Types: [${validVariantTypes.join(', ')}]`);
+        console.log(`[DEBUG] Name trimmed: "${name.trim()}", Name length: ${name.length}`);
+        console.log(`[DEBUG] Includes check: ${validVariantTypes.includes(name)}`);
+        
+        if (!validVariantTypes.includes(name)) {
+          throw new Error(`Variant at index ${index}: Name must be one of: ${validVariantTypes.join(', ')}`);
+        }
+
+        if (!value || typeof value !== 'string' || !value.trim()) {
+          throw new Error(`Variant at index ${index}: Value is required`);
+        }
+
+        if (value.length > 100) {
+          throw new Error(`Variant at index ${index}: Value cannot exceed 100 characters`);
+        }
+
+        // Note: additional_price and stock are managed at VariantCombination level, not individual variants
+      }
+
+      return true;
+    }),
+    
+  // Images validation
+  body('images')
+    .optional()
+    .isArray().withMessage('Images must be an array')
+    .custom(async (images) => {
+      if (!Array.isArray(images)) return true;
+      
+      let featuredCount = 0;
+      
+      for (const [index, image] of images.entries()) {
+        // Validate URL is required and is a string
+        if (!image.url || typeof image.url !== 'string' || !image.url.trim()) {
+          throw new Error(`Image at index ${index}: URL is required`);
+        }
+        
+        // Validate URL format and length (max 255 chars as per model)
+        try {
+          new URL(image.url);
+          if (image.url.length > 255) {
+            throw new Error('URL exceeds maximum length of 255 characters');
+          }
+        } catch (e) {
+          throw new Error(`Image at index ${index}: Must be a valid URL (max 255 characters)`);
+        }
+        
+        // Handle is_featured (defaults to false if not provided)
+        const isFeatured = image.is_featured !== undefined ? Boolean(image.is_featured) : false;
+        
+        // Count featured images
+        if (isFeatured) {
+          featuredCount++;
+          if (featuredCount > 1) {
+            throw new Error('Only one image can be marked as featured');
+          }
+        }
+        
+        // Update the image object to ensure is_featured is a boolean
+        image.is_featured = isFeatured;
+      }
+      
+      return true;
+    })
+];
+
+// Enhanced Update product validation
+/**
+ * Enhanced validation rules for updating an existing product.
+ * Validates product ID and comprehensive field updates including variants and images.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} id - Required product ID parameter, validates product exists
+ * @property {ValidationChain} name - Optional, 2-100 chars, validates product ownership
+ * @property {ValidationChain} description - Optional, max 2000 chars, validates product ownership
+ * @property {ValidationChain} price - Optional, positive float, validates product ownership
+ * @property {ValidationChain} category_id - Optional, positive integer, validates category exists
+ * @property {ValidationChain} sku - Optional, max 100 chars, validates product ownership
+ * @property {ValidationChain} status - Optional, validates against allowed status values
+ * @property {ValidationChain} variants - Optional array with detailed variant validation
+ * @property {ValidationChain} images - Optional array with URL and featured image validation
+ * @returns {Array} Express validator middleware array for enhanced product updates
+ * @example
+ * // Use in route:
+ * router.put('/products/:id', updateProductValidation, updateProduct);
+ */
+exports.updateProductValidation = [
+  param('id')
+    .isInt({ min: 1 }).withMessage('Invalid product ID')
+    .custom(async (value) => {
+      const product = await Product.findByPk(value);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('name')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('Name'))
+    .isLength({ min: 2 }).withMessage(messages.minLength('Name', 2))
+    .isLength({ max: 100 }).withMessage(messages.maxLength('Name', 100))
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('description')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('Description'))
+    .isLength({ max: 2000 }).withMessage(messages.maxLength('Description', 2000))
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('price')
+    .optional()
+    .isNumeric().withMessage(messages.numeric('Price'))
+    .isFloat({ min: 0.01, max: 1000000 }).withMessage('Price must be between $0.01 and $1,000,000')
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('category_id')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Invalid category ID')
+    .custom(async (value) => {
+      const category = await Category.findByPk(value);
+      if (!category) {
+        throw new Error('Category not found');
+      }
+      return true;
+    })
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('sku')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('SKU'))
+    .isLength({ max: 100 }).withMessage(messages.maxLength('SKU', 100))
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('status')
+    .optional()
+    .isIn(['draft', 'active', 'inactive', 'out_of_stock'])
+    .withMessage('Invalid status value'),
+    
+  // Variants validation (optional)
+  body('variants')
+    .optional()
+    .custom(async (value) => {
+      let variants = value;
+      if (typeof value === 'string') {
+        try {
+          variants = JSON.parse(value);
+        } catch (e) {
+          throw new Error('Variants must be a valid JSON array');
+        }
+      }
+      if (!Array.isArray(variants)) {
+        throw new Error('Variants must be an array');
+      }
+
+      // Validate variant structure based on ProductVariant model
+      const validVariantTypes = ['Size', 'Color', 'Material', 'Style', 'Fit'];
+
+      for (const [index, variant] of variants.entries()) {
+        const { type: name, value } = variant;
+
+        // Check required fields
+        if (!name || typeof name !== 'string' || !name.trim()) {
+          throw new Error(`Variant at index ${index}: Name is required`);
+        }
+
+        if (name.length > 100) {
+          throw new Error(`Variant at index ${index}: Name cannot exceed 100 characters`);
+        }
+
+        // Debug logging to validate our assumptions
+        console.log(`[DEBUG] Variant validation - Index: ${index}, Name: "${name}", Type: ${typeof name}, Valid Types: [${validVariantTypes.join(', ')}]`);
+        console.log(`[DEBUG] Name trimmed: "${name.trim()}", Name length: ${name.length}`);
+        console.log(`[DEBUG] Includes check: ${validVariantTypes.includes(name)}`);
+        
+        if (!validVariantTypes.includes(name)) {
+          throw new Error(`Variant at index ${index}: Name must be one of: ${validVariantTypes.join(', ')}`);
+        }
+
+        if (!value || typeof value !== 'string' || !value.trim()) {
+          throw new Error(`Variant at index ${index}: Value is required`);
+        }
+
+        if (value.length > 100) {
+          throw new Error(`Variant at index ${index}: Value cannot exceed 100 characters`);
+        }
+      }
+
+      return true;
+    }),
+    
+  // Images validation (optional)
+  body('images')
+    .optional()
+    .isArray().withMessage('Images must be an array')
+    .custom(async (images) => {
+      if (!Array.isArray(images)) return true;
+      
+      let featuredCount = 0;
+      
+      for (const [index, image] of images.entries()) {
+        // Validate URL is required and is a string
+        if (!image.url && !image.image_url) {
+          throw new Error(`Image at index ${index}: URL is required`);
+        }
+        
+        const imageUrl = image.url || image.image_url;
+        
+        if (typeof imageUrl !== 'string' || !imageUrl.trim()) {
+          throw new Error(`Image at index ${index}: URL must be a valid string`);
+        }
+        
+        // Validate URL format and length (max 255 chars as per model)
+        try {
+          new URL(imageUrl);
+          if (imageUrl.length > 255) {
+            throw new Error('URL exceeds maximum length of 255 characters');
+          }
+        } catch (e) {
+          throw new Error(`Image at index ${index}: Must be a valid URL (max 255 characters)`);
+        }
+        
+        // Handle is_featured (defaults to false if not provided)
+        const isFeatured = image.is_featured !== undefined ? Boolean(image.is_featured) : false;
+        
+        // Count featured images
+        if (isFeatured) {
+          featuredCount++;
+          if (featuredCount > 1) {
+            throw new Error('Only one image can be marked as featured');
+          }
+        }
+        
+        // Update the image object to ensure is_featured is a boolean
+        image.is_featured = isFeatured;
+      }
+      
+      return true;
+    })
+];
+
+// Get products validation
+/**
+ * Validation rules for retrieving paginated product lists.
+ * Validates pagination, category filtering, sorting, and vendor filtering.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} page - Optional, positive integer >= 1, max 100 items per page
+ * @property {ValidationChain} limit - Optional, integer 1-100
+ * @property {ValidationChain} category - Optional, validates category exists (by ID, name, or slug)
+ * @property {ValidationChain} sortBy - Optional, one of: price, createdAt, name
+ * @property {ValidationChain} sortOrder - Optional, ASC, DESC, asc, or desc
+ * @property {ValidationChain} vendor - Optional, positive integer, validates vendor exists
+ * @property {ValidationChain} search - Optional, min 2 chars, string search term
+ * @returns {Array} Express validator middleware array for product list retrieval
+ * @example
+ * // Use in route:
+ * router.get('/products', getProductsValidation, getProducts);
+ */
+exports.getProductsValidation = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Page must be a positive integer')
+    .toInt(),
+    
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+    .toInt(),
+    
+  query('category')
+    .optional()
+    .custom(async (value) => {
+      // Check if it's a numeric ID
+      const isNumericId = !isNaN(value) && !isNaN(parseFloat(value));
+
+      if (isNumericId) {
+        // Validate as ID
+        const category = await Category.findByPk(parseInt(value));
+        if (!category) {
+          throw new Error('Category not found');
+        }
+      } else {
+        // Validate as name or slug
+        const category = await Category.findOne({
+          where: {
+            [Op.or]: [
+              { name: { [Op.like]: `%${value}%` } },
+              { slug: value }
+            ]
+          }
+        });
+        if (!category) {
+          throw new Error('Category not found');
+        }
+      }
+      return true;
+    }),
+  query('sortBy')
+    .optional()
+    .isIn(['price', 'createdAt', 'name']).withMessage('Invalid sort field'),
+  query('sortOrder')
+    .optional()
+    .isIn(['ASC', 'DESC', 'asc', 'desc']).withMessage('Sort order must be either ASC, DESC, asc, or desc'),
+
+  query('vendor')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Vendor ID must be a positive integer')
+    .custom(async (value) => {
+      const vendor = await Vendor.findByPk(value);
+      if (!vendor) {
+        throw new Error('Vendor not found');
+      }
+      return true;
+    }),
+
+    
+  query('search')
+    .optional()
+    .trim()
+    .isString().withMessage('Search term must be a string')
+    .isLength({ min: 2 }).withMessage('Search term must be at least 2 characters')
+];
+
+// Get product by ID or slug validation
+/**
+ * Validation rules for retrieving a product by ID or slug identifier.
+ * Handles both numeric IDs and string slugs with existence validation.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} identifier - Required product identifier (ID or slug), validates existence
+ * @returns {Array} Express validator middleware array for product retrieval by identifier
+ * @example
+ * // Use in route:
+ * router.get('/products/:identifier', getProductByIdentifierValidation, getProduct);
+ */
+exports.getProductByIdentifierValidation = [
+  param('identifier')
+    .notEmpty().withMessage('Product identifier is required')
+    .custom(async (value) => {
+      // Check if it's a numeric ID
+      const isNumericId = !isNaN(value) && !isNaN(parseFloat(value));
+
+      if (isNumericId) {
+        // Validate as ID
+        const product = await Product.findByPk(parseInt(value));
+        if (!product) {
+          throw new Error('Product not found');
+        }
+      } else {
+        // Validate as slug
+        const product = await Product.findOne({ where: { slug: value } });
+        if (!product) {
+          throw new Error('Product not found');
+        }
+      }
+      return true;
+    })
+];
+
+// Delete product validation
+/**
+ * Validation rules for deleting a product.
+ * Validates product ID and ownership/authorization for deletion.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} id - Required product ID, validates product exists and ownership
+ * @returns {Array} Express validator middleware array for product deletion
+ * @example
+ * // Use in route:
+ * router.delete('/products/:id', deleteProductValidation, deleteProduct);
+ */
+exports.deleteProductValidation = [
+  param('id')
+    .isInt({ min: 1 }).withMessage('Invalid product ID')
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(value);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      // Check if the current user is the product owner or admin
+      // Admins can delete any product, vendors can only delete their own products
+      const isVendor = req.user.roles && req.user.roles.some(role => role.name === 'vendor');
+      const isAdmin = req.user.roles && req.user.roles.some(role => role.name === 'admin');
+      
+      if (isVendor && product.vendor_id !== req.user.id) {
+        throw new Error('Not authorized to delete this product');
+      }
+      // Admins can delete any product, no additional check needed
+      
+      return true;
+    })
+];
+
+// Enhanced Update product validation (Admin/Full Update)
+/**
+ * Enhanced validation rules for updating products with full payload support.
+ * Supports images, variants, and comprehensive field validation for admin routes.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} id - Required product ID, validates product exists and ownership
+ * @property {ValidationChain} name - Optional, 2-100 chars, validates product ownership
+ * @property {ValidationChain} description - Optional, max 2000 chars, validates product ownership
+ * @property {ValidationChain} price - Optional, positive float, validates product ownership
+ * @property {ValidationChain} category_id - Optional, positive integer, validates category exists
+ * @property {ValidationChain} sku - Optional, max 100 chars, validates product ownership
+ * @property {ValidationChain} status - Optional, validates against allowed status values
+ * @property {ValidationChain} variants - Optional array with detailed variant validation
+ * @property {ValidationChain} images - Optional array with URL and featured image validation
+ * @returns {Array} Enhanced express validator middleware array for product updates
+ * @example
+ * // Use in route:
+ * router.put('/products/:id/admin', updateProductValidation, updateProduct);
+ */
+exports.updateProductValidation = [
+  param('id')
+    .isInt({ min: 1 }).withMessage('Invalid product ID')
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(value);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      // Check if the current user is the product owner or admin
+      const isAdmin = req.user.roles && req.user.roles.some(role => role.name === 'admin');
+      if (product.vendor_id !== req.user.id && !isAdmin) {
+        throw new Error('Not authorized to update this product');
+      }
+      return true;
+    }),
+    
+  // Optional fields that can be updated
+  body('name')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('Name'))
+    .isLength({ min: 2 }).withMessage(messages.minLength('Name', 2))
+    .isLength({ max: 100 }).withMessage(messages.maxLength('Name', 100))
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('description')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('Description'))
+    .isLength({ max: 2000 }).withMessage(messages.maxLength('Description', 2000))
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('price')
+    .optional()
+    .isNumeric().withMessage(messages.numeric('Price'))
+    .isFloat({ min: 0.01, max: 1000000 }).withMessage('Price must be between $0.01 and $1,000,000')
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('category_id')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Invalid category ID')
+    .custom(async (value) => {
+      const category = await Category.findByPk(value);
+      if (!category) {
+        throw new Error('Category not found');
+      }
+      return true;
+    })
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('sku')
+    .optional()
+    .trim()
+    .isString().withMessage(messages.string('SKU'))
+    .isLength({ max: 100 }).withMessage(messages.maxLength('SKU', 100))
+    .custom(async (value, { req }) => {
+      const product = await Product.findByPk(req.params.id);
+      if (!product) {
+        throw new Error('Product not found');
+      }
+      return true;
+    }),
+    
+  body('status')
+    .optional()
+    .isIn(['draft', 'active', 'inactive', 'out_of_stock'])
+    .withMessage('Invalid status value'),
+    
+  // Variants validation (optional)
+  body('variants')
+    .optional()
+    .custom(async (value) => {
+      let variants = value;
+      if (typeof value === 'string') {
+        try {
+          variants = JSON.parse(value);
+        } catch (e) {
+          throw new Error('Variants must be a valid JSON array');
+        }
+      }
+      if (!Array.isArray(variants)) {
+        throw new Error('Variants must be an array');
+      }
+
+      // Validate variant structure based on ProductVariant model
+      const validVariantTypes = ['Size', 'Color', 'Material', 'Style', 'Fit'];
+
+      for (const [index, variant] of variants.entries()) {
+        const { type: name, value } = variant;
+
+        // Check required fields
+        if (!name || typeof name !== 'string' || !name.trim()) {
+          throw new Error(`Variant at index ${index}: Name is required`);
+        }
+
+        if (name.length > 100) {
+          throw new Error(`Variant at index ${index}: Name cannot exceed 100 characters`);
+        }
+
+        // Debug logging to validate our assumptions
+        console.log(`[DEBUG] Variant validation - Index: ${index}, Name: "${name}", Type: ${typeof name}, Valid Types: [${validVariantTypes.join(', ')}]`);
+        console.log(`[DEBUG] Name trimmed: "${name.trim()}", Name length: ${name.length}`);
+        console.log(`[DEBUG] Includes check: ${validVariantTypes.includes(name)}`);
+        
+        if (!validVariantTypes.includes(name)) {
+          throw new Error(`Variant at index ${index}: Name must be one of: ${validVariantTypes.join(', ')}`);
+        }
+
+        if (!value || typeof value !== 'string' || !value.trim()) {
+          throw new Error(`Variant at index ${index}: Value is required`);
+        }
+
+        if (value.length > 100) {
+          throw new Error(`Variant at index ${index}: Value cannot exceed 100 characters`);
+        }
+      }
+
+      return true;
+    }),
+    
+  // Images validation (optional)
+  body('images')
+    .optional()
+    .isArray().withMessage('Images must be an array')
+    .custom(async (images) => {
+      if (!Array.isArray(images)) return true;
+      
+      let featuredCount = 0;
+      
+      for (const [index, image] of images.entries()) {
+        // Validate URL is required and is a string
+        if (!image.url && !image.image_url) {
+          throw new Error(`Image at index ${index}: URL is required`);
+        }
+        
+        const imageUrl = image.url || image.image_url;
+        
+        if (typeof imageUrl !== 'string' || !imageUrl.trim()) {
+          throw new Error(`Image at index ${index}: URL must be a valid string`);
+        }
+        
+        // Validate URL format and length (max 255 chars as per model)
+        try {
+          new URL(imageUrl);
+          if (imageUrl.length > 255) {
+            throw new Error('URL exceeds maximum length of 255 characters');
+          }
+        } catch (e) {
+          throw new Error(`Image at index ${index}: Must be a valid URL (max 255 characters)`);
+        }
+        
+        // Handle is_featured (defaults to false if not provided)
+        const isFeatured = image.is_featured !== undefined ? Boolean(image.is_featured) : false;
+        
+        // Count featured images
+        if (isFeatured) {
+          featuredCount++;
+          if (featuredCount > 1) {
+            throw new Error('Only one image can be marked as featured');
+          }
+        }
+        
+        // Update the image object to ensure is_featured is a boolean
+        image.is_featured = isFeatured;
+      }
+      
+      return true;
+    })
+];
+
+// Get vendor products validation
+/**
+ * Validation rules for retrieving products owned by a specific vendor.
+ * Validates vendor ID and pagination parameters.
+ * @type {Array<ValidationChain>} Array of express-validator validation chains
+ * @property {ValidationChain} id - Required vendor ID parameter, validates vendor exists
+ * @property {ValidationChain} page - Optional, positive integer >= 1
+ * @property {ValidationChain} limit - Optional, integer 1-100
+ * @returns {Array} Express validator middleware array for vendor product retrieval
+ * @example
+ * // Use in route:
+ * router.get('/products/vendor/:id', getVendorProductsValidation, getVendorProducts);
+ */
+exports.getVendorProductsValidation = [
+  param('id')
+    .isInt({ min: 1 }).withMessage('Invalid vendor ID')
+    .custom(async (value) => {
+      const vendor = await Vendor.findByPk(value);
+      if (!vendor) {
+        throw new Error('Vendor not found');
+      }
+      return true;
+    }),
+    
+  query('page')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Page must be a positive integer')
+    .toInt(),
+    
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
+    .toInt()
+];

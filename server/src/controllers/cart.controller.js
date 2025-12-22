@@ -1,0 +1,1121 @@
+const { Cart, CartItem, Product, ProductVariant, User } = require("../models");
+const {sequelize } = require("../models");
+const AppError = require("../utils/appError");
+const { Op } = require("sequelize");
+
+/**
+ * Get or create shopping cart for authenticated user
+ * Supports both authenticated users (with user_id) and guest users (with session_id).
+ * Returns full cart details including items, products, and variants with proper associations.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts (optional)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with cart data
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {Object} res.body.data - Cart object with items, totals, and product details
+ * @returns {Object} res.body.data.cart - Cart details (null if no cart found)
+ * @throws {Error} 500 - Server error during cart retrieval
+ * @api {get} /api/v1/cart Get cart
+ * @private Supports both authenticated and guest users
+ * @example
+ * GET /api/v1/cart
+ * Authorization: Bearer <jwt_token>
+ *
+ * // For guest users:
+ * GET /api/v1/cart
+ * x-session-id: abc123def456
+ */
+const getCart = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    let cart;
+
+    if (userId) {
+      // Get or create cart for authenticated user
+      [cart] = await Cart.findOrCreate({
+        where: { user_id: userId },
+        defaults: {
+          total_items: 0,
+          total_amount: 0.0,
+        },
+      });
+
+      // Load full cart details
+      cart = await cart.getFullCart();
+    } else {
+      // Handle guest cart using session_id
+      const sessionId = req.session?.id || req.headers["x-session-id"];
+
+      if (!sessionId) {
+        return res.status(200).json({
+          status: "success",
+          data: {
+            cart: null,
+            message: "No cart found. Please log in or provide session ID.",
+          },
+        });
+      }
+
+      cart = await Cart.findOne({
+        where: { session_id: sessionId },
+      });
+
+      if (!cart) {
+        return res.status(200).json({
+          status: "success",
+          data: {
+            cart: null,
+            message: "No cart found for this session.",
+          },
+        });
+      }
+
+      // Load full cart details consistently
+      cart = await cart.getFullCart();
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: cart,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Add item to shopping cart
+ * Validates product availability, handles quantity updates, and supports product variants.
+ * Uses database transactions to ensure data consistency. Updates cart totals automatically.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {number} req.body.productId - Product ID to add (required)
+ * @param {number} [req.body.quantity=1] - Quantity to add (default: 1)
+ * @param {number} [req.body.variantId] - Product variant ID (optional)
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with added/updated item
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {Object} res.body.data - Item details with product and variant information
+ * @throws {AppError} 400 - Missing productId, invalid quantity, or insufficient stock
+ * @throws {AppError} 404 - Product or variant not found
+ * @throws {Error} 500 - Server error during cart operation
+ * @api {post} /api/v1/cart/items Add item to cart
+ * @private Supports both authenticated and guest users
+ * @example
+ * POST /api/v1/cart/items
+ * Authorization: Bearer <jwt_token>
+ * {
+ *   "productId": 123,
+ *   "quantity": 2,
+ *   "variantId": 456
+ * }
+ *
+ * // For guest users:
+ * POST /api/v1/cart/items
+ * x-session-id: abc123def456
+ * {
+ *   "productId": 123,
+ *   "quantity": 1
+ * }
+ */
+const addToCart = async (req, res, next) => {
+  const transaction = await Cart.sequelize.transaction();
+
+  try {
+    const userId = req.user?.id;
+    const {
+      product_id,
+      quantity = 1,
+      variant_id,
+      selected_variants = [],
+    } = req.body;
+
+    // Validate required fields
+    if (!product_id) {
+      return next(new AppError("Product ID is required", 400));
+    }
+
+    // Fetch product with all variants and combinations
+    const product = await Product.findByPk(product_id, {
+      include: [
+        {
+          model: ProductVariant,
+          as: "variants",
+          required: false,
+        },
+        {
+          model: sequelize.models.VariantCombination,
+          as: "combinations",
+          where: { is_active: true },
+          required: false,
+        }
+      ],
+    });
+
+    if (!product) {
+      return next(new AppError("Product not found", 404));
+    }
+
+    if (product.status !== "active") {
+      return next(new AppError("Product is not available", 400));
+    }
+
+    // Check if product has variants but none were selected
+    if (product.variants && product.variants.length > 0) {
+      if ((!selected_variants || selected_variants.length === 0) && !variant_id) {
+        return next(new AppError("Please select a variant", 400));
+      }
+    }
+
+    let finalSelectedVariants = [...selected_variants];
+    let basePrice = product.price;
+    let totalAdditionalPrice = 0;
+    let finalVariantId = null;
+
+    if (finalSelectedVariants.length > 0) {
+      // Validate and calculate additional price
+      const variantMap = new Map(
+        product.variants.map((v) => [Number(v.id), v])
+      ); // Ensure ID is treated as number
+      const seen = new Set();
+      for (const sel of finalSelectedVariants) {
+        // Ensure sel.id is treated as a number
+        const variantId = Number(sel.id);
+        if (isNaN(variantId)) {
+          return next(
+            new AppError("Invalid variant ID: must be a number", 400)
+          );
+        }
+
+        if (seen.has(variantId)) {
+          return next(
+            new AppError("Duplicate variant ID in selected_variants", 400)
+          );
+        }
+        seen.add(variantId);
+
+        const variant = variantMap.get(variantId);
+        if (!variant) {
+          return next(
+            new AppError(`Variant ${variantId} not found for product`, 404)
+          );
+        }
+        // Stock is now managed at combination level; skip per-variant stock checks here
+        totalAdditionalPrice += sel.additional_price || 0;
+      }
+      finalVariantId = null;
+    } else if (variant_id) {
+      // Backward compatibility: single variant (no additional_price/stock on ProductVariant anymore)
+      const variant = product.variants.find((v) => v.id === variant_id);
+      if (!variant) {
+        return next(new AppError("Product variant not found", 404));
+      }
+      finalSelectedVariants = [
+        {
+          name: variant.name,
+          id: variant.id,
+          value: variant.value,
+          additional_price: 0,
+        },
+      ];
+      totalAdditionalPrice = 0;
+      finalVariantId = null;
+    } else {
+      // Simple product (no variants selected)
+      // Check default combination stock
+      let defaultStock = 0;
+      
+      if (product.combinations && product.combinations.length > 0) {
+        // Use the first active combination as default
+        const defaultCombo = product.combinations[0];
+        defaultStock = defaultCombo.stock;
+      } else {
+        // Fallback to legacy inventory if no combinations found (should not happen with new fix)
+        const inventory = await product.getInventory();
+        if (inventory) {
+          defaultStock = inventory.stock;
+        }
+      }
+
+      if (defaultStock < quantity) {
+        return next(
+          new AppError(
+            `Insufficient stock for product. Available: ${defaultStock}`,
+            400
+          )
+        );
+      }
+    }
+
+    const price = basePrice + totalAdditionalPrice;
+
+    // Sort variants for consistent string
+    const sortedSelectedVariants = [...finalSelectedVariants].sort(
+      (a, b) => a.id - b.id
+    );
+
+    // Get or create cart
+    let cart;
+    if (userId) {
+      [cart] = await Cart.findOrCreate({
+        where: { user_id: userId },
+        defaults: {
+          total_items: 0,
+          total_amount: 0.0,
+        },
+        transaction,
+      });
+    } else {
+      // Handle guest cart
+      const sessionId =
+        req.session?.id || req.headers["x-session-id"] || `guest_${Date.now()}`;
+      [cart] = await Cart.findOrCreate({
+        where: { session_id: sessionId },
+        defaults: {
+          total_items: 0,
+          total_amount: 0.0,
+        },
+        transaction,
+      });
+    }
+
+    // Lock the cart row to prevent concurrent updates
+    await cart.reload({ lock: true, transaction });
+
+    // Check if item already exists in cart
+    const existingItem = await CartItem.findOne({
+      where: {
+        cart_id: cart.id,
+        product_id: product_id,
+        selected_variants: sortedSelectedVariants,
+      },
+      transaction,
+    });
+
+    if (existingItem) {
+      // Update quantity if item exists
+      const newQuantity = existingItem.quantity + quantity;
+      await existingItem.update(
+        {
+          quantity: newQuantity,
+        },
+        { transaction }
+      );
+
+      await existingItem.updateTotalPrice(transaction);
+
+      await transaction.commit();
+
+      const item = await existingItem.getFullDetails();
+
+      return res.status(200).json({
+        status: "success",
+        message: "Cart item updated successfully",
+        data: { item },
+      });
+    }
+
+    // Create new cart item
+    const cartItem = await CartItem.create(
+      {
+        cart_id: cart.id,
+        product_id: product_id,
+        selected_variants: sortedSelectedVariants,
+        quantity: quantity,
+        price: basePrice,
+        total_price: quantity * price,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    // Get full item details
+    const item = await cartItem.getFullDetails();
+
+    res.status(201).json({
+      status: "success",
+      message: "Item added to cart successfully",
+      data: { item },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+    next(error);
+  }
+};
+
+/**
+ * Update cart item quantity
+ * Validates new quantity, checks ownership, and updates cart totals.
+ * Uses database transactions for data consistency.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.itemId - Cart item ID to update
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {number} req.body.quantity - New quantity (must be >= 1)
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with updated item
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {Object} res.body.data - Updated item details
+ * @throws {AppError} 400 - Invalid quantity (less than 1)
+ * @throws {AppError} 403 - Access denied (item doesn't belong to user)
+ * @throws {AppError} 404 - Cart item not found
+ * @throws {Error} 500 - Server error during update
+ * @api {put} /api/v1/cart/items/:itemId Update cart item
+ * @private Supports both authenticated and guest users
+ * @example
+ * PUT /api/v1/cart/items/789
+ * Authorization: Bearer <jwt_token>
+ * {
+ *   "quantity": 3
+ * }
+ *
+ * // For guest users:
+ * PUT /api/v1/cart/items/789
+ * x-session-id: abc123def456
+ * {
+ *   "quantity": 1
+ * }
+ */
+const updateCartItem = async (req, res, next) => {
+  const transaction = await Cart.sequelize.transaction();
+
+  try {
+    const { itemId } = req.params;
+    const { quantity } = req.body;
+    const userId = req.user?.id;
+
+    // Validate quantity
+    if (!quantity || quantity < 1) {
+      return next(new AppError("Quantity must be at least 1", 400));
+    }
+
+    // Find cart item
+    const cartItem = await CartItem.findByPk(itemId, {
+      include: [
+        {
+          model: Cart,
+          as: "cart",
+          include: [{ model: User, as: "user" }],
+        },
+        {
+          model: Product,
+          as: "product",
+          required: false,
+        }
+      ],
+      transaction,
+    });
+
+    if (!cartItem) {
+      return next(new AppError("Cart item not found", 404));
+    }
+
+    // Check if user owns the cart (if authenticated)
+    if (userId && cartItem.cart.user_id !== userId) {
+      return next(new AppError("Access denied", 403));
+    }
+
+    // Handle guest cart access
+    if (!userId) {
+      const sessionId = req.session?.id || req.headers["x-session-id"];
+      if (cartItem.cart.session_id !== sessionId) {
+        return next(new AppError("Access denied", 403));
+      }
+    }
+
+    // Check stock availability for the new quantity
+    if (quantity > 0) {
+      // Variant-level stock is managed at combination level; skip per-variant checks here
+      if (cartItem.product) {
+        // Check main product stock
+        const inventory = await cartItem.product.getInventory();
+        if (inventory && inventory.stock !== null && inventory.stock < quantity) {
+          return next(new AppError(`Insufficient stock for this product. Available: ${inventory.stock}`, 400));
+        }
+      }
+    }
+
+    // Lock the cart row to prevent concurrent updates
+    await cartItem.cart.reload({ lock: true, transaction });
+
+    // Update item quantity
+    await cartItem.update(
+      {
+        quantity: quantity,
+      },
+      { transaction }
+    );
+
+    await cartItem.updateTotalPrice(transaction);
+
+    const updatedItem = await cartItem.getFullDetails();
+
+    await transaction.commit();
+
+    res.status(200).json({
+      status: "success",
+      message: "Cart item updated successfully",
+      data: { item: updatedItem },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+    next(error);
+  }
+};
+
+/**
+ * Remove item from cart
+ * Validates ownership and updates cart totals after removal.
+ * Uses database transactions for data consistency.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.itemId - Cart item ID to remove
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming removal
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {Object} res.body.data - Removed item ID
+ * @throws {AppError} 403 - Access denied (item doesn't belong to user)
+ * @throws {AppError} 404 - Cart item not found
+ * @throws {Error} 500 - Server error during removal
+ * @api {delete} /api/v1/cart/items/:itemId Remove cart item
+ * @private Supports both authenticated and guest users
+ * @example
+ * DELETE /api/v1/cart/items/789
+ * Authorization: Bearer <jwt_token>
+ *
+ * // For guest users:
+ * DELETE /api/v1/cart/items/789
+ * x-session-id: abc123def456
+ */
+const removeFromCart = async (req, res, next) => {
+  const transaction = await Cart.sequelize.transaction();
+
+  try {
+    const { itemId } = req.params;
+    const userId = req.user?.id;
+
+    // Find cart item
+    const cartItem = await CartItem.findByPk(itemId, {
+      include: [
+        {
+          model: Cart,
+          as: "cart",
+          include: [{ model: User, as: "user" }],
+        },
+      ],
+      transaction,
+    });
+
+    if (!cartItem) {
+      return next(new AppError("Cart item not found", 404));
+    }
+
+    // Check if user owns the cart (if authenticated)
+    if (userId && cartItem.cart.user_id !== userId) {
+      return next(new AppError("Access denied", 403));
+    }
+
+    // Handle guest cart access
+    if (!userId) {
+      const sessionId = req.session?.id || req.headers["x-session-id"];
+      if (cartItem.cart.session_id !== sessionId) {
+        return next(new AppError("Access denied", 403));
+      }
+    }
+
+    // Lock the cart row to prevent concurrent updates
+    await cartItem.cart.reload({ lock: true, transaction });
+
+    // Delete the cart item
+    await cartItem.destroy({ transaction });
+
+    await transaction.commit();
+
+    res.status(200).json({
+      status: "success",
+      message: "Item removed from cart successfully",
+      data: { itemId: parseInt(itemId) },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+    next(error);
+  }
+};
+
+/**
+ * Clear all items from cart
+ * Removes all cart items and resets cart totals to zero.
+ * Uses database transactions for data consistency.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts (required for guests)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming cart clearance
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {Object} res.body.data - Cart ID that was cleared
+ * @throws {AppError} 400 - Session ID required for guest carts
+ * @throws {AppError} 404 - Cart not found
+ * @throws {Error} 500 - Server error during clearance
+ * @api {delete} /api/v1/cart/clear Clear cart
+ * @private Supports both authenticated and guest users
+ * @example
+ * DELETE /api/v1/cart/clear
+ * Authorization: Bearer <jwt_token>
+ *
+ * // For guest users:
+ * DELETE /api/v1/cart/clear
+ * x-session-id: abc123def456
+ */
+const clearCart = async (req, res, next) => {
+  const transaction = await Cart.sequelize.transaction();
+
+  try {
+    const userId = req.user?.id;
+    let cart;
+
+    if (userId) {
+      // Clear authenticated user's cart
+      cart = await Cart.findOne({
+        where: { user_id: userId },
+        transaction,
+      });
+
+      if (!cart) {
+        return next(new AppError("Cart not found", 404));
+      }
+    } else {
+      // Handle guest cart
+      const sessionId = req.session?.id || req.headers["x-session-id"];
+      if (!sessionId) {
+        return next(new AppError("Session ID required for guest cart", 400));
+      }
+
+      cart = await Cart.findOne({
+        where: { session_id: sessionId },
+        transaction,
+      });
+
+      if (!cart) {
+        return next(new AppError("Cart not found", 404));
+      }
+    }
+
+    // Lock the cart row to prevent concurrent updates
+    await cart.reload({ lock: true, transaction });
+
+    // Delete all cart items
+    await CartItem.destroy({
+      where: { cart_id: cart.id },
+      transaction,
+    });
+
+    // Reset cart totals
+    await cart.update(
+      {
+        total_items: 0,
+        total_amount: 0.0,
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    res.status(200).json({
+      status: "success",
+      message: "Cart cleared successfully",
+      data: { cartId: cart.id },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+    next(error);
+  }
+};
+
+/**
+ * Get cart summary for checkout
+ * Provides comprehensive cart information including totals, shipping, and tax calculations.
+ * Used primarily during the checkout process to display final pricing.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with cart summary
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {Object} res.body.data - Cart summary object
+ * @returns {number} res.body.data.subtotal - Sum of all item subtotals
+ * @returns {number} res.body.data.shipping - Shipping cost (currently 0.00)
+ * @returns {number} res.body.data.tax - Tax amount (currently 0.00)
+ * @returns {number} res.body.data.total - Final total amount
+ * @returns {Array} res.body.data.items - Array of cart items with product details
+ * @throws {Error} 500 - Server error during summary calculation
+ * @api {get} /api/v1/cart/summary Get cart summary
+ * @private Supports both authenticated and guest users
+ * @example
+ * GET /api/v1/cart/summary
+ * Authorization: Bearer <jwt_token>
+ *
+ * // Response includes:
+ * {
+ *   "status": "success",
+ *   "data": {
+ *     "subtotal": 150.00,
+ *     "shipping": 0.00,
+ *     "tax": 0.00,
+ *     "total": 150.00,
+ *     "items": [...]
+ *   }
+ * }
+ */
+/**
+ * Get detailed cart summary for checkout
+ * Provides comprehensive cart information including user details, totals, and itemized products.
+ * Used for checkout process and order conversion.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {string} [req.headers['x-session-id']] - Session ID for guest carts
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with detailed cart summary
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {Object} res.body.data - Cart summary object
+ * @returns {number} res.body.data.cartId - Cart ID
+ * @returns {number} res.body.data.userId - User ID (null for guest carts)
+ * @returns {number} res.body.data.subtotal - Sum of all item subtotals
+ * @returns {number} res.body.data.discount - Total discount applied (currently 0.00)
+ * @returns {number} res.body.data.total - Final total amount
+ * @returns {Array} res.body.data.items - Array of cart items with product details
+ * @throws {Error} 500 - Server error during summary calculation
+ * @api {get} /api/v1/cart/summary Get cart summary
+ * @private Supports both authenticated and guest users
+ * @example
+ * GET /api/v1/cart/summary
+ * Authorization: Bearer <jwt_token>
+ *
+ * // Response:
+ * {
+ *   "status": "success",
+ *   "data": {
+ *     "cartId": 1,
+ *     "userId": 123,
+ *     "subtotal": 99.99,
+ *     "discount": 10.00,
+ *     "total": 89.99,
+ *     "items": [
+ *       {
+ *         "product": { "id": 1, "name": "Item", "price": 50 },
+ *         "quantity": 2,
+ *         "subtotal": 100
+ *       }
+ *     ]
+ *   }
+ * }
+ */
+const getCartSummary = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    let cart;
+
+    if (userId) {
+      cart = await Cart.findOne({
+        where: { user_id: userId },
+        include: [
+          {
+            model: CartItem,
+            as: "items",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                attributes: [
+                  "id",
+                  "name",
+                  "price",
+                  "discounted_price",
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    } else {
+      const sessionId = req.session?.id || req.headers["x-session-id"];
+      if (!sessionId) {
+        return res.status(200).json({
+          status: "success",
+          data: {
+            summary: null,
+            message: "No cart found. Please log in or provide session ID.",
+          },
+        });
+      }
+
+      cart = await Cart.findOne({
+        where: { session_id: sessionId },
+        include: [
+          {
+            model: CartItem,
+            as: "items",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                attributes: [
+                  "id",
+                  "name",
+                  "price",
+                  "discounted_price",
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    // Get full cart details to include variant information
+    if (cart) {
+      cart = await cart.getFullCart();
+    }
+
+    if (!cart) {
+      return res.status(200).json({
+        status: "success",
+        data: {
+          summary: null,
+          message: "Cart is empty",
+        },
+      });
+    }
+
+    // Calculate summary
+    const items = cart.items || [];
+    const subtotal = parseFloat(cart.total_amount);
+    const discount = 0.0; // TODO: Calculate discounts based on promotions/coupons
+    const total = subtotal - discount;
+
+    const summary = {
+      cartId: cart.id,
+      userId: userId || null,
+      subtotal,
+      discount,
+      total,
+      items: items.map((item) => ({
+        product: {
+          id: item.product.id,
+          name: item.product.name,
+          price: parseFloat(item.product.discounted_price || item.product.price),
+        },
+        variants: item.selected_variants || [],
+        quantity: item.quantity,
+        subtotal: parseFloat(item.total_price),
+      })),
+    };
+
+    res.status(200).json({
+      status: "success",
+      data: summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Sync local cart with server cart on user login
+ * Sync local cart with server cart on user login
+ * Merges local Redux cart items into authenticated user's server cart.
+ * Handles conflicts by combining quantities for same products/variants and validates stock.
+ * Uses database transactions for data consistency.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {Array} req.body.localItems - Array of local cart items to sync
+ * @param {string} req.body.localItems[].productId - Product ID (as string, converted to number)
+ * @param {number} req.body.localItems[].quantity - Quantity
+ * @param {number} req.body.localItems[].price - Base product price
+ * @param {Array} [req.body.localItems[].selected_variants] - Array of variant objects
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with synchronized cart and sync report
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {Object} res.body.data - Cart object and sync report
+ * @returns {Object} res.body.data.cart - Synchronized cart with items
+ * @returns {Object} res.body.data.sync_report - Report of sync operations
+ * @throws {AppError} 400 - Invalid local cart data or stock issues
+ * @throws {Error} 500 - Server error during sync
+ * @api {post} /api/v1/cart/sync Sync cart
+ * @private Requires authentication
+ * @example
+ * POST /api/v1/cart/sync
+ * Authorization: Bearer <jwt_token>
+ * {
+ *   "localItems": [
+ *     {
+ *       "productId": 1,
+ *       "quantity": 2,
+ *       "price": 25.00,
+ *       "selected_variants": [
+ *         { "id": 101, "name": "Color", "value": "Red", "additional_price": 5.00 }
+ *       ]
+ *     }
+ *   ]
+ * }
+ */
+const syncCart = async (req, res, next) => {
+  const transaction = await Cart.sequelize.transaction();
+
+  try {
+    const userId = req.user?.id;
+    const { localItems } = req.body;
+
+    // Must be authenticated user
+    if (!userId) {
+      return next(new AppError("Authentication required for cart sync", 401));
+    }
+
+    // Initialize sync report
+    const syncReport = {
+      successful_merges: [],
+      new_items_added: [],
+      quantity_adjusted: [],
+      failed_items: [],
+    };
+
+    // Get or create user's cart
+    let [cart] = await Cart.findOrCreate({
+      where: { user_id: userId },
+      defaults: {
+        total_items: 0,
+        total_amount: 0.0,
+      },
+      transaction,
+    });
+
+    // Lock the cart row to prevent concurrent updates
+    await cart.reload({ lock: true, transaction });
+
+    // Process each local cart item
+    for (const localItem of localItems) {
+      try {
+        const {
+          productId,
+          quantity,
+          price,
+          selected_variants = [],
+        } = localItem;
+
+        // Fetch product with variants
+        const product = await Product.findByPk(productId, {
+          include: [
+            {
+              model: ProductVariant,
+              as: "variants",
+              required: false,
+            },
+          ],
+          transaction,
+        });
+
+        if (!product || product.status !== "active") {
+          syncReport.failed_items.push({
+            productId,
+            reason: "Product not found or not available",
+          });
+          continue;
+        }
+
+        // Sort selected variants for consistent comparison
+        const sortedSelectedVariants = [...selected_variants].sort(
+          (a, b) => a.id - b.id
+        );
+
+        // Find existing cart item with same product and variants
+        const existingItem = await CartItem.findOne({
+          where: {
+            cart_id: cart.id,
+            product_id: productId,
+            selected_variants:
+              sortedSelectedVariants.length > 0 ? sortedSelectedVariants : null,
+          },
+          transaction,
+        });
+
+        // Check stock availability
+        let availableStock = null;
+        if (sortedSelectedVariants.length > 0) {
+          // Variant-level stock now handled by combinations; do not derive from ProductVariant
+          availableStock = null;
+        } else {
+          // Check product stock
+          const inventory = await product.getInventory({ transaction });
+          availableStock = inventory?.stock ?? null;
+        }
+
+        const requestedQuantity = existingItem
+          ? existingItem.quantity + quantity
+          : quantity;
+
+        if (availableStock !== null && requestedQuantity > availableStock) {
+          // Adjust quantity to maximum available
+          const adjustedQuantity = availableStock;
+
+          if (existingItem) {
+            // Update existing item with adjusted quantity
+            await existingItem.update(
+              { quantity: adjustedQuantity },
+              { transaction }
+            );
+            await existingItem.updateTotalPrice(transaction);
+
+            syncReport.successful_merges.push({
+              productId,
+              oldQuantity: existingItem.quantity,
+              newQuantity: adjustedQuantity,
+            });
+          } else {
+            // Create new item with adjusted quantity
+            const newItem = await CartItem.create(
+              {
+                cart_id: cart.id,
+                product_id: productId,
+                selected_variants:
+                  sortedSelectedVariants.length > 0
+                    ? sortedSelectedVariants
+                    : null,
+                quantity: adjustedQuantity,
+                price: price,
+                total_price: adjustedQuantity * price,
+              },
+              { transaction }
+            );
+
+            syncReport.new_items_added.push({
+              productId,
+              quantity: adjustedQuantity,
+            });
+          }
+
+          syncReport.quantity_adjusted.push({
+            productId,
+            variantIds: sortedSelectedVariants.map((v) => v.id),
+            requestedQuantity,
+            adjustedQuantity,
+            reason: "Insufficient stock",
+          });
+        } else {
+          // Sufficient stock available
+          if (existingItem) {
+            // Update existing item quantity
+            await existingItem.update(
+              { quantity: requestedQuantity },
+              { transaction }
+            );
+            await existingItem.updateTotalPrice(transaction);
+
+            syncReport.successful_merges.push({
+              productId,
+              oldQuantity: existingItem.quantity,
+              newQuantity: requestedQuantity,
+            });
+          } else {
+            // Create new cart item
+            const totalVariantPrice = sortedSelectedVariants.reduce(
+              (sum, v) => sum + (v.additional_price || 0),
+              0
+            );
+            const totalPrice = quantity * (price + totalVariantPrice);
+
+            const newItem = await CartItem.create(
+              {
+                cart_id: cart.id,
+                product_id: productId,
+                selected_variants:
+                  sortedSelectedVariants.length > 0
+                    ? sortedSelectedVariants
+                    : null,
+                quantity: quantity,
+                price: price,
+                total_price: totalPrice,
+              },
+              { transaction }
+            );
+
+            syncReport.new_items_added.push({
+              productId,
+              quantity,
+            });
+          }
+        }
+      } catch (itemError) {
+        // Log individual item errors but continue processing other items
+        console.error(
+          `Error syncing cart item ${localItem.productId}:`,
+          itemError
+        );
+        syncReport.failed_items.push({
+          productId: localItem.productId,
+          reason: itemError.message || "Unknown error",
+        });
+      }
+    }
+
+    // Update cart totals
+    await cart.updateTotals(transaction);
+
+    await transaction.commit();
+
+    // Get full synchronized cart
+    const synchronizedCart = await cart.getFullCart();
+
+    res.status(200).json({
+      status: "success",
+      message: "Cart synchronized successfully",
+      data: {
+        cart: synchronizedCart,
+        sync_report: syncReport,
+      },
+    });
+  } catch (error) {
+    if (transaction && !transaction.finished) {
+      await transaction.rollback();
+    }
+    next(error);
+  }
+};
+
+module.exports = {
+  getCart,
+  addToCart,
+  updateCartItem,
+  removeFromCart,
+  clearCart,
+  getCartSummary,
+  syncCart,
+};

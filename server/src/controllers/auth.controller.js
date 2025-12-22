@@ -1,0 +1,1734 @@
+﻿const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const passport = require('passport');
+const { User, Role, Permission } = require("../models");
+const { Op } = require("sequelize");
+const AppError = require("../utils/appError");
+const { sendWelcomeEmail, sendPasswordResetEmail } = require("../services/email.service"); // Assuming sendPasswordResetEmail is here
+const logger = require("../utils/logger");
+const rateLimit = require('express-rate-limit'); // Import rate-limiter
+const fs = require('fs');
+
+// Generate a random 6-digit code and expiration time (10 minutes from now)
+const generateVerificationCode = () => {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expires = new Date();
+  expires.setMinutes(expires.getMinutes() + 10); // Token expires in 10 min
+  return { code, expires };
+};
+
+// Hash the verification code
+const hashVerificationCode =  (code) => {
+  return bcrypt.hashSync(code, 10);
+};
+
+// Generate JWT token
+const signToken = (id) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is not defined in environment variables");
+  }
+
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || "90d",
+    algorithm: "HS256", // Explicitly specify the algorithm
+    issuer: process.env.APP_NAME || "Stylay",
+    audience: "user",
+  });
+};
+
+// Create and send token
+const createSendToken = (user, statusCode, res) => {
+  const token = signToken(user.id);
+
+  // Remove password from output
+  user.password = undefined;
+
+  res.status(statusCode).json({
+    status: "success",
+    token,
+    data: user,
+  });
+};
+
+// Rate limiting configurations
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many login attempts from this IP, please try again after 15 minutes'
+});
+
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // Limit each IP to 5 password reset requests per hour
+  message: 'Too many password reset attempts. Please try again after an hour.'
+});
+
+/**
+ * Register a new user account
+ * Creates a new user with email verification required before account activation.
+ * Sends a welcome email with verification code that expires in 10 minutes.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.first_name - User's first name (required)
+ * @param {string} req.body.last_name - User's last name (required)
+ * @param {string} req.body.email - User's email address (required, must be unique)
+ * @param {string} req.body.password - User's password (required, min 8 characters)
+ * @param {string} req.body.phone - User's phone number (required, must be unique, Nigerian format)
+ * @param {string} req.body.gender - User's gender (optional)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with JWT token and user data
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.token - JWT authentication token
+ * @returns {Object} res.body.data - User data object
+ * @throws {AppError} 400 - Email already registered or phone already in use
+ * @throws {AppError} 500 - Server error during registration
+ * @api {post} /api/v1/auth/register Register a new user
+ * @example
+ * POST /api/v1/auth/register
+ * {
+ *   "first_name": "John",
+ *   "last_name": "Doe",
+ *   "email": "john.doe@example.com",
+ *   "password": "securepass123",
+ *   "phone": "+2348012345678",
+ *   "gender": "male"
+ * }
+ */
+exports.register = async (req, res, next) => {
+  try {
+    const { first_name, last_name, email, password, phone, gender } = req.body;
+
+    // Check if user already exists with the same email or phone
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { email: email.toLowerCase() },
+          { phone: phone }
+        ]
+      },
+      attributes: ['email', 'phone'] // Only fetch necessary fields for the check
+    });
+    
+    if (existingUser) {
+      if (existingUser.email === email.toLowerCase()) {
+        return next(new AppError("This email is already registered. Please use a different email or try logging in.", 400, {
+          code: 'EMAIL_EXISTS',
+          field: 'email'
+        }));
+      }
+      if (existingUser.phone === phone) {
+        return next(new AppError("This phone number is already in use. Please use a different number.", 400, {
+          code: 'PHONE_EXISTS',
+          field: 'phone'
+        }));
+      }
+    }
+
+    // Generate and store verification code with expiration
+    const { code: verificationCode, expires: tokenExpires } = generateVerificationCode();
+    const hashedCode = hashVerificationCode(verificationCode);
+    // Create new user (initially inactive)
+    const newUser = await User.create({
+      first_name,
+      last_name,
+      email: email.toLowerCase(),
+      password: await bcrypt.hash(password, 12),
+      profile_image: req.body.profile_image || `https://ui-avatars.com/api/?name=${first_name}+${last_name}&background=random&size=128`,
+      phone,
+      gender,
+      is_active: false, // User needs to verify email first
+      email_verified_at: null,
+      email_verification_token: hashedCode,
+      email_verification_token_expires: tokenExpires,
+    });
+    
+
+    // Assign default role (customer)
+    const customerRole = await Role.findOne({ where: { name: "customer" } });
+    if (customerRole) {
+      await newUser.addRole(customerRole, { 
+        through: { 
+          created_at: new Date(),
+        } 
+      });
+    }
+
+    // Calculate minutes until expiration
+    const minutesUntilExpiry = Math.ceil((tokenExpires - new Date()) / (1000 * 60));
+    
+    // Send welcome email with verification code
+    try {
+      await sendWelcomeEmail(
+        newUser.email,
+        `${newUser.first_name} ${newUser.last_name}`,
+        verificationCode,
+        minutesUntilExpiry
+      );
+    } catch (err) {
+      logger.error(`Error sending welcome email: ${err.message}`);
+      // Don't fail the registration if email sending fails
+    }
+
+    createSendToken(newUser, 201, res);
+  } catch (err) {
+    logger.error(`Error in register: ${err.message}`, { error: err });
+    next(new AppError("An error occurred during registration. Please try again.", 500));
+  }
+};
+
+/**
+ * Verify user email using verification code
+ * Validates the email verification code sent during registration and activates the user account.
+ * Uses database transactions for data consistency.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.email - User's email address (required)
+ * @param {string} req.body.code - 6-digit verification code (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with JWT token and verified user data
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {string} res.body.token - JWT authentication token
+ * @returns {Object} res.body.data - Verified user data with roles
+ * @throws {AppError} 400 - Missing email/code, invalid/expired code, or already verified
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 500 - Server error during verification
+ * @api {post} /api/v1/auth/verify-email Verify email with code
+ * @example
+ * POST /api/v1/auth/verify-email
+ * {
+ *   "email": "john.doe@example.com",
+ *   "code": "123456"
+ * }
+ */
+exports.verifyEmail = async (req, res, next) => {
+  const { email, code } = req.body;
+
+  // Validate input
+  if (!email || !code) {
+    return next(new AppError("Email and verification code are required", 400));
+  }
+
+  let transaction;
+  
+  try {
+    // Start a transaction
+    transaction = await User.sequelize.transaction();
+
+    // Find the user by email
+    const user = await User.findOne({
+      where: { email },
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          attributes: ["name"],
+          through: { attributes: [] },
+        },
+      ],
+      transaction,
+      lock: true // Lock the row to prevent concurrent updates
+    });
+
+    if (!user) {
+      if (transaction) await transaction.rollback();
+      return next(new AppError("No user found with this email", 404));
+    }
+
+    // Check if user is already verified
+    if (user.email_verified_at) {
+      if (transaction) await transaction.rollback();
+      return res.status(200).json({
+        status: "success",
+        message: "Email is already verified",
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            is_verified: true,
+          },
+        },
+      });
+    }
+
+    // Check token status
+    const tokenStatus = user.getTokenStatus();
+    if (tokenStatus.isExpired) {
+      if (transaction) await transaction.rollback();
+      return next(new AppError(tokenStatus.message, 400, {
+        code: 'TOKEN_EXPIRED',
+        expiresAt: tokenStatus.expiresAt,
+        isExpired: true
+      }));
+    }
+
+    // Verify the verification code
+    const isCodeValid = await bcrypt.compare(
+      code,
+      user.email_verification_token
+    );
+    
+    if (!isCodeValid) {
+      if (transaction) await transaction.rollback();
+      return next(new AppError("Invalid or expired verification code", 400, {
+        code: 'INVALID_CODE',
+        message: 'The verification code is invalid or has expired.'
+      }));
+    }
+
+    // Update user as verified, active, and clear verification token
+    await user.update(
+      {
+        email_verification_token: null,
+        email_verification_token_expires: null,
+        email_verified_at: new Date(),
+        is_active: true,
+      },
+      { transaction }
+    );
+
+    // Commit the transaction
+    await transaction.commit();
+
+    // Generate JWT token
+    const token = signToken(user.id);
+
+    // Remove sensitive data from output
+    user.password = undefined;
+
+    // Log successful verification
+    logger.info(`User ${user.id} email verified successfully`);
+
+    res.status(200).json({
+      status: "success",
+      message: "Email verified successfully",
+      token,
+      data: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        phone: user.phone,
+        is_verified: true,
+        role: user.roles && user.roles.length > 0 ? user.roles[0].name : "customer",
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+      },
+    });
+  } catch (error) {
+    // Rollback transaction in case of error
+    try {
+      if (transaction && typeof transaction.rollback === 'function' && 
+          transaction.finished !== 'commit' && transaction.finished !== 'rollback') {
+        await transaction.rollback();
+      }
+    } catch (rollbackError) {
+      logger.error(`Error during transaction rollback: ${rollbackError.message}`, { error: rollbackError });
+    }
+
+    logger.error(`Error verifying email: ${error.message}`, { 
+      error: error.message,
+      stack: error.stack,
+      email: email
+    });
+    
+    return next(
+      new AppError(
+        "An error occurred while verifying your email. Please try again.",
+        500,
+        { code: 'VERIFICATION_ERROR' }
+      )
+    );
+  }
+};
+
+/**
+ * Authenticate user login using Passport local strategy
+ * Validates user credentials and returns JWT token if authentication successful.
+ * Requires email verification before allowing login.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.email - User's email address (required)
+ * @param {string} req.body.password - User's password (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with JWT token and user data
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.token - JWT authentication token
+ * @returns {Object} res.body.data - User data object
+ * @throws {AppError} 400 - Missing email or password
+ * @throws {AppError} 401 - Invalid credentials or unverified email
+ * @throws {AppError} 500 - Authentication error
+ * @api {post} /api/v1/auth/login Login user with Passport local strategy
+ * @example
+ * POST /api/v1/auth/login
+ * {
+ *   "email": "john.doe@example.com",
+ *   "password": "securepass123"
+ * }
+ */
+exports.login = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1) Check if email and password exist
+    if (!email || !password) {
+      return next(new AppError("Please provide email and password!", 400));
+    }
+
+    // Apply login rate limiting
+    loginLimiter(req, res, async () => {
+      // 2) Use Passport's local strategy for authentication
+      passport.authenticate('local', { session: false }, async (err, user, info) => {
+        try {
+          if (err) {
+            return next(err);
+          }
+
+          if (!user) {
+            return next(new AppError(info?.message || 'Authentication failed', 401));
+          }
+
+          // 3) Check if email is verified
+          if (!user.email_verified_at) {
+            return next(new AppError("Please verify your email address first", 401));
+          }
+
+          // 4) Send token to client
+          createSendToken(user, 200, res);
+        } catch (err) {
+          logger.error(`Error in login passport authenticate callback: ${err.message}`, { error: err });
+          next(new AppError("An error occurred during login. Please try again.", 500));
+        }
+      })(req, res, next);
+    });
+  } catch (err) {
+    logger.error(`Error in login: ${err.message}`, { error: err });
+    next(new AppError("An error occurred during login. Please try again.", 500));
+  }
+};
+
+/**
+ * Update authenticated user's profile information
+ * Allows users to modify their profile data while preventing updates to sensitive fields.
+ * If email is changed, marks it as unverified and triggers re-verification process.
+ *
+ * @param {import('express').Request} req - Express request object (authenticated user required)
+ * @param {import('express').Request.body} req.body - Request body with updatable fields
+ * @param {string} [req.body.first_name] - User's first name
+ * @param {string} [req.body.last_name] - User's last name
+ * @param {string} [req.body.email] - New email address (triggers verification)
+ * @param {string} [req.body.phone] - Phone number
+ * @param {string} [req.body.gender] - Gender
+ * @param {Date} [req.body.dob] - Date of birth
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with updated user data
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {Object} res.body.data - Updated user object with roles
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 500 - Server error during update
+ * @api {put} /api/v1/auth/update-profile Update user profile
+ * @private Requires authentication
+ * @example
+ * PUT /api/v1/auth/update-profile
+ * Authorization: Bearer <jwt_token>
+ * {
+ *   "first_name": "John",
+ *   "last_name": "Smith",
+ *   "phone": "+2348012345678"
+ * }
+ */
+exports.updateProfile = async (req, res, next) => {
+  let uploadedFile = null; // Declare at function level for error handling
+  
+  try {
+    const { id } = req.user;
+    const updateData = { ...req.body };
+    
+    // DEBUG: Log request details to diagnose file upload issues
+    logger.info('updateProfile called with:', {
+      userId: id,
+      hasFiles: !!req.files,
+      hasUploadedFiles: !!req.uploadedFiles,
+      contentType: req.get('Content-Type'),
+      bodyKeys: Object.keys(req.body),
+      uploadedFilesCount: req.uploadedFiles ? req.uploadedFiles.length : 0
+    });
+    
+    // DEBUG: Log uploaded files details if any
+    if (req.uploadedFiles && req.uploadedFiles.length > 0) {
+      logger.info('Uploaded files found:', req.uploadedFiles.map(file => ({
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        url: file.url
+      })));
+    }
+    
+    // Remove fields that shouldn't be updated this way
+    const restrictedFields = ['password', 'password_reset_token', 'password_reset_expires', 'email_verified_at', 'email_verification_token'];
+    restrictedFields.forEach(field => delete updateData[field]);
+    
+    // If email is being updated, mark it as unverified
+    if (updateData.email && updateData.email !== req.user.email) {
+      updateData.email_verified_at = null;
+      updateData.email_verification_token = generateVerificationCode().code;
+      // TODO: Send verification email
+    }
+    
+    // Handle profile image upload if file was uploaded
+    if (req.uploadedFiles && req.uploadedFiles.length > 0) {
+      const profileImageFile = req.uploadedFiles[0];
+      if (profileImageFile && profileImageFile.url) {
+        updateData.profile_image = profileImageFile.url;
+        uploadedFile = profileImageFile;
+        logger.info('Profile image updated:', {
+          userId: id,
+          imageUrl: profileImageFile.url,
+          originalFilename: profileImageFile.originalname
+        });
+      }
+    }
+    
+    // DEBUG: Log update data before database operation
+    logger.info('Update data prepared:', {
+      updateDataKeys: Object.keys(updateData),
+      hasProfileImage: !!updateData.profile_image
+    });
+    
+    // Update user in database
+    const [updatedCount] = await User.update(updateData, {
+      where: { id },
+      individualHooks: true
+    });
+    
+    if (updatedCount === 0) {
+      return next(new AppError('No user found with that ID', 404));
+    }
+    
+    // Fetch the updated user with all necessary relations
+    const updatedUser = await User.findByPk(id, {
+      attributes: { exclude: ['password', 'password_reset_token', 'password_reset_expires'] },
+      include: [
+        {
+          model: Role,
+          as: 'roles',
+          attributes: ['id', 'name'],
+          through: { attributes: [] }
+        }
+      ]
+    });
+    
+    if (!updatedUser) {
+      return next(new AppError('User not found after update', 404));
+    }
+    
+    // Log the profile update
+    logger.info(`User profile updated: ${updatedUser.email} (ID: ${updatedUser.id})`);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        user: updatedUser
+      }
+    });
+    
+  } catch (error) {
+    // Clean up uploaded file if there was an error
+    if (uploadedFile && uploadedFile.path && fs.existsSync(uploadedFile.path)) {
+      try {
+        fs.unlinkSync(uploadedFile.path);
+        logger.info(`Cleaned up uploaded file after error: ${uploadedFile.path}`);
+      } catch (cleanupError) {
+        logger.error(`Failed to clean up uploaded file: ${cleanupError.message}`);
+      }
+    }
+    
+    logger.error(`Error updating user profile: ${error.message}`, {
+      userId: req.user?.id,
+      error: error.stack
+    });
+    
+    // Ensure a user-friendly error is passed to the next middleware
+    if (error instanceof AppError) {
+      next(error);
+    } else {
+      next(new AppError("An error occurred while updating your profile. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Get current authenticated user's profile data
+ * Returns comprehensive user information including roles and permissions.
+ * Excludes sensitive data like passwords.
+ *
+ * @param {import('express').Request} req - Express request object (authenticated user required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with current user data
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {Object} res.body.data - User object with roles and permissions
+ * @throws {AppError} 500 - Server error retrieving user data
+ * @api {get} /api/v1/auth/me Get current user
+ * @private Requires authentication
+ * @example
+ * GET /api/v1/auth/me
+ * Authorization: Bearer <jwt_token>
+ */
+exports.getMe = async (req, res, next) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ["password"] },
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          through: { attributes: [] },
+          attributes: ["id", "name", "description"],
+          include: [
+            {
+              model: Permission,
+              as: "permissions",
+              through: { attributes: [] },
+              attributes: ["id", "name", "description"]
+            }
+          ]
+        },
+      ],
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        user,
+      },
+    });
+  } catch (err) {
+    logger.error(`Error fetching user profile for ${req.user.id}: ${err.message}`, { error: err });
+    next(new AppError("An error occurred while fetching your profile. Please try again.", 500));
+  }
+};
+
+// Rate limiting configuration (in milliseconds)
+const VERIFICATION_RESEND_DELAY = 30 * 1000; // 30 seconds
+
+/**
+ * Resend email verification code
+ * Generates and sends a new verification code with rate limiting (30 seconds between requests).
+ * Updates the verification token and expiration time in the database.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.email - User's email address (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with expiration details
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Success message
+ * @returns {number} res.body.expiresIn - Token expiration in seconds
+ * @returns {Date} res.body.expiresAt - Token expiration timestamp
+ * @throws {AppError} 400 - Email required or already verified
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 429 - Rate limit exceeded (wait before retrying)
+ * @throws {AppError} 500 - Server error sending email
+ * @api {post} /api/v1/auth/resend-verification-code Resend verification code
+ * @example
+ * POST /api/v1/auth/resend-verification-code
+ * {
+ *   "email": "john.doe@example.com"
+ * }
+ */
+exports.resendVerificationCode = async (req, res, next) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return next(new AppError('Email is required', 400));
+  }
+  
+  let transaction;
+  
+  try {
+    // Start transaction
+    
+    // Find user by email with lock to prevent race conditions
+    const user = await User.findOne({ 
+      where: { email },
+    });
+
+    if (!user) {
+      return next(new AppError('No account found with this email', 404));
+    }
+
+    // Check if email is already verified
+    if (user.email_verified_at) {
+      return next(new AppError('Email is already verified', 400));
+    }
+
+    // Check rate limiting
+    const now = new Date();
+    if (user.email_verification_token_expires) {
+      const timeSinceLastSent = now - user.email_verification_token_expires.getTime() + (10 * 60 * 1000); // 10 minutes
+      const timeRemaining = Math.ceil((VERIFICATION_RESEND_DELAY - timeSinceLastSent) / 1000); 
+      
+      if (timeSinceLastSent < VERIFICATION_RESEND_DELAY) {
+        return next(new AppError(
+          `Please wait ${timeRemaining} seconds before requesting a new code`,
+          429, // Too Many Requests
+          { code: 'RATE_LIMIT_EXCEEDED', retryAfter: timeRemaining }
+        ));
+      }
+    }
+
+    // Generate new verification code with expiration
+    const { code: verificationCode, expires: tokenExpires } = generateVerificationCode();
+    const hashedCode = hashVerificationCode(verificationCode);
+
+    try {
+      // Update user with new verification token and expiration
+      await user.update({
+        email_verification_token: hashedCode,
+        email_verification_token_expires: tokenExpires,
+        updated_at: now
+      });
+
+      // Calculate minutes until expiration
+      const minutesUntilExpiry = Math.ceil((tokenExpires - now) / (1000 * 60)); // 10 minutes
+      
+      // Send welcome email with new verification code
+      try {
+        await sendWelcomeEmail(
+          user.email,
+          `${user.first_name} ${user.last_name}`,
+          verificationCode, 
+          minutesUntilExpiry
+        );
+      } catch (err) {
+        logger.error(`Error sending verification email to ${user.email}:`, err);
+        // Don't fail the request if email sending fails, just log it
+      }
+
+      return res.status(200).json({
+        status: "success",
+        message: `Verification code sent to ${email}`,
+        expiresIn: minutesUntilExpiry * 60, // in seconds for consistency
+        expiresAt: tokenExpires
+      });
+    } catch (updateErr) {
+      throw updateErr; // Let the outer catch handle it
+    }
+  } catch (err) {
+    
+    // Log the error for debugging
+    logger.error('Error in resendVerificationCode:', err);
+    
+    // Handle specific error cases
+    if (err.name === 'SequelizeDatabaseError') {
+      return next(new AppError('A database error occurred', 500));
+    }
+    
+    // Pass to the global error handler
+    next(err);
+  }
+};
+
+/**
+ * Update authenticated user's password
+ * Validates current password before allowing password change.
+ * Updates password_changed_at timestamp and logs the change.
+ *
+ * @param {import('express').Request} req - Express request object (authenticated user required)
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.currentPassword - User's current password (required)
+ * @param {string} req.body.newPassword - New password (required, min 8 characters)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with new JWT token
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.token - New JWT authentication token
+ * @returns {Object} res.body.data - Updated user data
+ * @throws {AppError} 400 - Phone change pending (blocks password update)
+ * @throws {AppError} 401 - Current password is incorrect
+ * @throws {AppError} 500 - Server error during password update
+ * @api {put} /api/v1/auth/update-password Update password
+ * @private Requires authentication
+ * @example
+ * PUT /api/v1/auth/update-password
+ * Authorization: Bearer <jwt_token>
+ * {
+ *   "currentPassword": "oldpassword123",
+ *   "newPassword": "newpassword456"
+ * }
+ */
+exports.updatePassword = async (req, res, next) => {
+  const { currentPassword, newPassword } = req.body;
+  try {
+    // 1) Get user from collection
+    const user = await User.findByPk(req.user.id);
+
+    // 2) Check if phone change is pending verification
+    if (user.isPhoneChangePending() && !user.isPhoneChangeVerificationExpired()) {
+      return next(new AppError("You cannot change your password while a phone number change is pending verification. Please wait for admin approval or cancel the phone change request.", 400));
+    }
+
+    // 3) Check if POSTed current password is correct
+    if (!(await bcrypt.compare(currentPassword, user.password))) {
+      return next(new AppError("Your current password is wrong.", 401));
+    }
+
+    // 4) If so, update password
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.password_changed_at = new Date();
+    await user.save();
+
+    // 5) Log user in, send JWT
+    createSendToken(user, 200, res);
+  } catch (err) {
+    logger.error(`Error updating password: ${err.message}`, { userId: req.user?.id, error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while updating your password. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Initiate password reset process
+ * Generates a reset token and sends it via email with a clickable reset link.
+ * The token is embedded in the URL, so users don't need to copy/paste it.
+ * Uses database transactions for consistency.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.email - User's email address (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response (generic message for security)
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Generic success message
+ * @throws {AppError} 400 - Email required
+ * @throws {AppError} 500 - Server error or email sending failure
+ * @api {post} /api/v1/auth/forgot-password Forgot password - Send reset link
+ * @example
+ * POST /api/v1/auth/forgot-password
+ * {
+ *   "email": "john.doe@example.com"
+ * }
+ */
+exports.forgotPassword = async (req, res, next) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return next(new AppError("Email is required", 400));
+  }
+
+  const transaction = await User.sequelize.transaction();
+
+  try {
+    // 1) Get user based on POSTed email
+    const user = await User.findOne({
+      where: { email },
+      transaction,
+    });
+
+    // Return success even if user doesn't exist to prevent email enumeration
+    if (!user) {
+      await transaction.commit();
+      return res.status(200).json({
+        status: "success",
+        message:
+          "If your email is registered, you will receive a password reset link.",
+      });
+    }
+
+    // 2) Generate a reset token using crypto (URL-safe)
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    const resetTokenExpires = new Date();
+    resetTokenExpires.setMinutes(resetTokenExpires.getMinutes() + 15); // Token expires in 15 minutes
+
+    // 3) Save the hashed reset token and its expiration to the database
+    await user.update({
+      password_reset_token: hashedToken,
+      password_reset_expires: resetTokenExpires,
+    }, { transaction });
+
+    // 4) Create the reset link with embedded token
+    const resetUrl = `${
+      process.env.FRONTEND_URL || "https://stylay.com"
+    }/reset-password/${resetToken}`;
+
+    // 5) Send the reset link to the user's email
+    try {
+      await sendPasswordResetEmail(
+        user.email,
+        `${user.first_name} ${user.last_name}`,
+        resetUrl // Send the full URL instead of just the code
+      );
+    } catch (emailErr) {
+      logger.error(`Error sending password reset email: ${emailErr.message}`);
+      await transaction.rollback();
+      return next(new AppError("Failed to send password reset email. Please try again.", 500));
+    }
+
+    // Commit the transaction
+    await transaction.commit();
+
+    // Log the successful password reset request
+    logger.info(`Password reset link sent to user ${user.id}`);
+
+    res.status(200).json({
+      status: "success",
+      message:
+        "If your email is registered, you will receive a password reset link.",
+    });
+  } catch (err) {
+    // Rollback transaction in case of error
+    if (
+      transaction.finished !== "commit" &&
+      transaction.finished !== "rollback"
+    ) {
+      await transaction.rollback();
+    }
+
+    logger.error(`Error in forgotPassword for ${email}: ${err.message}`, {
+      error: err,
+    });
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while processing your request. Please try again later.", 500));
+    }
+  }
+};
+
+/**
+ * Verify password reset token and validate it's still valid
+ * This endpoint validates the token from the URL before allowing password reset.
+ * Users hit this endpoint when they click the reset link to verify the token is valid.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.token - Reset token from URL (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming token validity
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Token validation message
+ * @returns {Object} res.body.data - User details (for form prefilling)
+ * @returns {string} res.body.data.email - User's email
+ * @returns {Date} res.body.data.expiresAt - Token expiration time
+ * @throws {AppError} 400 - Invalid or expired token
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 500 - Server error
+ * @api {get} /api/v1/auth/verify-reset-token/:token Verify password reset token
+ * @example
+ * GET /api/v1/auth/verify-reset-token/abc123def456xyz789
+ */
+exports.verifyResetToken = async (req, res, next) => {
+  try {
+    let { token } = req.params;
+
+    if (!token) {
+      return next(new AppError("Reset token is required", 400));
+    }
+
+    // Clean the token by removing any trailing URL-encoded newline characters
+    token = token.replace(/%0A/g, "");
+
+    // Hash the token to match what's stored in the database
+    const crypto = require('crypto');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Find user with this reset token
+    const user = await User.findOne({
+      where: {
+        password_reset_token: hashedToken,
+      },
+      attributes: ['id', 'email', 'password_reset_expires'],
+    });
+
+    if (!user) {
+      return next(new AppError("Invalid or expired reset token", 400));
+    }
+
+    // Check if token has expired
+    if (new Date() > user.password_reset_expires) {
+      // Clear the expired token from the database
+      await user.update({
+        password_reset_token: null,
+        password_reset_expires: null,
+      });
+      return next(new AppError("Password reset link has expired. Please request a new one.", 400, {
+        code: 'TOKEN_EXPIRED',
+        expiresAt: user.password_reset_expires
+      }));
+    }
+
+    // Token is valid
+    res.status(200).json({
+      status: "success",
+      message: "Reset token is valid",
+      data: {
+        email: user.email,
+        expiresAt: user.password_reset_expires,
+      },
+    });
+  } catch (err) {
+    logger.error(`Error verifying reset token: ${err.message}`, { error: err });
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while verifying the reset token.", 500));
+    }
+  }
+};
+
+
+/**
+ * Logout user by clearing authentication cookies and blacklisting JWT token
+ * Clears JWT cookies and adds the JWT token to blacklist to prevent reuse.
+ * Always returns success to prevent user being stuck in logged-in state.
+ *
+ * @param {import('express').Request} req - Express request object (may include JWT cookie)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming logout
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Logout confirmation message
+ * @api {post} /api/v1/auth/logout Logout user
+ * @example
+ * POST /api/v1/auth/logout
+ * Authorization: Bearer <jwt_token> (optional)
+ */
+exports.logout = async (req, res) => {
+  try {
+    // Clear the JWT cookie if it exists
+    if (req.cookies?.jwt) {
+      res.clearCookie("jwt", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+      });
+    }
+
+    // Blacklist the JWT token if provided in Authorization header
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      
+      // Import the blacklist service
+      const tokenBlacklistService = require('../services/token-blacklist.service');
+      
+      // Add token to blacklist
+      await tokenBlacklistService.blacklistToken(token);
+    }
+
+    // If using token-based auth, the client should remove the token
+    res.status(200).json({
+      status: "success",
+      message: "Successfully logged out",
+    });
+  } catch (err) {
+    // Even if there's an error, we still want to return a success response
+    // to prevent the user from being stuck in a logged-in state
+    logger.error(`Error during logout: ${err.message}`, { error: err });
+    res.status(200).json({
+      status: "success",
+      message: "Successfully logged out",
+    });
+  }
+};
+
+/**
+ * Reset user password using reset token from URL
+ * Validates the reset token and updates the user's password.
+ * Token is provided in the URL/params instead of the body for security.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.token - Reset token from URL (required)
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.newPassword - New password (required, min 8 characters)
+ * @param {string} req.body.confirmPassword - Password confirmation (required, must match newPassword)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming password update
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Password update confirmation
+ * @throws {AppError} 400 - Missing required fields, invalid/expired token, or password mismatch
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 500 - Server error during password reset
+ * @api {post} /api/v1/auth/reset-password/:token Reset password with embedded token
+ * @example
+ * POST /api/v1/auth/reset-password/abc123def456xyz789
+ * {
+ *   "newPassword": "newsecurepass123",
+ *   "confirmPassword": "newsecurepass123"
+ * }
+ */
+exports.resetPassword = async (req, res, next) => {
+  try {
+    let { token } = req.params;
+    const { newPassword, confirmPassword } = req.body;
+
+    // Validate input
+    if (!token) {
+      return next(new AppError("Reset token is required", 400));
+    }
+
+    // Clean the token by removing any trailing URL-encoded newline characters
+    token = token.replace(/%0A/g, "");
+
+    if (!newPassword || !confirmPassword) {
+      return next(new AppError("New password and confirmation are required", 400));
+    }
+
+    if (newPassword !== confirmPassword) {
+      return next(new AppError("Passwords do not match", 400));
+    }
+
+    // Hash the token to match what's stored in the database
+    const crypto = require('crypto');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    // Find user with this reset token
+    const user = await User.findOne({
+      where: {
+        password_reset_token: hashedToken,
+      },
+    });
+
+    if (!user) {
+      return next(new AppError("Invalid or expired reset token", 400));
+    }
+
+    // Check if token has expired
+    if (new Date() > user.password_reset_expires) {
+      // Clear the expired token and expiration from the database
+      await user.update({
+        password_reset_token: null,
+        password_reset_expires: null,
+      });
+      return next(new AppError("Password reset link has expired. Please request a new one.", 400, {
+        code: 'TOKEN_EXPIRED',
+        expiresAt: user.password_reset_expires
+      }));
+    }
+
+    // Update password
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.password_changed_at = new Date();
+    
+    // Clear the reset token and expiration (mark as used)
+    user.password_reset_token = null;
+    user.password_reset_expires = null;
+    
+    await user.save();
+
+    // Log successful password reset
+    logger.info(`Password reset successfully for user ${user.id}`);
+
+    res.status(200).json({
+      status: "success",
+      message: "Password has been reset successfully. You can now log in with your new password.",
+    });
+  } catch (err) {
+    logger.error(`Error resetting password: ${err.message}`, { error: err });
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while resetting your password. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Request phone number change for authenticated user
+ * Initiates phone change process requiring admin approval. Sends verification email to user.
+ * Generates secure token valid for 24 hours. Validates Nigerian phone format.
+ *
+ * @param {import('express').Request} req - Express request object (authenticated user required)
+ * @param {import('express').Request.body} req.body - Request body
+ * @param {string} req.body.newPhone - New phone number in Nigerian format (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with pending change details
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Request submission confirmation
+ * @returns {Object} res.body.data - Pending change details
+ * @returns {string} res.body.data.pending_phone - Requested phone number
+ * @returns {Date} res.body.data.requested_at - Request timestamp
+ * @returns {Date} res.body.data.verification_expires_at - Token expiry
+ * @throws {AppError} 400 - Invalid phone format, phone in use, or pending request exists
+ * @throws {AppError} 500 - Server error during request processing
+ * @api {post} /api/v1/auth/request-phone-change Request phone number change
+ * @private Requires authentication
+ * @example
+ * POST /api/v1/auth/request-phone-change
+ * Authorization: Bearer <jwt_token>
+ * {
+ *   "newPhone": "+2348012345678"
+ * }
+ */
+exports.requestPhoneChange = async (req, res, next) => {
+  try {
+    const { newPhone } = req.body;
+    const userId = req.user.id;
+
+    if (!newPhone) {
+      return next(new AppError("New phone number is required", 400));
+    }
+
+    // Validate phone format
+    const phoneRegex = /^\+234(70|80|81|90|91)[0-9]{8}$/;
+    if (!phoneRegex.test(newPhone)) {
+      return next(new AppError("Phone number must be in the format +234[70|80|81|90|91]XXXXXXXX (e.g., +2348012345678)", 400));
+    }
+
+    const user = await User.findByPk(userId);
+
+    // Check if phone is already in use
+    const existingUser = await User.findOne({ where: { phone: newPhone } });
+    if (existingUser && existingUser.id !== userId) {
+      return next(new AppError("This phone number is already in use", 400));
+    }
+
+    // Check if user already has a pending phone change
+    if (user.isPhoneChangePending() && !user.isPhoneChangeVerificationExpired()) {
+      return next(new AppError("You already have a pending phone change request. Please wait for admin approval or cancel the current request.", 400));
+    }
+
+    // Generate verification token (24 hours expiry)
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenExpires = new Date();
+    tokenExpires.setHours(tokenExpires.getHours() + 24);
+
+    // Update user with pending phone change
+    await user.update({
+      pending_phone_number: newPhone,
+      phone_change_requested_at: new Date(),
+      phone_change_token: token,
+      phone_change_token_expires: tokenExpires
+    });
+
+    // Send admin notification
+    try {
+      await sendAdminPhoneChangeNotification(
+        process.env.ADMIN_EMAIL || "admin@stylay.com", // Default admin email if not set
+        {
+          name: `${user.first_name} ${user.last_name}`,
+          email: user.email,
+          currentPhone: user.phone,
+          newPhone: newPhone,
+          requestedAt: user.phone_change_requested_at,
+        }
+      );
+    } catch (emailErr) {
+      logger.error(`Error sending admin phone change notification: ${emailErr.message}`);
+      // Don't fail the request if admin email fails
+    }
+
+    // Send user notification email
+    try {
+      await sendPhoneChangeNotificationEmail(
+        user.email,
+        `${user.first_name} ${user.last_name}`,
+        newPhone,
+        token
+      );
+    } catch (emailErr) {
+      logger.error(`Error sending phone change notification email: ${emailErr.message}`);
+      // Don't fail the request if email fails
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Phone change request submitted successfully. Please check your email for verification instructions.",
+      data: {
+        pending_phone: newPhone,
+        requested_at: user.phone_change_requested_at,
+        verification_expires_at: tokenExpires
+      }
+    });
+  } catch (err) {
+    logger.error(`Error requesting phone change for user ${req.user.id}: ${err.message}`, { error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while processing your phone change request. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Verify phone change request via email link
+ * Validates the verification token and marks the request as verified for admin approval.
+ * Clears the verification token after successful verification.
+ *
+ * @param {import('express').Request} req - Express request object
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.token - Verification token from email link (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming verification
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Verification confirmation
+ * @returns {Object} res.body.data - Verified request details
+ * @returns {string} res.body.data.pending_phone - Requested phone number
+ * @returns {Date} res.body.data.requested_at - Request timestamp
+ * @throws {AppError} 400 - Invalid/expired token or verification period expired
+ * @throws {AppError} 500 - Server error during verification
+ * @api {get} /api/v1/auth/verify-phone-change Verify phone change (user clicks verification link)
+ * @example
+ * GET /api/v1/auth/verify-phone-change?token=abc123def456
+ */
+exports.verifyPhoneChange = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return next(new AppError("Verification token is required", 400));
+    }
+
+    const user = await User.findOne({
+      where: {
+        phone_change_token: token
+      }
+    });
+
+    if (!user) {
+      return next(new AppError("Invalid verification token", 400));
+    }
+
+    // Check if token is expired
+    const tokenStatus = user.getPhoneChangeTokenStatus();
+    if (tokenStatus.isExpired) {
+      return next(new AppError(tokenStatus.message, 400));
+    }
+
+    // Check if verification period has expired
+    if (user.isPhoneChangeVerificationExpired()) {
+      return next(new AppError("Phone change verification period has expired. Please submit a new request.", 400));
+    }
+
+    // Clear the verification token but keep pending phone for admin approval
+    await user.update({
+      phone_change_token: null,
+      phone_change_token_expires: null
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Phone change request verified successfully. Your request is now pending admin approval.",
+      data: {
+        pending_phone: user.pending_phone_number,
+        requested_at: user.phone_change_requested_at
+      }
+    });
+  } catch (err) {
+    logger.error(`Error verifying phone change for user ${req.user?.id || 'unknown'}: ${err.message}`, { error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred during phone change verification. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Cancel pending phone change request
+ * Removes all pending phone change data for the authenticated user.
+ * Allows user to submit a new phone change request after cancellation.
+ *
+ * @param {import('express').Request} req - Express request object (authenticated user required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response confirming cancellation
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Cancellation confirmation
+ * @throws {AppError} 400 - No pending request found
+ * @throws {AppError} 500 - Server error during cancellation
+ * @api {post} /api/v1/auth/cancel-phone-change Cancel phone change request (user)
+ * @private Requires authentication
+ * @example
+ * POST /api/v1/auth/cancel-phone-change
+ * Authorization: Bearer <jwt_token>
+ */
+exports.cancelPhoneChange = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findByPk(userId);
+
+    if (!user.isPhoneChangePending()) {
+      return next(new AppError("No pending phone change request found", 400));
+    }
+
+    // Clear pending phone change
+    await user.update({
+      pending_phone_number: null,
+      phone_change_requested_at: null,
+      phone_change_token: null,
+      phone_change_token_expires: null
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Phone change request cancelled successfully"
+    });
+  } catch (err) {
+    logger.error(`Error cancelling phone change for user ${userId}: ${err.message}`, { error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while cancelling your phone change request. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Admin approval of phone number change request
+ * Validates request is still pending and phone number available, then updates user's phone.
+ * Clears all pending change fields after successful approval.
+ *
+ * @param {import('express').Request} req - Express request object (admin authentication required)
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.userId - ID of user whose request to approve (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with approval details
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Approval confirmation
+ * @returns {Object} res.body.data - Approval result details
+ * @returns {string} res.body.data.user_id - Approved user ID
+ * @returns {string} res.body.data.new_phone - New phone number
+ * @throws {AppError} 400 - No pending request, verification expired, or phone unavailable
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 500 - Server error during approval
+ * @api {post} /api/v1/auth/approve-phone-change Admin approve phone change
+ * @private Requires admin authentication
+ * @example
+ * POST /api/v1/auth/approve-phone-change/123
+ * Authorization: Bearer <admin_jwt_token>
+ */
+exports.approvePhoneChange = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    if (!user.isPhoneChangePending()) {
+      return next(new AppError("No pending phone change request for this user", 400));
+    }
+
+    if (user.isPhoneChangeVerificationExpired()) {
+      return next(new AppError("Phone change verification period has expired", 400));
+    }
+
+    // Check if new phone is still available
+    const existingUser = await User.findOne({
+      where: { phone: user.pending_phone_number }
+    });
+    if (existingUser && existingUser.id !== userId) {
+      return next(new AppError("The requested phone number is no longer available", 400));
+    }
+
+    // Update phone number and clear pending fields
+    await user.update({
+      phone: user.pending_phone_number,
+      pending_phone_number: null,
+      phone_change_requested_at: null,
+      phone_change_token: null,
+      phone_change_token_expires: null
+    });
+
+    // Log the approval
+    logger.info(`Phone change approved for user ${userId}: ${user.phone}`);
+
+    res.status(200).json({
+      status: "success",
+      message: "Phone change approved successfully",
+      data: {
+        user_id: userId,
+        new_phone: user.phone
+      }
+    });
+  } catch (err) {
+    logger.error(`Error approving phone change for user ${userId}: ${err.message}`, { error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while approving the phone change. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Admin rejection of phone number change request
+ * Removes pending phone change request without updating user's phone number.
+ * Logs the rejection for audit purposes.
+ *
+ * @param {import('express').Request} req - Express request object (admin authentication required)
+ * @param {import('express').Request.params} req.params - Route parameters
+ * @param {string} req.params.userId - ID of user whose request to reject (required)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with rejection details
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {string} res.body.message - Rejection confirmation
+ * @returns {Object} res.body.data - Rejection result details
+ * @returns {string} res.body.data.user_id - Rejected user ID
+ * @throws {AppError} 400 - No pending request found
+ * @throws {AppError} 404 - User not found
+ * @throws {AppError} 500 - Server error during rejection
+ * @private admin
+ * @api {post} /api/v1/auth/reject-phone-change Admin reject phone change
+ * @example
+ * POST /api/v1/auth/reject-phone-change/123
+ * Authorization: Bearer <admin_jwt_token>
+ */
+exports.rejectPhoneChange = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    if (!user.isPhoneChangePending()) {
+      return next(new AppError("No pending phone change request for this user", 400));
+    }
+
+    // Clear pending phone change
+    await user.update({
+      pending_phone_number: null,
+      phone_change_requested_at: null,
+      phone_change_token: null,
+      phone_change_token_expires: null
+    });
+
+    // Log the rejection
+    logger.info(`Phone change rejected for user ${userId}`);
+
+    res.status(200).json({
+      status: "success",
+      message: "Phone change request rejected",
+      data: {
+        user_id: userId
+      }
+    });
+  } catch (err) {
+    logger.error(`Error rejecting phone change for user ${userId}: ${err.message}`, { error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while rejecting the phone change. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Get paginated list of pending phone change requests (admin only)
+ * Returns all users with pending phone change requests for admin review and approval.
+ * Includes pagination support for large result sets.
+ *
+ * @param {import('express').Request} req - Express request object (admin authentication required)
+ * @param {import('express').Request.query} req.query - Query parameters
+ * @param {number} [req.query.page=1] - Page number for pagination
+ * @param {number} [req.query.limit=10] - Number of results per page
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Paginated list of pending phone change requests
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {number} res.body.results - Number of results in current page
+ * @returns {number} res.body.total - Total number of pending requests
+ * @returns {number} res.body.totalPages - Total number of pages
+ * @returns {number} res.body.currentPage - Current page number
+ * @returns {Array} res.body.data - Array of pending phone change user objects
+ * @throws {AppError} 500 - Server error retrieving pending requests
+ * @private admin
+ * @api {get} /api/v1/auth/get-pending-phone-changes Get pending phone changes (admin)
+ * @example
+ * GET /api/v1/auth/get-pending-phone-changes?page=1&limit=5
+ * Authorization: Bearer <admin_jwt_token>
+ */
+exports.getPendingPhoneChanges = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const { count, rows: users } = await User.findAndCountAll({
+      where: {
+        pending_phone_number: { [require('sequelize').Op.ne]: null },
+        phone_change_requested_at: { [require('sequelize').Op.ne]: null }
+      },
+      attributes: ['id', 'first_name', 'last_name', 'email', 'phone', 'pending_phone_number', 'phone_change_requested_at'],
+      limit,
+      offset,
+      order: [['phone_change_requested_at', 'ASC']]
+    });
+
+    res.status(200).json({
+      status: 'success',
+      results: users.length,
+      total: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      data: users
+    });
+  } catch (err) {
+    logger.error(`Error retrieving pending phone changes: ${err.message}`, { error: err });
+    // Ensure a user-friendly error is passed to the next middleware
+    if (err instanceof AppError) {
+      next(err);
+    } else {
+      next(new AppError("An error occurred while retrieving pending phone changes. Please try again.", 500));
+    }
+  }
+};
+
+/**
+ * Registers an admin user
+ * @param {Object} req - Express request object
+ * @param {Object} req.body - Request body
+ * @param {string} req.body.first_name - First name of the admin user
+ * @param {string} req.body.last_name - Last name of the admin user
+ * @param {string} req.body.phone - Phone number of the admin user
+ * @param {string} req.body.email - Email of the admin user
+ * @param {string} req.body.password - Password of the admin user
+ * @param {string} req.body.gender - Gender of the admin user
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {Object} res.body.status - Response status ("success")
+ * @returns {Object} res.body.data - User object
+ * @throws {AppError} 400 - Invalid input
+ * @throws {AppError} 500 - Server error
+ * @private admin
+ * @api {post} /api/v1/auth/register-admin Register admin
+ * @example
+ * POST /api/v1/auth/register-admin
+ * Authorization: Bearer <admin_jwt_token>
+ * {
+ *   "first_name": "John",
+ *   "last_name": "Doe",
+ *   "phone": "1234567890",
+ *   "email": "john.doe@example.com",
+ *   "password": "password"
+ *   "gender": "male"
+ * }
+ */
+exports.registerAdmin = async (req, res, next) => {
+  try {
+    const transaction = await User.sequelize.transaction(); // Start transaction
+
+    const { first_name, last_name, phone, email, password, gender } = req.body;
+
+    // Check if user already exists with the same email or phone
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { email: email.toLowerCase() },
+          { phone: phone }
+        ]
+      },
+      attributes: ['email', 'phone'], // Only fetch necessary fields for the check
+      transaction // Include transaction
+    });
+
+    if (existingUser) {
+      const errorMessage = existingUser.email === email.toLowerCase() ? "Email already registered" : "Phone already in use";
+      throw new AppError(errorMessage, 400);
+    }
+
+    // Validate input
+    if (!first_name || !last_name || !phone || !email || !password) {
+      throw new AppError("Please provide all required fields.", 400);
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user within transaction
+    const user = await User.create({
+      first_name,
+      last_name,
+      phone,
+      email,
+      password: hashedPassword,
+      email_verified_at: new Date(),
+      is_active: true,
+      profile_image: `https://ui-avatars.com/api/?name=${first_name}+${last_name}&background=random&size=128`,
+      gender,
+    }, { transaction });
+
+    // Add admin role to user within transaction
+    const role = await Role.findOne({
+      where: { name: "admin" },
+      transaction // Include transaction
+    });
+    if (!role) {
+      logger.error('Admin role not found in database');
+      const allRoles = await Role.findAll({ attributes: ['id', 'name'] });
+      logger.info(`Existing roles: ${JSON.stringify(allRoles)}`);
+
+      // Check if seeders ran by querying roles table directly
+      const seededRoles = await Role.findAll();
+      logger.info(`Seeded roles check: ${seededRoles.length ? 'Roles exist' : 'No roles found'}`);
+
+      throw new AppError("Admin role configuration missing", 500);
+    }
+    await user.addRole(role, { transaction });
+
+    await transaction.commit(); // Commit transaction
+
+    logger.info(`Admin user ${user.id} created successfully`);
+
+    // Generate token and send response
+    createSendToken(user, 201, res);
+  } catch (error) {
+    if (transaction) {
+      await transaction.rollback(); // Rollback transaction if any error occurs
+    }
+
+    if (error instanceof AppError) {
+      next(error);
+    } else {
+      logger.error(`Error registering admin user: ${error.message}`, { error });
+      next(new AppError("An error occurred while registering the admin user. Please try again.", 500));
+    }
+  }
+};

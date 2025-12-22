@@ -1,0 +1,1390 @@
+const {
+  Product,
+  ProductVariant,
+  ProductImage,
+  Vendor,
+  Category,
+  Store,
+  Review,
+  VariantType,
+  VariantCombination,
+  sequelize,
+  UserProductView,
+  ProductVariantCombination,
+  User,
+} = require("../models");
+const ProductService = require("../services/product.service");
+const AppError = require("../utils/appError");
+const { Op } = require("sequelize");
+const slugify = require("slugify");
+const VariantService = require("../services/variant.service");
+const ImageProcessor = require("../utils/imageProcessor");
+const recentlyViewedService = require("../services/recently-viewed.service");
+const fs = require("fs");
+
+/**
+ * Creates a new product for an approved vendor, with support for variants and images.
+ * Only approved vendors can create products. Admins can create products for any vendor.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.body - Request body containing product data
+ * @param {string} req.body.name - Product name (required)
+ * @param {string} req.body.description - Product description (required)
+ * @param {number} req.body.price - Product price (required)
+ * @param {number} req.body.category_id - Category ID (required)
+ * @param {string} req.body.sku - Product SKU (required)
+ * @param {Array<Object>} [req.body.variants] - Product variants array with type categorization
+ * @param {Array<Object>} [req.body.images] - Product images array
+ * @param {number} [req.body.vendor_id] - Vendor ID (admin only)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with created product data
+ * @returns {Object} data - Response data
+ * @returns {Object} data.data - Created product with associations
+ * @returns {number} data.data.id - Product ID
+ * @returns {string} data.data.name - Product name
+ * @returns {string} data.data.slug - Product slug
+ * @returns {string} data.data.description - Product description
+ * @returns {number} data.data.price - Product price
+ * @returns {string} data.data.sku - Product SKU
+ * @returns {string} data.data.status - Product status ('active')
+ * @returns {number} data.data.impressions - View count (0)
+ * @returns {number} data.data.sold_units - Units sold (0)
+ * @returns {Object} data.data.category - Product category
+ * @returns {Object} data.data.vendor - Product vendor
+ * @returns {Array} data.data.ProductVariants - Product variants with type associations
+ * @returns {Array} data.data.combinations - Generated variant combinations
+ * @returns {Array} data.data.images - Product images
+ * @throws {AppError} 403 - When vendor is not approved or admin tries to create for unapproved vendor
+ * @throws {AppError} 404 - When category not found
+ * @throws {AppError} 400 - When required fields are missing or invalid variant data
+ * @api {post} /api/v1/products Create Product
+ * @private vendor, admin
+ * @example
+ * // Request
+ * POST /api/v1/products
+ * Authorization: Bearer <token>
+ * {
+ *   "name": "Tommy Hilfiger T-Shirt",
+ *   "description": "Classic cotton t-shirt",
+ *   "price": 29.99,
+ *   "category_id": 1,
+ *   "sku": "TH-TS-001",
+ *   "variants": [
+ *     {"type": "Color", "value": "Black", "additional_price": 0, "stock": 50},
+ *     {"type": "Color", "value": "White", "additional_price": 0, "stock": 45},
+ *     {"type": "Size", "value": "Small", "additional_price": 0, "stock": 20},
+ *     {"type": "Size", "value": "Medium", "additional_price": 0, "stock": 35},
+ *     {"type": "Size", "value": "Large", "additional_price": 2, "stock": 40}
+ *   ],
+ *   "images": [
+ *     {"url": "https://example.com/tshirt1.jpg"}
+ *   ]
+ * }
+ *
+ * // Success Response (201)
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "id": 1,
+ *     "name": "Wireless Headphones",
+ *     "slug": "wireless-headphones",
+ *     "description": "High-quality wireless headphones",
+ *     "price": 99.99,
+ *     "category": {"id": 1, "name": "Electronics"},
+ *     "vendor": {"id": 1, "status": "approved"},
+ *     "ProductVariants": [],
+ *     "images": []
+ *   }
+ * }
+ */
+const createProduct = async (req, res, next) => {
+  try {
+    const {
+      name,
+      description,
+      price,
+      category_id,
+      sku,
+      stock, // Start with this stock for simple products
+      variants: rawVariants = [],
+      vendor_id: vendorId, // Optional vendor_id for admin
+    } = req.body;
+
+    // Parse variants if it's a string
+    let variants = rawVariants;
+    if (typeof rawVariants === "string") {
+      try {
+        variants = JSON.parse(rawVariants);
+      } catch (e) {
+        throw new AppError("Variants must be a valid JSON array", 400);
+      }
+    }
+    // Initialize ImageProcessor for enhanced image handling
+    const imageProcessor = new ImageProcessor({
+      uploadPath: "product-images",
+      maxSize: 10 * 1024 * 1024, // 10MB
+      allowedTypes: ["image/jpeg", "image/png", "image/jpg", "image/webp"],
+    });
+
+    // Process images from multiple sources (multipart, base64, URLs)
+    const processedImages = await imageProcessor.processImages(req, {
+      fieldName: "images",
+      maxCount: 10,
+    });
+
+    console.log("=== PRODUCT CREATION DIAGNOSTIC ===");
+    console.log("Request body keys:", Object.keys(req.body));
+    console.log(
+      "Images from req.uploadedFiles:",
+      processedImages.length,
+      "files"
+    );
+    console.log(
+      "Images details:",
+      processedImages.map((img) => ({
+        fieldname: img.fieldname,
+        filename: img.filename,
+        url: img.url,
+      }))
+    );
+    console.log("Raw req.body.images:", req.body.images);
+    console.log("req.files present:", !!req.files);
+    console.log("req.files keys:", req.files ? Object.keys(req.files) : "N/A");
+    console.log("Content-Type:", req.get("Content-Type"));
+    console.log("=====================================");
+
+    let vendor;
+    let createdProduct;
+    await sequelize.transaction(async (t) => {
+      // If vendor_id is provided in request (admin case)
+      if (vendorId) {
+        // Check if user is admin
+        if (!req.user.roles.some((role) => role.name === "admin")) {
+          throw new AppError(
+            "Only admins can create products for other vendors",
+            403
+          );
+        }
+
+        vendor = await Vendor.findByPk(vendorId, { transaction: t });
+      } else {
+        // Regular vendor creating their own product
+        vendor = await Vendor.findOne({
+          where: { user_id: req.user.id },
+          transaction: t,
+        });
+
+        if (!vendor) {
+          throw new AppError("Vendor account not found", 404);
+        }
+      }
+
+      // Check if vendor is approved
+      if (vendor.status !== "approved") {
+        throw new AppError("Only approved vendors can create products", 403);
+      }
+
+      // Check if category exists
+      const category = await Category.findByPk(category_id, { transaction: t });
+      if (!category) {
+        throw new AppError("Category not found", 404);
+      }
+
+      // Generate unique slug from product name
+      let slug = slugify(name, {
+        lower: true,
+        strict: true,
+        remove: /[*+~.()'"!:@]/g,
+      });
+
+      // Check if slug already exists and make it unique if needed
+      const slugCount = await Product.count({
+        where: { slug: { [Op.like]: `${slug}%` } },
+        transaction: t,
+      });
+      if (slugCount > 0) {
+        const randomString = Math.random().toString(36).substring(2, 8);
+        slug = `${slug}-${randomString}`;
+      }
+
+      // Create the product with the vendor's ID (not user ID)
+      const product = await Product.create(
+        {
+          vendor_id: vendor.id, // Use the vendor's ID from the vendors table
+          category_id,
+          name,
+          slug,
+          description,
+          price,
+          sku,
+          status: "active",
+          impressions: 0,
+          sold_units: 0,
+        },
+        { transaction: t }
+      );
+
+      // Add variants and generate combinations
+      let createdVariants = [];
+      if (variants && variants.length > 0) {
+        try {
+          // Validate variant data
+          const validation = VariantService.validateVariantData(variants);
+          if (!validation.isValid) {
+            throw new AppError(
+              `Invalid variant data: ${validation.errors.join(", ")}`,
+              400
+            );
+          }
+
+          // Create variants with type associations
+          for (const variantData of variants) {
+            // Find or create variant type
+            let variantType = await VariantType.findOne({
+              where: { name: variantData.type.toLowerCase() },
+              transaction: t,
+            });
+
+            if (!variantType) {
+              variantType = await VariantType.create(
+                {
+                  name: variantData.type.toLowerCase(),
+                  display_name: variantData.type,
+                  sort_order: 0,
+                },
+                { transaction: t }
+              );
+            }
+
+            // Create the variant
+            const variant = await ProductVariant.create(
+              {
+                product_id: product.id,
+                variant_type_id: variantType.id,
+                name: variantData.type,
+                value: variantData.value,
+                created_at: new Date(),
+              },
+              { transaction: t }
+            );
+
+            createdVariants.push({
+              id: variant.id,
+              type: variantData.type,
+              value: variantData.value,
+            });
+          }
+
+        } catch (variantError) {
+          console.error("Variant creation error:", variantError);
+          throw variantError;
+        }
+      }
+
+      // Generate and create combinations (will handle empty variants for simple products)
+      const combinations = await VariantService.createCombinationsForProduct(
+        product.id,
+        createdVariants,
+        t
+      );
+
+      // If this is a simple product (no variants) and stock is provided, set the initial stock on the default combination
+      if ((!createdVariants || createdVariants.length === 0) && stock !== undefined) {
+        if (combinations && combinations.length > 0) {
+          const defaultCombo = combinations[0];
+          await defaultCombo.update({ stock: parseInt(stock, 10) || 0 }, { transaction: t });
+          
+          // Note: Inventory history should ideally be tracked here too, but for initial creation we set the base value.
+        }
+      }
+
+      // Add images if any
+      if (processedImages && processedImages.length > 0) {
+        await ProductImage.bulkCreate(
+          processedImages.map((image, index) => ({
+            product_id: product.id,
+            image_url: image.url, // Use the URL from processed image
+            is_featured: index === 0, // First image is featured by default
+          })),
+          { transaction: t }
+        );
+      }
+
+      // Fetch the created product with associations
+      createdProduct = await Product.findByPk(product.id, {
+        attributes: [
+          "id",
+          "vendor_id",
+          "category_id",
+          "name",
+          "slug",
+          "description",
+          "thumbnail",
+          "price",
+          "discounted_price",
+          "sku",
+          "status",
+          "impressions",
+          "sold_units",
+          "created_at",
+          "updated_at",
+          [
+            sequelize.literal(
+              "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+            ),
+            "thumbnailUrl",
+          ],
+        ],
+        include: [
+          {
+            model: ProductVariant,
+            as: "variants",
+            attributes: ["id", "name", "value"],
+          },
+          {
+            model: VariantCombination,
+            as: "combinations",
+            include: [
+              {
+                model: ProductVariant,
+                as: "variants",
+                attributes: ["id", "name", "value"],
+                through: { attributes: [] },
+              },
+            ],
+          },
+          { model: ProductImage, as: "images" },
+          { model: Category, attributes: ["id", "name", "slug"] },
+          {
+            model: Vendor,
+            attributes: ["id", "status"],
+            as: "vendor",
+            include: [
+              {
+                model: Store,
+                as: "store",
+                attributes: ["id", "business_name"],
+              },
+            ],
+          },
+        ],
+        transaction: t,
+      });
+    }); // End of transaction
+
+    res.status(201).json({
+      success: true,
+      data: createdProduct,
+    });
+  } catch (error) {
+    // Clean up uploaded images if transaction failed
+    if (processedImages && processedImages.length > 0) {
+      processedImages.forEach((image) => {
+        if (image.path && fs.existsSync(image.path)) {
+          try {
+            fs.unlinkSync(image.path);
+            console.log(`Cleaned up file: ${image.path}`);
+          } catch (cleanupError) {
+            console.warn(
+              `Failed to clean up file ${image.path}:`,
+              cleanupError.message
+            );
+          }
+        }
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Retrieves a paginated list of active products with optional filtering by category, vendor, and search terms.
+ * Supports both numeric category IDs and category names/slugs for flexible filtering.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.query - Query parameters
+ * @param {number} [req.query.page=1] - Page number for pagination
+ * @param {number} [req.query.limit=12] - Number of products per page
+ * @param {string|number} [req.query.category] - Category ID (numeric) or name/slug (string)
+ * @param {number} [req.query.vendor] - Vendor ID to filter products by
+ * @param {string} [req.query.search] - Search term for product name or description
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with paginated product list
+ * @returns {boolean} data.success - Success flag
+ * @returns {number} data.count - Number of products in current page
+ * @returns {number} data.total - Total number of products matching criteria
+ * @returns {Array} data.data - Array of product objects
+ * @returns {number} data.data[].id - Product ID
+ * @returns {string} data.data[].name - Product name
+ * @returns {string} data.data[].slug - Product slug
+ * @returns {string} data.data[].description - Product description
+ * @returns {number} data.data[].price - Product price
+ * @returns {Object} data.data[].Category - Product category info
+ * @returns {Object} data.data[].Vendor - Product vendor info
+ * @returns {Array} data.data[].images - Product images (first image only)
+ * @throws {AppError} 404 - When category filter is provided but category not found
+ * @api {get} /api/v1/products Get All Products
+ * @public
+ * @example
+ * // Request
+ * GET /api/v1/products?page=1&limit=10&category=electronics&search=headphones
+ *
+ * // Success Response (200)
+ * {
+ *   "success": true,
+ *   "count": 2,
+ *   "total": 25,
+ *   "data": [
+ *     {
+ *       "id": 1,
+ *       "name": "Wireless Headphones",
+ *       "slug": "wireless-headphones",
+ *       "description": "High-quality wireless headphones",
+ *       "price": 99.99,
+ *       "Category": {"id": 1, "name": "Electronics"},
+ *       "Vendor": {"id": 1},
+ *       "images": [{"id": 1, "image_url": "https://example.com/image.jpg"}]
+ *     }
+ *   ]
+ * }
+ */
+const getProducts = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 12, category, vendor, search } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+
+    // Filter by category (supports both ID and name/slug)
+    if (category) {
+      // Check if category is a numeric ID or string (name/slug)
+      const isNumericId = !isNaN(category) && !isNaN(parseFloat(category));
+
+      if (isNumericId) {
+        whereClause.category_id = parseInt(category);
+      } else {
+        // Find category by name or slug
+        const categoryRecord = await Category.findOne({
+          where: {
+            [Op.or]: [
+              { name: { [Op.like]: `%${category}%` } },
+              { slug: category },
+            ],
+          },
+        });
+
+        if (categoryRecord) {
+          whereClause.category_id = categoryRecord.id;
+        } else {
+          // If category not found, continue without applying category filter
+        }
+      }
+    }
+
+    // Filter by vendor
+    if (vendor) {
+      // Verify vendor exists before filtering
+      const vendorExists = await Vendor.findByPk(vendor);
+      if (vendorExists) {
+        whereClause.vendor_id = vendor;
+      }
+    }
+
+    // Search by product name or description
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    // Use separate count query to avoid cartesian product explosion
+    const count = await Product.count({
+      where: whereClause,
+      distinct: true,
+      col: "Product.id",
+    });
+
+    const { rows: products } = await Product.findAndCountAll({
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+        [
+          sequelize.literal(
+            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+          ),
+          "thumbnailUrl",
+        ],
+      ],
+      where: whereClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      include: [
+        { model: Category, attributes: ["id", "name", "slug"] },
+        {
+          model: Vendor,
+          attributes: ["id"],
+          as: "vendor",
+        },
+        {
+          model: ProductVariant,
+          as: "variants",
+          attributes: ["id", "name", "value"],
+        },
+        { model: ProductImage, limit: 1, as: "images" }, // Only get first image for listing
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      total: count,
+      data: products,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieves detailed information about a specific product by its ID (numeric) or slug (string).
+ * Increments product impression count for analytics purposes and tracks user views.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {string|number} req.params.identifier - Product ID (number) or slug (string)
+ * @param {Object} [req.user] - Authenticated user info (for viewer tracking)
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with detailed product information
+ * @returns {boolean} data.success - Success flag
+ * @returns {Object} data.data - Product details
+ * @returns {number} data.data.id - Product ID
+ * @returns {string} data.data.name - Product name
+ * @returns {string} data.data.slug - Product slug
+ * @returns {string} data.data.description - Product description
+ * @returns {number} data.data.price - Product price
+ * @returns {string} data.data.sku - Product SKU
+ * @returns {string} data.data.status - Product status
+ * @returns {number} data.data.impressions - Updated impression count
+ * @returns {number} data.data.sold_units - Units sold
+ * @returns {Object} data.data.Category - Product category
+ * @returns {Object} data.data.Vendor - Product vendor with store info
+ * @returns {Array} data.data.ProductVariants - Product variants
+ * @returns {Array} data.data.ProductImages - Product images
+ * @throws {AppError} 404 - When product is not found
+ * @api {get} /api/v1/products/:identifier Get Product by ID/Slug
+ * @public
+ * @example
+ * // Request by ID
+ * GET /api/v1/products/123
+ *
+ * // Request by slug
+ * GET /api/v1/products/wireless-headphones
+ *
+ * // Success Response (200)
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "id": 123,
+ *     "name": "Wireless Headphones",
+ *     "slug": "wireless-headphones",
+ *     "description": "High-quality wireless headphones",
+ *     "price": 99.99,
+ *     "status": "active",
+ *     "impressions": 156,
+ *     "sold_units": 23,
+ *     "Category": {"id": 1, "name": "Electronics"},
+ *     "Vendor": {
+ *       "id": 1,
+ *       "status": "approved",
+ *       "store": {"business_name": "Tech Store"}
+ *     },
+ *     "ProductVariants": [],
+ *     "ProductImages": [
+ *       {"id": 1, "image_url": "https://example.com/image.jpg"}
+ *     ]
+ *   }
+ * }
+ */
+const getProductByIdentifier = async (req, res, next) => {
+  try {
+    const { identifier } = req.params;
+
+    // Check if identifier is a number (ID) or string (slug)
+    const isNumericId = !isNaN(identifier) && !isNaN(parseFloat(identifier));
+
+    let whereClause = {};
+    if (isNumericId) {
+      whereClause.id = parseInt(identifier);
+    } else {
+      whereClause.slug = identifier;
+    }
+
+    const product = await Product.findOne({
+      where: whereClause,
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+        [
+          sequelize.literal(
+            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+          ),
+          "thumbnailUrl",
+        ],
+      ],
+      include: [
+        { model: Category, attributes: ["id", "name", "slug"] },
+        {
+          model: Vendor,
+          attributes: ["id", "status"],
+          as: "vendor",
+          include: [
+            {
+              model: Store,
+              as: "store",
+              attributes: ["business_name"],
+            },
+          ],
+        },
+        {
+          model: ProductVariant,
+          as: "variants",
+          attributes: ["id", "name", "value"],
+        },
+        { model: ProductImage, as: "images" },
+        {
+          model: VariantCombination,
+          as: "combinations",
+          where: { is_active: true },
+          required: false,
+          include: [
+            {
+              model: ProductVariant,
+              as: "variants",
+              attributes: ["id", "name", "value"],
+              through: { attributes: [] },
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!product) {
+      return next(new AppError("Product not found", 404));
+    }
+
+    // Increment impression count for analytics
+    await Product.increment("impressions", {
+      by: 1,
+      where: { id: product.id },
+    });
+
+    // Track the product view for recently viewed functionality
+    const userId = req.user?.id;
+    if (userId) {
+      try {
+        await recentlyViewedService.trackView({
+          userId,
+          productId: product.id,
+          metadata: {
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.get("User-Agent"),
+            referrer: req.get("Referrer"),
+            deviceType: req.user.deviceType || "unknown",
+          },
+        });
+      } catch (error) {
+        // Log error but don't fail the request
+        console.warn("Failed to track product view:", error.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieves comprehensive analytics summary for all products owned by a vendor.
+ * Includes overall performance metrics, top-performing products, and aggregated statistics.
+ * Only accessible to the vendor themselves.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.user - Authenticated user info
+ * @param {number} req.user.id - User ID for vendor lookup
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with vendor analytics summary
+ * @returns {boolean} data.success - Success flag
+ * @returns {Object} data.data - Analytics data container
+ * @returns {Object} data.data.summary - Overall vendor performance summary
+ * @returns {number} data.data.summary.total_products - Total number of products
+ * @returns {number} data.data.summary.active_products - Number of active products
+ * @returns {number} data.data.summary.total_impressions - Total impressions across all products
+ * @returns {number} data.data.summary.total_sold_units - Total units sold across all products
+ * @returns {number} data.data.summary.avg_impressions_per_product - Average impressions per product
+ * @returns {number} data.data.summary.avg_sales_per_product - Average sales per product
+ * @returns {Array} data.data.top_products - Top 10 performing products
+ * @returns {number} data.data.top_products[].id - Product ID
+ * @returns {string} data.data.top_products[].name - Product name
+ * @returns {number} data.data.top_products[].impressions - Product impressions
+ * @returns {number} data.data.top_products[].sold_units - Units sold
+ * @returns {number} data.data.top_products[].total_revenue - Total revenue from product
+ * @returns {number} data.data.top_products[].total_orders - Total orders
+ * @throws {AppError} 404 - When vendor account not found
+ * @api {get} /api/v1/products/analytics/vendor Get Vendor Analytics Summary
+ * @private vendor
+ * @example
+ * // Request
+ * GET /api/v1/products/analytics/vendor
+ * Authorization: Bearer <vendor_token>
+ *
+ * // Success Response (200)
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "summary": {
+ *       "total_products": 25,
+ *       "active_products": 20,
+ *       "total_impressions": 15420,
+ *       "total_sold_units": 380,
+ *       "avg_impressions_per_product": 616.80,
+ *       "avg_sales_per_product": 15.20
+ *     },
+ *     "top_products": [
+ *       {
+ *         "id": 123,
+ *         "name": "Wireless Headphones",
+ *         "impressions": 1250,
+ *         "sold_units": 45,
+ *         "total_revenue": 4495.50,
+ *         "total_orders": 38
+ *       }
+ *     ]
+ *   }
+ * }
+ */
+const getVendorAnalytics = async (req, res, next) => {
+  try {
+    const vendor = await Vendor.findOne({ where: { user_id: req.user.id } });
+    if (!vendor) {
+      return next(new AppError("Vendor account not found", 404));
+    }
+
+    // Get overall vendor analytics
+    const vendorStats = await sequelize.query(
+      `
+      SELECT
+        COUNT(DISTINCT p.id) as total_products,
+        SUM(p.impressions) as total_impressions,
+        SUM(p.sold_units) as total_sold_units,
+        COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) as active_products,
+        AVG(p.impressions) as avg_impressions_per_product,
+        AVG(p.sold_units) as avg_sales_per_product
+      FROM products p
+      WHERE p.vendor_id = :vendorId
+    `,
+      {
+        replacements: { vendorId: vendor.id },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    // Get top performing products
+    const topProducts = await sequelize.query(
+      `
+      SELECT
+        p.id,
+        p.name,
+        p.impressions,
+        p.sold_units,
+        COALESCE(SUM(oi.sub_total), 0) as total_revenue,
+        COALESCE(COUNT(DISTINCT oi.order_id), 0) as total_orders
+      FROM products p
+      LEFT JOIN order_items oi ON p.id = oi.product_id
+      LEFT JOIN orders o ON oi.order_id = o.id AND o.payment_status = 'paid'
+      WHERE p.vendor_id = :vendorId
+      GROUP BY p.id, p.name, p.impressions, p.sold_units
+      ORDER BY total_revenue DESC
+      LIMIT 10
+    `,
+      {
+        replacements: { vendorId: vendor.id },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    const stats = vendorStats[0] || {};
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: {
+          total_products: parseInt(stats.total_products) || 0,
+          active_products: parseInt(stats.active_products) || 0,
+          total_impressions: parseInt(stats.total_impressions) || 0,
+          total_sold_units: parseInt(stats.total_sold_units) || 0,
+          avg_impressions_per_product:
+            parseFloat(stats.avg_impressions_per_product) || 0,
+          avg_sales_per_product: parseFloat(stats.avg_sales_per_product) || 0,
+        },
+        top_products: topProducts.map((product) => ({
+          id: product.id,
+          name: product.name,
+          impressions: parseInt(product.impressions) || 0,
+          sold_units: parseInt(product.sold_units) || 0,
+          total_revenue: parseFloat(product.total_revenue) || 0,
+          total_orders: parseInt(product.total_orders) || 0,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin methods
+const getAllProducts = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 12, search, category, vendor } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+
+    // Apply filters if provided
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        { sku: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    if (category) whereClause.category_id = category;
+    if (vendor) whereClause.vendor_id = vendor;
+
+    const { count, rows: products } = await Product.findAndCountAll({
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+        [
+          sequelize.literal(
+            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+          ),
+          "thumbnailUrl",
+        ],
+      ],
+      where: whereClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      include: [
+        { model: Category, attributes: ["id", "name", "slug"] },
+        {
+          model: Vendor,
+          attributes: ["id"],
+          as: "vendor",
+          include: [
+            {
+              model: Store,
+              attributes: ["id", "business_name", "status"],
+              as: "store",
+            },
+          ],
+        },
+        { model: ProductImage, limit: 1, as: "images" },
+        {
+          model: ProductVariant,
+          as: "variants",
+          attributes: ["variant_type_id", "name", "value"],
+        },
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      total: count,
+      data: products,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateProductStatus = async (req, res, next) => {
+  try {
+    const { status } = req.body;
+
+    const product = await Product.findByPk(req.params.id, {
+      include: [
+        {
+          model: Vendor,
+          attributes: ["id"],
+          as: "vendor",
+          include: [
+            {
+              model: Store,
+              as: "store",
+              attributes: ["business_name"],
+            },
+          ],
+        },
+        { model: Category, attributes: ["id", "name"] },
+      ],
+    });
+
+    if (!product) {
+      return next(new AppError("Product not found", 404));
+    }
+
+    await product.update({ status });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: product.id,
+        name: product.name,
+        status: product.status,
+        vendor: product.Vendor,
+        category: product.Category,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getProductsByStatus = async (req, res, next) => {
+  try {
+    const { status } = req.params;
+    const { page = 1, limit = 12 } = req.query;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+
+    // Only filter by status if not 'all'
+    if (status !== "all") {
+      whereClause.status = status;
+    }
+
+    const { count, rows: products } = await Product.findAndCountAll({
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+        [
+          sequelize.literal(
+            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+          ),
+          "thumbnailUrl",
+        ],
+      ],
+      where: whereClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      include: [
+        { model: Category, attributes: ["id", "name", "slug"] },
+        {
+          model: Vendor,
+          attributes: ["id", "status"],
+          as: "vendor",
+          include: [
+            {
+              model: Store,
+              as: "store",
+              attributes: ["business_name"],
+            },
+          ],
+        },
+        { model: ProductImage, limit: 1, as: "images" },
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      total: count,
+      data: products,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update product with full payload support including images and variants
+ * @route   PUT /api/v1/products/:id
+ * @access  Private (Vendor/Admin)
+ */
+const updateProduct = async (req, res, next) => {
+  let processedImages = [];
+  try {
+    // Determine user role - more robust role detection
+    let userRole = "vendor"; // Default to vendor role
+    if (
+      req.user.roles &&
+      req.user.roles.some((role) => role.name === "admin")
+    ) {
+      userRole = "admin";
+    }
+
+    // Initialize ImageProcessor for enhanced image handling
+    const imageProcessor = new ImageProcessor({
+      uploadPath: "product-images",
+      maxSize: 10 * 1024 * 1024, // 10MB
+      allowedTypes: ["image/jpeg", "image/png", "image/jpg", "image/webp"],
+    });
+
+    // Process images from multiple sources (multipart, base64, URLs)
+    processedImages = await imageProcessor.processImages(req, {
+      fieldName: "images",
+      maxCount: 10,
+    });
+
+    console.log("=== PRODUCT UPDATE DIAGNOSTIC ===");
+    console.log("Request body keys:", Object.keys(req.body));
+    console.log(
+      "Images from req.uploadedFiles:",
+      processedImages.length,
+      "files"
+    );
+    console.log(
+      "Images details:",
+      processedImages.map((img) => ({
+        fieldname: img.fieldname,
+        filename: img.filename,
+        url: img.url,
+      }))
+    );
+    console.log("Raw req.body.images:", req.body.images);
+    console.log("req.files present:", !!req.files);
+    console.log("req.files keys:", req.files ? Object.keys(req.files) : "N/A");
+    console.log("Content-Type:", req.get("Content-Type"));
+    console.log("=====================================");
+
+    // Call the unified service method with processed images
+    const updatedProduct = await ProductService.updateProduct(
+      req.params.id,
+      { ...req.body, images: processedImages },
+      userRole,
+      req.user.id
+    );
+
+    // Add thumbnailUrl to the response if not already present
+    if (updatedProduct && !updatedProduct.thumbnailUrl) {
+      updatedProduct.thumbnailUrl = updatedProduct.thumbnail;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: updatedProduct,
+    });
+  } catch (error) {
+    // Clean up uploaded images if transaction failed
+    if (processedImages && processedImages.length > 0) {
+      processedImages.forEach((image) => {
+        if (image.path && fs.existsSync(image.path)) {
+          try {
+            fs.unlinkSync(image.path);
+            console.log(`Cleaned up file: ${image.path}`);
+          } catch (cleanupError) {
+            console.warn(
+              `Failed to clean up file ${image.path}:`,
+              cleanupError.message
+            );
+          }
+        }
+      });
+    }
+    next(error);
+  }
+};
+
+const deleteProduct = async (req, res, next) => {
+  try {
+    // Determine user role - more robust role detection
+    let userRole = "vendor"; // Default to vendor role
+    if (
+      req.user.roles &&
+      req.user.roles.some((role) => role.name === "admin")
+    ) {
+      userRole = "admin";
+    }
+
+    // Call the unified service method
+    const result = await ProductService.deleteProduct(
+      req.params.id,
+      userRole,
+      req.user.id
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieves a paginated list of all products belonging to a specific vendor.
+ * Shows both active and inactive products for public access.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.id - Vendor ID
+ * @param {Object} req.query - Query parameters
+ * @param {number} [req.query.page=1] - Page number for pagination
+ * @param {number} [req.query.limit=12] - Number of products per page
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with vendor's products
+ * @returns {boolean} data.success - Success flag
+ * @returns {number} data.count - Number of products in current page
+ * @returns {number} data.total - Total number of products by vendor
+ * @returns {Array} data.data - Array of product objects
+ * @returns {number} data.data[].id - Product ID
+ * @returns {string} data.data[].name - Product name
+ * @returns {string} data.data[].slug - Product slug
+ * @returns {string} data.data[].description - Product description
+ * @returns {number} data.data[].price - Product price
+ * @returns {Object} data.data[].Category - Product category
+ * @returns {Array} data.data[].images - Product images (first image only)
+ * @throws {AppError} 404 - When vendor not found
+ * @api {get} /api/v1/products/vendors/:id Get Products by Vendor
+ * @public
+ * @example
+ * // Request
+ * GET /api/v1/products/vendors/5?page=1&limit=10
+ *
+ * // Success Response (200)
+ * {
+ *   "success": true,
+ *   "count": 8,
+ *   "total": 25,
+ *   "data": [
+ *     {
+ *       "id": 1,
+ *       "name": "Wireless Headphones",
+ *       "slug": "wireless-headphones",
+ *       "description": "High-quality wireless headphones",
+ *       "price": 99.99,
+ *       "Category": {"id": 1, "name": "Electronics"},
+ *       "images": [{"id": 1, "image_url": "https://example.com/image.jpg"}]
+ *     }
+ *   ]
+ * }
+ */
+const getProductsByVendor = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 12 } = req.query;
+    const offset = (page - 1) * limit;
+
+    const vendor = await Vendor.findByPk(req.params.id);
+
+    if (!vendor) {
+      return next(new AppError("Vendor not found", 404));
+    }
+
+    const { count, rows: products } = await Product.findAndCountAll({
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+        [
+          sequelize.literal(
+            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+          ),
+          "thumbnailUrl",
+        ],
+      ],
+      where: { vendor_id: req.params.id },
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      include: [
+        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: ProductImage, limit: 1, as: "images" }, // Only get first image for listing
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      total: count,
+      data: products,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Retrieves detailed analytics and metrics for a specific product.
+ * Includes sales data, revenue, conversion rates, and monthly performance.
+ * Vendors can only access analytics for their own products; admins can access any product.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.params - Route parameters
+ * @param {number} req.params.id - Product ID for analytics
+ * @param {Object} req.user - Authenticated user info
+ * @param {Array} req.user.roles - User roles array
+ * @param {number} req.user.id - User ID for ownership verification
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with comprehensive product analytics
+ * @returns {boolean} data.success - Success flag
+ * @returns {Object} data.data - Analytics data container
+ * @returns {Object} data.data.product - Basic product information
+ * @returns {Object} data.data.analytics - Detailed analytics metrics
+ * @returns {number} data.data.analytics.total_orders - Total number of orders
+ * @returns {number} data.data.analytics.total_units_sold - Total units sold
+ * @returns {number} data.data.analytics.total_revenue - Total revenue from product
+ * @returns {number} data.data.analytics.average_sale_price - Average sale price
+ * @returns {number} data.data.analytics.average_order_value - Average order value
+ * @returns {number} data.data.analytics.conversion_rate - Conversion rate percentage
+ * @returns {string} data.data.analytics.first_sale_date - Date of first sale
+ * @returns {string} data.data.analytics.last_sale_date - Date of last sale
+ * @returns {Array} data.data.analytics.monthly_sales - Monthly sales data for last 12 months
+ * @throws {AppError} 404 - When product not found
+ * @throws {AppError} 403 - When user lacks permission to view analytics
+ * @api {get} /api/v1/products/:id/analytics Get Product Analytics
+ * @private vendor, admin
+ * @example
+ * // Request
+ * GET /api/v1/products/123/analytics
+ * Authorization: Bearer <token>
+ *
+ * // Success Response (200)
+ * {
+ *   "success": true,
+ *   "data": {
+ *     "product": {
+ *       "id": 123,
+ *       "name": "Wireless Headphones",
+ *       "impressions": 1250,
+ *       "sold_units": 45,
+ *       "status": "active"
+ *     },
+ *     "analytics": {
+ *       "total_orders": 38,
+ *       "total_units_sold": 45,
+ *       "total_revenue": 4495.50,
+ *       "average_sale_price": 99.90,
+ *       "average_order_value": 118.30,
+ *       "conversion_rate": 3.04,
+ *       "first_sale_date": "2024-01-15T10:30:00.000Z",
+ *       "last_sale_date": "2024-09-20T14:22:00.000Z",
+ *       "monthly_sales": [
+ *         {"month": "2024-09", "orders_count": 8, "units_sold": 12, "revenue": 1198.80}
+ *       ]
+ *     }
+ *   }
+ * }
+ */
+const getProductAnalytics = async (req, res, next) => {
+  try {
+    // Determine user role - more robust role detection
+    let userRole = "vendor"; // Default to vendor role
+    if (
+      req.user.roles &&
+      req.user.roles.some((role) => role.name === "admin")
+    ) {
+      userRole = "admin";
+    }
+
+    // Call the unified service method
+    const analyticsData = await ProductService.getProductAnalytics(
+      req.params.id,
+      userRole,
+      req.user.id
+    );
+
+    res.status(200).json({
+      success: true,
+      data: analyticsData,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  getProducts,
+  getProductByIdentifier,
+  getProductsByVendor,
+  getProductAnalytics,
+  getVendorAnalytics,
+  // Admin methods
+  getAllProducts,
+  updateProductStatus,
+  getProductsByStatus,
+};
