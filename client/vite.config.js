@@ -33,6 +33,12 @@ export default defineConfig({
     }
   },
 
+  // Preview configuration for production deployment
+  preview: {
+    port: 8080,
+    host: '0.0.0.0'
+  },
+
   // Optimized Build configuration for Vercel deployment
   build: {
     outDir: 'dist',
