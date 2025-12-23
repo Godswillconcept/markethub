@@ -4,7 +4,7 @@
   "description": "Stylay E-commerce API - Multi-vendor e-commerce platform",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node --watch app.js",
     "dev": "nodemon app.js",
     "tunnel": "node src/scripts/tunnel.js",
     "test": "jest --watchAll --verbose --coverage",
