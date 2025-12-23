@@ -33,11 +33,13 @@ const config = {
     production: (() => {
       // Parse DATABASE_URL if available
       let dbConfig = {
-        username: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        database: process.env.DB_NAME,
-        host: process.env.DB_HOST || "127.0.0.1",
-        port: parseInt(process.env.DB_PORT) || (process.env.DB_DIALECT === 'postgres' ? 5432 : 3306),
+        username: process.env.MYSQL_ADDON_USER || process.env.DB_USER,
+        password: process.env.MYSQL_ADDON_PASSWORD || process.env.DB_PASSWORD,
+        database: process.env.MYSQL_ADDON_DB || process.env.DB_NAME,
+        host:
+          process.env.MYSQL_ADDON_HOST || process.env.DB_HOST || "127.0.0.1",
+        port:
+          parseInt(process.env.MYSQL_ADDON_PORT || process.env.DB_PORT) || 3306,
         dialect: process.env.DB_DIALECT || "mysql",
         logging: false,
         seederStorage: "sequelize",
@@ -45,8 +47,11 @@ const config = {
           max: 5,
           min: 0,
           acquire: 30000,
-          idle: 10000
-        }
+          idle: 10000,
+        },
+        dialectOptions: {
+          connectTimeout: 60000,
+        },
       };
 
       if (process.env.DATABASE_URL) {
@@ -55,7 +60,8 @@ const config = {
         dbConfig.password = url.password;
         dbConfig.database = url.pathname.slice(1); // remove leading /
         dbConfig.host = url.hostname;
-        dbConfig.port = parseInt(url.port) || (url.protocol === 'postgres:' ? 5432 : 3306);
+        dbConfig.port =
+          parseInt(url.port) || (url.protocol === "postgres:" ? 5432 : 3306);
         dbConfig.dialect = url.protocol.slice(0, -1); // remove :
       }
 
