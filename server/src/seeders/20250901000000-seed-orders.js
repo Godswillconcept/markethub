@@ -245,6 +245,8 @@ module.exports = {
           return {
             ...b.order,
             order_number: orderNumber,
+            created_at: new Date(),
+            updated_at: new Date(),
           };
         });
 
