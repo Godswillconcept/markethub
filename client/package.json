@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "npx vite preview",
+    "preview": "./node_modules/.bin/vite preview",
     "vercel:build": "vite build"
   },
   "dependencies": {
