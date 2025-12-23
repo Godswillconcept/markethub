@@ -250,10 +250,28 @@ module.exports = {
           };
         });
 
-        // Batch insert orders with order numbers
-        await queryInterface.bulkInsert("orders", ordersToInsert, {
-          transaction,
-        });
+        // Batch insert orders with order numbers using individual inserts to ensure timestamps are set
+        for (const order of ordersToInsert) {
+          await queryInterface.sequelize.query(
+            `INSERT INTO orders (user_id, order_date, total_amount, payment_status, payment_method, payment_reference, paid_at, order_status, order_number, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            {
+              replacements: [
+                order.user_id,
+                order.order_date,
+                order.total_amount,
+                order.payment_status,
+                order.payment_method,
+                order.payment_reference,
+                order.paid_at,
+                order.order_status,
+                order.order_number,
+                order.created_at,
+                order.updated_at,
+              ],
+              transaction,
+            }
+          );
+        }
 
         // Get the actual order IDs that were inserted
         const insertedOrderIds = await queryInterface.sequelize.query(
