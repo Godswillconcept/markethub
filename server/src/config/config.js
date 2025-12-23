@@ -30,22 +30,37 @@ const config = {
       logging: false,
       seederStorage: "sequelize",
     },
-    production: {
-      username: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      host: process.env.DB_HOST || "127.0.0.1",
-      port: parseInt(process.env.DB_PORT) || (process.env.DB_DIALECT === 'postgres' ? 5432 : 3306),
-      dialect: process.env.DB_DIALECT || "mysql",
-      logging: false,
-      seederStorage: "sequelize",
-      pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
+    production: (() => {
+      // Parse DATABASE_URL if available
+      let dbConfig = {
+        username: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        host: process.env.DB_HOST || "127.0.0.1",
+        port: parseInt(process.env.DB_PORT) || (process.env.DB_DIALECT === 'postgres' ? 5432 : 3306),
+        dialect: process.env.DB_DIALECT || "mysql",
+        logging: false,
+        seederStorage: "sequelize",
+        pool: {
+          max: 5,
+          min: 0,
+          acquire: 30000,
+          idle: 10000
+        }
+      };
+
+      if (process.env.DATABASE_URL) {
+        const url = new URL(process.env.DATABASE_URL);
+        dbConfig.username = url.username;
+        dbConfig.password = url.password;
+        dbConfig.database = url.pathname.slice(1); // remove leading /
+        dbConfig.host = url.hostname;
+        dbConfig.port = parseInt(url.port) || (url.protocol === 'postgres:' ? 5432 : 3306);
+        dbConfig.dialect = url.protocol.slice(0, -1); // remove :
       }
-    },
+
+      return dbConfig;
+    })(),
   },
 
   // JWT Configuration
