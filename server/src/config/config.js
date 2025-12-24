@@ -44,25 +44,47 @@ const config = {
         logging: false,
         seederStorage: "sequelize",
         pool: {
-          max: 5,
-          min: 0,
-          acquire: 30000,
+          max: 10,
+          min: 2,
+          acquire: 60000,
           idle: 10000,
         },
         dialectOptions: {
           connectTimeout: 60000,
+          // Add SSL configuration for Aiven and other cloud databases
+          ssl: {
+            require: true,
+            rejectUnauthorized: false
+          }
         },
       };
 
       if (process.env.DATABASE_URL) {
-        const url = new URL(process.env.DATABASE_URL);
-        dbConfig.username = url.username;
-        dbConfig.password = url.password;
-        dbConfig.database = url.pathname.slice(1); // remove leading /
-        dbConfig.host = url.hostname;
-        dbConfig.port =
-          parseInt(url.port) || (url.protocol === "postgres:" ? 5432 : 3306);
-        dbConfig.dialect = url.protocol.slice(0, -1); // remove :
+        try {
+          const url = new URL(process.env.DATABASE_URL);
+          dbConfig.username = url.username;
+          dbConfig.password = url.password;
+          dbConfig.database = url.pathname.slice(1).split('?')[0]; // remove leading / and query params
+          dbConfig.host = url.hostname;
+          dbConfig.port = parseInt(url.port) || 3306;
+          
+          // Handle mysql:// protocol
+          if (url.protocol === 'mysql:') {
+            dbConfig.dialect = 'mysql';
+          }
+          
+          // Check if SSL is required from URL params
+          const sslMode = url.searchParams.get('ssl-mode') || url.searchParams.get('sslmode');
+          if (sslMode && (sslMode.toLowerCase() === 'required' || sslMode.toLowerCase() === 'true')) {
+            dbConfig.dialectOptions.ssl = {
+              require: true,
+              rejectUnauthorized: false
+            };
+          }
+        } catch (error) {
+          console.error('Error parsing DATABASE_URL:', error);
+          throw error;
+        }
       }
 
       return dbConfig;
