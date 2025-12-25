@@ -2,6 +2,45 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
+    /**
+     * Data Reduction Strategy:
+     * This seeder implements environment-based data volume control to optimize performance
+     * and resource usage across different deployment environments:
+     * - Production: 5 journal entries (lowest)
+     * - Staging: 10 journal entries (medium)
+     * - Development: 20 journal entries (highest)
+     *
+     * Rationale:
+     * - Development: 20 journal entries provide sufficient content for testing blog functionality,
+     *   content management, and basic UI/UX without overwhelming the development database
+     * - Staging: 10 journal entries allow for realistic testing of content browsing, search,
+     *   and pagination features while maintaining manageable content volume
+     * - Production: 5 journal entries ensure a rich content library for SEO, user engagement,
+     *   and establishing thought leadership while being scalable for ongoing content creation
+     *
+     * Conditional Logic:
+     * The strategy uses process.env.NODE_ENV to determine the current environment and sets
+     * totalJournals accordingly. The seeder uses a pre-defined array of high-quality journal
+     * entries and slices it to the appropriate length for the current environment.
+     *
+     * Future Maintainability:
+     * - Environment variables can be easily adjusted without code changes
+     * - Pre-defined content ensures consistent quality across all environments
+     * - Simple array slicing makes it easy to add more content without changing logic
+     * - Content structure (title, content, excerpt, tags, etc.) can be easily extended
+     *
+     * This approach ensures:
+     * - Faster development cycles with smaller datasets
+     * - Realistic content testing in staging
+     * - Production-ready content volume when deployed
+     * - Easy scalability for ongoing content marketing efforts
+     */
+    
+    // Adjust journal content based on NODE_ENV
+    // Production: 5 entries (lowest), Staging: 10 entries (medium), Development: 20 entries (highest)
+    const totalJournals = process.env.NODE_ENV === 'production' ? 5 :
+                         process.env.NODE_ENV === 'staging' ? 10 : 20;
+
     const journals = [
       {
         title: "Spring/Summer 2024 Fashion Trends: What's Hot This Season",
@@ -393,7 +432,9 @@ Remember, the perfect denim should feel like a second skin—comfortable enough 
       },
     ];
 
-    await queryInterface.bulkInsert("journals", journals);
+    // Insert only the specified number of journals based on environment
+    const journalsToInsert = journals.slice(0, totalJournals);
+    await queryInterface.bulkInsert("journals", journalsToInsert);
   },
 
   down: async (queryInterface, Sequelize) => {

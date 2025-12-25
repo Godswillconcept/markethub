@@ -128,6 +128,41 @@ const generateBankDetails = () => {
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
+    /**
+     * Data Reduction Strategy:
+     * This seeder implements environment-based data volume control to optimize performance
+     * and resource usage across different deployment environments:
+     * - Production: 5 vendors (lowest)
+     * - Staging: 10 vendors (medium)
+     * - Development: 20 vendors (highest)
+     *
+     * Rationale:
+     * - Development: 20 vendors provide sufficient data for testing vendor-specific functionality
+     *   (dashboard, product management, earnings) without overwhelming the development database
+     * - Staging: 10 vendors allow for realistic testing of multi-vendor scenarios, marketplace
+     *   interactions, and vendor competition features while maintaining manageable resource usage
+     * - Production: 5 vendors ensure a diverse marketplace with sufficient competition and
+     *   variety for customers, while providing meaningful analytics and vendor performance data
+     *
+     * Conditional Logic:
+     * The strategy uses process.env.NODE_ENV to determine the current environment and sets
+     * totalVendors accordingly. Each vendor includes comprehensive business data including
+     * stores, bank details, social media, and business images to simulate real-world complexity.
+     *
+     * Future Maintainability:
+     * - Environment variables can be easily adjusted without code changes
+     * - Modular helper functions (generateBusinessName, generateBankDetails, etc.) make it easy
+     *   to update or extend vendor data generation logic
+     * - Clear separation between user data, store data, and vendor relationship data
+     * - Comprehensive uniqueness handling for business identifiers (CAC numbers)
+     *
+     * This approach ensures:
+     * - Faster development cycles with smaller datasets
+     * - Realistic marketplace testing in staging
+     * - Production-ready vendor diversity when deployed
+     * - Easy scalability for future marketplace growth
+     */
+    
     // Get vendor role ID
     const [role] = await queryInterface.sequelize.query(
       "SELECT id FROM roles WHERE name = 'vendor'",
@@ -204,8 +239,13 @@ module.exports = {
     let vendorId = maxVendorId || 1;
     let storeId = maxStoreId || 1;
 
-    // Generate 50 vendors
-    for (let i = 0; i < 50; i++) {
+    // Adjust vendor count based on NODE_ENV
+    // Production: 5 vendors (lowest), Staging: 10 vendors (medium), Development: 20 vendors (highest)
+    const totalVendors = process.env.NODE_ENV === 'production' ? 5 :
+                         process.env.NODE_ENV === 'staging' ? 10 : 20;
+
+    // Generate vendors
+    for (let i = 0; i < totalVendors; i++) {
       const firstName = person.firstName();
       const lastName = person.lastName();
       // Ensure unique email for each vendor

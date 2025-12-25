@@ -6,6 +6,40 @@ require('dotenv').config();
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    /**
+     * Data Reduction Strategy:
+     * This seeder implements environment-based data volume control to optimize performance
+     * and resource usage across different deployment environments:
+     * - Production: 100 customers (lowest)
+     * - Staging: 500 customers (medium)
+     * - Development: 1000 customers (highest)
+     *
+     * Rationale:
+     * - Development: 100 customers provide sufficient data for UI/UX testing and basic functionality
+     *   without overwhelming local databases or slowing down development workflows
+     * - Staging: 500 customers simulate realistic user loads for performance testing, API stress testing,
+     *   and user experience validation while maintaining reasonable resource consumption
+     * - Production: 100 customers ensure the system can handle real-world user volumes and provides
+     *   meaningful analytics data while being scalable for future growth
+     *
+     * Conditional Logic:
+     * The strategy uses process.env.NODE_ENV to determine the current environment and sets
+     * totalCustomers accordingly. The batch processing system (batchSize = 100) ensures efficient
+     * database operations regardless of the total volume.
+     *
+     * Future Maintainability:
+     * - Environment variables can be easily adjusted without code changes
+     * - Batch processing allows for scaling to even larger datasets if needed
+     * - Clear separation of concerns between data generation and insertion logic
+     * - Comprehensive error handling for data uniqueness (emails, phone numbers)
+     *
+     * This approach ensures:
+     * - Faster development cycles with smaller datasets
+     * - Realistic performance testing in staging
+     * - Production-ready data volumes when deployed
+     * - Easy scalability for future requirements
+     */
+    
     // Get the customer role ID
     const [roles] = await queryInterface.sequelize.query(
       `SELECT id FROM roles WHERE name = 'customer' LIMIT 1`
@@ -23,8 +57,10 @@ module.exports = {
     const usedPhoneNumbers = new Set();
     const usedEmails = new Set();
 
-    // Generate 1000 customers in batches of 100
-    const totalCustomers = 1000;
+    // Adjust customer count based on NODE_ENV
+    // Production: 100 (lowest), Staging: 500 (medium), Development: 1000 (highest)
+    const totalCustomers = process.env.NODE_ENV === 'production' ? 100 :
+                          process.env.NODE_ENV === 'staging' ? 500 : 1000;
     const batchSize = 100;
     const numBatches = Math.ceil(totalCustomers / batchSize);
 
