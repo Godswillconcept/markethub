@@ -46,14 +46,31 @@ const colors = {
 // Add colors to winston
 winston.addColors(colors);
 
-// Create the main logger
+// Enhanced structured logging with proper levels
 const logger = createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   format: combine(
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     format.errors({ stack: true }),
     format.splat(),
-    format.json()
+    format.json(),
+    format.printf(({ level, message, timestamp, ...meta }) => {
+      // Add request context if available
+      const context = meta.requestId ? `[Request: ${meta.requestId}]` : '';
+      const userId = meta.userId ? `[User: ${meta.userId}]` : '';
+      const cleanMeta = { ...meta };
+      delete cleanMeta.requestId;
+      delete cleanMeta.userId;
+      
+      return JSON.stringify({
+        timestamp,
+        level: level.toUpperCase(),
+        message,
+        context: context.trim(),
+        userContext: userId.trim(),
+        metadata: Object.keys(cleanMeta).length > 0 ? cleanMeta : undefined
+      });
+    })
   ),
   defaultMeta: { service: 'stylay-api' },
   transports: [

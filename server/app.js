@@ -1,17 +1,15 @@
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
-// Debug: Log environment variables
-console.log("🔍 Debug: Checking environment variables...");
+// Secure environment check (removed sensitive data logging)
+console.log("🔍 Debug: Environment configuration check...");
 console.log("🔍 Current directory:", process.cwd());
 console.log("🔍 __dirname:", __dirname);
 console.log("🔍 Looking for .env at:", path.join(__dirname, ".env"));
-console.log("🔍 JWT_SECRET:", process.env.JWT_SECRET ? "✅ Found" : "❌ Missing");
 console.log("🌍 NODE_ENV:", process.env.NODE_ENV || "undefined");
 console.log("🏷️ APP_NAME:", process.env.APP_NAME || "undefined");
-console.log("🏷️ EMAIL_USER:", process.env.EMAIL_USER || "undefined");
-console.log("🗄️ DATABASE_URL:", process.env.DATABASE_URL ? "✅ Found" : "❌ Missing");
 console.log("🌐 CORS_ORIGIN:", process.env.CORS_ORIGIN || "undefined");
+console.log("🗄️ Database:", process.env.DATABASE_URL ? "✅ Configured" : "❌ Missing");
 
 const express = require("express");
 const helmet = require("helmet");
@@ -91,8 +89,11 @@ initializeApp();
 // Initialize Redis client
 let redisClient;
 
-// Use Redis in production or if explicitly enabled via REDIS_ENABLED
-if (process.env.NODE_ENV === "production" || process.env.REDIS_HOST) {
+// Check if we're in a test environment
+const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+
+// Use Redis only in production or if explicitly enabled via REDIS_ENABLED (and not in test)
+if (!isTestEnvironment && (process.env.NODE_ENV === "production" || process.env.REDIS_HOST)) {
   redisClient = redis.createClient({
     socket: {
       host: process.env.REDIS_HOST || "localhost",
@@ -215,10 +216,26 @@ app.use("/products", (req, res, next) => {
 // REQUEST TRACKING AND LOGGING
 // ============================================
 
-// Add request ID for tracing
+// Enhanced request tracking and logging
 app.use((req, res, next) => {
   req.id = uuidv4();
   res.setHeader("X-Request-ID", req.id);
+  
+  // Add user context if authenticated
+  if (req.user) {
+    req.userId = req.user.id;
+  }
+  
+  // Log request with context
+  logger.info(`${req.method} ${req.originalUrl}`, {
+    requestId: req.id,
+    userId: req.userId,
+    method: req.method,
+    url: req.originalUrl,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip
+  });
+  
   next();
 });
 

@@ -4,7 +4,7 @@ const logger = require('../utils/logger');
 
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   dialectModule: process.env.DATABASE_URL ? require(process.env.DB_DIALECT === 'mysql' ? 'mysql2' : 'pg') : undefined,
-  logging: process.env.NODE_ENV === 'development' ? (msg) => logger.debug(msg) : true,
+  logging: process.env.NODE_ENV === 'development' ? (msg) => logger.debug(msg) : false,
   define: {
     timestamps: true,
     underscored: true,

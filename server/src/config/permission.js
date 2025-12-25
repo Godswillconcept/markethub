@@ -1,7 +1,7 @@
 // Permission Map: 'METHOD /path' -> 'permission name'
 // This file now serves as a legacy interface - actual mapping is in permission-mapping.js
 // Permission Map: 'METHOD /path' -> 'permission name'
-export const permissionMap = {
+const permissionMap = {
   // ========================================
   // AUTH ROUTES
   // ========================================
@@ -351,7 +351,7 @@ export const permissionMap = {
 };
 
 // Public Routes: Array of 'METHOD /path' that don't require authentication
-export const publicRoutes = [
+const publicRoutes = [
   // Auth routes
   'POST /auth/register',
   'POST /auth/register-admin',
@@ -442,3 +442,8 @@ export const publicRoutes = [
   
   // Catch-all route for production React app
 ];
+
+module.exports = {
+  permissionMap,
+  publicRoutes
+};

@@ -1,7 +1,9 @@
 const redis = require('redis');
 
 // Check if Redis should be enabled
-const REDIS_ENABLED = process.env.REDIS_ENABLED !== 'false';
+// Auto-disable in test environments
+const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
+const REDIS_ENABLED = !isTestEnvironment && process.env.REDIS_ENABLED !== 'false';
 
 let client = null;
 let isConnected = false;

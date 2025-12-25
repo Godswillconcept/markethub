@@ -63,6 +63,37 @@ const passwordResetLimiter = rateLimit({
   message: 'Too many password reset attempts. Please try again after an hour.'
 });
 
+// SECURITY FIX 3: Rate limiting for bootstrap admin endpoint
+const bootstrapAdminLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Limit each IP to 3 bootstrap attempts per hour (very restrictive)
+  message: 'Too many bootstrap admin registration attempts. Please try again after an hour.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Custom key generator to include IP and User-Agent for additional security
+  keyGenerator: (req) => {
+    return `${req.ip}-${req.get('User-Agent')}`;
+  },
+  // Custom handler for when rate limit is exceeded
+  handler: (req, res) => {
+    logger.warn(`Bootstrap admin rate limit exceeded`, {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(429).json({
+      status: 'error',
+      message: 'Too many bootstrap admin registration attempts. Please try again after an hour.',
+      code: 'BOOTSTRAP_RATE_LIMIT_EXCEEDED',
+      retryAfter: Math.round(req.rateLimit.resetTime / 1000)
+    });
+  }
+});
+
+// Export the rate limiter for use in routes
+exports.bootstrapAdminLimiter = bootstrapAdminLimiter;
+
 /**
  * Register a new user account
  * Creates a new user with email verification required before account activation.
@@ -1622,40 +1653,152 @@ exports.getPendingPhoneChanges = async (req, res, next) => {
 };
 
 /**
- * Registers an admin user
+ * Bootstrap admin registration endpoint
+ * Registers the first base admin user with full permissions for system initialization.
+ * This is a PUBLIC endpoint designed for initial system setup only and should be disabled after first admin creation.
+ * Implements comprehensive security measures including rate limiting, input validation, and audit logging.
+ * 
+ * SECURITY FEATURES:
+ * - Prevents multiple admin registrations (only allows one base admin)
+ * - Rate limiting to prevent abuse (3 attempts per hour per IP)
+ * - Enhanced input validation with strict password strength requirements
+ * - Comprehensive audit logging for bootstrap operations
+ * - Explicit assignment of ALL system permissions to the base admin
+ * 
  * @param {Object} req - Express request object
  * @param {Object} req.body - Request body
- * @param {string} req.body.first_name - First name of the admin user
- * @param {string} req.body.last_name - Last name of the admin user
- * @param {string} req.body.phone - Phone number of the admin user
- * @param {string} req.body.email - Email of the admin user
- * @param {string} req.body.password - Password of the admin user
- * @param {string} req.body.gender - Gender of the admin user
+ * @param {string} req.body.first_name - First name of the admin user (required, 2-50 chars)
+ * @param {string} req.body.last_name - Last name of the admin user (required, 2-50 chars)
+ * @param {string} req.body.phone - Phone number in Nigerian format (required, +234XXXXXXXXXX)
+ * @param {string} req.body.email - Email address (required, valid format, unique)
+ * @param {string} req.body.password - Password (required, min 12 chars, must include: uppercase, lowercase, number, special char)
+ * @param {string} req.body.gender - Gender of the admin user (optional, "male"|"female"|"other")
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  * @returns {Object} res.body.status - Response status ("success")
- * @returns {Object} res.body.data - User object
- * @throws {AppError} 400 - Invalid input
- * @throws {AppError} 500 - Server error
- * @private admin
- * @api {post} /api/v1/auth/register-admin Register admin
+ * @returns {Object} res.body.data - User object with full permissions
+ * @throws {AppError} 400 - Invalid input, validation failed, or admin already exists
+ * @throws {AppError} 429 - Rate limit exceeded
+ * @throws {AppError} 500 - Server error or system configuration issues
+ * @api {post} /api/v1/auth/bootstrap-admin Bootstrap Admin Registration
  * @example
- * POST /api/v1/auth/register-admin
- * Authorization: Bearer <admin_jwt_token>
+ * POST /api/v1/auth/bootstrap-admin
  * {
  *   "first_name": "John",
  *   "last_name": "Doe",
- *   "phone": "1234567890",
- *   "email": "john.doe@example.com",
- *   "password": "password"
+ *   "phone": "+2348012345678",
+ *   "email": "admin@stylay.com",
+ *   "password": "SecurePass123!",
  *   "gender": "male"
  * }
  */
 exports.registerAdmin = async (req, res, next) => {
+  let transaction; // Declare transaction outside try block
+  const startTime = Date.now();
+  const clientIP = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get('User-Agent') || 'unknown';
+  
   try {
-    const transaction = await User.sequelize.transaction(); // Start transaction
+    // SECURITY FIX 1: Check if base admin already exists to prevent multiple registrations
+    const existingAdminCount = await User.count({
+      include: [{
+        model: Role,
+        as: 'roles',
+        where: { name: 'admin' },
+        through: { attributes: [] }
+      }]
+    });
+    
+    if (existingAdminCount > 0) {
+      // Log security event
+      logger.warn(`Bootstrap admin registration attempt blocked - admin already exists`, {
+        ip: clientIP,
+        userAgent,
+        existingAdminCount,
+        timestamp: new Date().toISOString()
+      });
+      
+      return next(new AppError(
+        "Base admin already exists. Bootstrap registration is disabled once the first admin is created.", 
+        400,
+        { code: 'ADMIN_ALREADY_EXISTS', existingAdminCount }
+      ));
+    }
+
+    transaction = await User.sequelize.transaction(); // Start transaction
 
     const { first_name, last_name, phone, email, password, gender } = req.body;
+
+    // SECURITY FIX 4: Enhanced input validation with comprehensive checks
+    const validationErrors = [];
+    
+    // Validate required fields
+    if (!first_name || !last_name || !phone || !email || !password) {
+      validationErrors.push("All fields (first_name, last_name, phone, email, password) are required");
+    }
+    
+    // Validate name lengths and format
+    if (first_name && (first_name.length < 2 || first_name.length > 50)) {
+      validationErrors.push("First name must be between 2 and 50 characters");
+    }
+    if (last_name && (last_name.length < 2 || last_name.length > 50)) {
+      validationErrors.push("Last name must be between 2 and 50 characters");
+    }
+    if (!/^[a-zA-Z\s'-]+$/.test(first_name) || !/^[a-zA-Z\s'-]+$/.test(last_name)) {
+      validationErrors.push("Names must contain only letters, spaces, hyphens, and apostrophes");
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) {
+      validationErrors.push("Invalid email format");
+    }
+    
+    // Validate Nigerian phone format
+    const phoneRegex = /^\+234[789][01]\d{8}$/;
+    if (phone && !phoneRegex.test(phone)) {
+      validationErrors.push("Phone number must be in Nigerian format: +234[7-9][0-1]XXXXXXXX");
+    }
+    
+    // SECURITY FIX 4: Enhanced password strength validation
+    if (password) {
+      if (password.length < 12) {
+        validationErrors.push("Password must be at least 12 characters long");
+      }
+      if (!/[A-Z]/.test(password)) {
+        validationErrors.push("Password must contain at least one uppercase letter");
+      }
+      if (!/[a-z]/.test(password)) {
+        validationErrors.push("Password must contain at least one lowercase letter");
+      }
+      if (!/\d/.test(password)) {
+        validationErrors.push("Password must contain at least one number");
+      }
+      if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        validationErrors.push("Password must contain at least one special character");
+      }
+      if (/(.)\1{2,}/.test(password)) {
+        validationErrors.push("Password cannot contain three or more consecutive identical characters");
+      }
+    }
+    
+    // Validate gender if provided
+    if (gender && !['male', 'female', 'other'].includes(gender)) {
+      validationErrors.push("Gender must be one of: male, female, other");
+    }
+    
+    if (validationErrors.length > 0) {
+      logger.warn(`Bootstrap admin registration validation failed`, {
+        ip: clientIP,
+        userAgent,
+        validationErrors,
+        timestamp: new Date().toISOString()
+      });
+      throw new AppError(`Validation failed: ${validationErrors.join(', ')}`, 400, {
+        code: 'VALIDATION_FAILED',
+        errors: validationErrors
+      });
+    }
 
     // Check if user already exists with the same email or phone
     const existingUser = await User.findOne({
@@ -1674,24 +1817,19 @@ exports.registerAdmin = async (req, res, next) => {
       throw new AppError(errorMessage, 400);
     }
 
-    // Validate input
-    if (!first_name || !last_name || !phone || !email || !password) {
-      throw new AppError("Please provide all required fields.", 400);
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Hash password with high cost factor for security
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user within transaction
     const user = await User.create({
-      first_name,
-      last_name,
-      phone,
-      email,
+      first_name: first_name.trim(),
+      last_name: last_name.trim(),
+      phone: phone.trim(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
       email_verified_at: new Date(),
       is_active: true,
-      profile_image: `https://ui-avatars.com/api/?name=${first_name}+${last_name}&background=random&size=128`,
+      profile_image: `https://ui-avatars.com/api/?name=${encodeURIComponent(first_name)}+${encodeURIComponent(last_name)}&background=random&size=128`,
       gender,
     }, { transaction });
 
@@ -1701,34 +1839,74 @@ exports.registerAdmin = async (req, res, next) => {
       transaction // Include transaction
     });
     if (!role) {
-      logger.error('Admin role not found in database');
+      logger.error('Admin role not found in database during bootstrap');
       const allRoles = await Role.findAll({ attributes: ['id', 'name'] });
-      logger.info(`Existing roles: ${JSON.stringify(allRoles)}`);
+      logger.info(`Existing roles during bootstrap: ${JSON.stringify(allRoles)}`);
 
       // Check if seeders ran by querying roles table directly
       const seededRoles = await Role.findAll();
-      logger.info(`Seeded roles check: ${seededRoles.length ? 'Roles exist' : 'No roles found'}`);
+      logger.info(`Seeded roles check during bootstrap: ${seededRoles.length ? 'Roles exist' : 'No roles found'}`);
 
-      throw new AppError("Admin role configuration missing", 500);
+      throw new AppError("Admin role configuration missing - please run database seeders", 500);
     }
     await user.addRole(role, { transaction });
 
+    // SECURITY FIX 2: Explicit assignment of ALL permissions to the admin user
+    // This ensures the base admin has full system access beyond just the role
+    const allPermissions = await Permission.findAll({ transaction });
+    if (allPermissions.length === 0) {
+      logger.warn('No permissions found in database during bootstrap - admin will have role-based permissions only');
+    } else {
+      // Explicitly assign each permission to ensure complete access
+      for (const permission of allPermissions) {
+        await user.addPermission(permission, { 
+          through: { created_at: new Date() },
+          transaction 
+        });
+      }
+      logger.info(`Explicitly assigned ${allPermissions.length} permissions to base admin user ${user.id}`);
+    }
+
     await transaction.commit(); // Commit transaction
 
-    logger.info(`Admin user ${user.id} created successfully`);
+    // SECURITY FIX 6: Comprehensive audit logging for bootstrap operation
+    const processingTime = Date.now() - startTime;
+    logger.info(`Bootstrap admin registration completed successfully`, {
+      userId: user.id,
+      email: user.email,
+      ip: clientIP,
+      userAgent,
+      permissionsAssigned: allPermissions.length,
+      processingTimeMs: processingTime,
+      timestamp: new Date().toISOString(),
+      bootstrapEvent: 'ADMIN_REGISTRATION_SUCCESS'
+    });
 
     // Generate token and send response
     createSendToken(user, 201, res);
+    
   } catch (error) {
     if (transaction) {
       await transaction.rollback(); // Rollback transaction if any error occurs
     }
 
+    // SECURITY FIX 6: Audit logging for failed bootstrap attempts
+    const processingTime = Date.now() - startTime;
+    logger.error(`Bootstrap admin registration failed`, {
+      error: error.message,
+      stack: error.stack,
+      ip: clientIP,
+      userAgent,
+      processingTimeMs: processingTime,
+      timestamp: new Date().toISOString(),
+      bootstrapEvent: 'ADMIN_REGISTRATION_FAILURE',
+      errorType: error.constructor.name
+    });
+
     if (error instanceof AppError) {
       next(error);
     } else {
-      logger.error(`Error registering admin user: ${error.message}`, { error });
-      next(new AppError("An error occurred while registering the admin user. Please try again.", 500));
+      next(new AppError("An error occurred while registering the base admin. Please try again.", 500));
     }
   }
 };
