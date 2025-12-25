@@ -26,6 +26,7 @@
     "seed:undo:all": "npx sequelize-cli db:seed:undo:all",
     "setup": "npx sequelize-cli db:create && npx sequelize-cli db:migrate",
     "reset": "npx sequelize-cli db:drop && npx sequelize-cli db:create && npx sequelize-cli db:migrate",
+    "postinstall": "npm run seed:file 20250823010000-seed-default-roles.js && npm run seed:file 20250823020000-seed-permissions.js && npm run seed:file 20250824000000-seed-admin-user.js && npm run seed:file 20251108000000-add-missing-permissions.js && npm run seed:file 20251108100000-add-recently-viewed-permissions.js && npm run seed:file 20251123101801-assign-customer-role-to-vendors.js",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:dev": "pm2 start ecosystem.config.js --env development",
     "pm2:stop": "pm2 stop stylay-server",
@@ -39,7 +40,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "setupFilesAfterEnv": ["./jest.setup.js"],
+    "setupFilesAfterEnv": [
+      "./jest.setup.js"
+    ],
     "testMatch": [
       "**/src/tests/**/*.test.js",
       "**/src/test/**/*.test.js"
@@ -51,7 +54,11 @@
       "!jest.setup.js"
     ],
     "coverageDirectory": "coverage",
-    "coverageReporters": ["text", "lcov", "html"],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
     "verbose": true,
     "forceExit": true,
     "detectOpenHandles": true
