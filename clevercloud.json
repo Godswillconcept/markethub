@@ -1,6 +1,0 @@
-{
-  "hooks": {
-    "pre_build": "npm install --prefix client && npm run build --prefix client && npm install --prefix server --ignore-scripts",
-    "post_build": "npm run migrate --prefix server"
-  }
-}

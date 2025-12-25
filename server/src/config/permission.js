@@ -441,6 +441,4 @@ export const publicRoutes = [
   'POST /webhooks/paystack',
   
   // Catch-all route for production React app
-  'GET /{*any}',
-  'GET /products/{*any}',
 ];

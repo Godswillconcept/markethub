@@ -441,12 +441,6 @@ app.use("/api/v1/payouts", payoutRoutes);
 // ============================================
 app.use(errorHandler);
 
-// Catch-all route for React app (production only)
-if (process.env.NODE_ENV === "production") {
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(__dirname, "../client/dist/index.html"));
-  });
-}
 
 // Export for serverless
 module.exports = app;

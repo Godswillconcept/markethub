@@ -119,8 +119,6 @@ const ROUTE_PATTERNS = [
   { pattern: /^\/payouts\/initiate$/, template: '/payouts/initiate' },
   
   // Catch-all pattern for production React app routes
-  { pattern: /^\/\{.*\}$/, template: '/{*any}' },
-  { pattern: /^\/products\/\{.*\}$/, template: '/products/{*any}' },
 ];
 
 /**
