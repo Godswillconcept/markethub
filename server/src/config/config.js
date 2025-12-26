@@ -50,14 +50,18 @@ const config = {
           idle: 10000,
         },
         dialectOptions: {
-          connectTimeout: 60000,
-          // Add SSL configuration for Aiven and other cloud databases
-          ssl: {
-            require: true,
-            rejectUnauthorized: false
-          }
+          connectTimeout: 60000
         },
       };
+
+      // Only add SSL if explicitly enabled via env var
+      // This allows local production testing without SSL while supporting cloud deployments
+      if (process.env.DB_SSL_ENABLED === 'true') {
+        dbConfig.dialectOptions.ssl = {
+          require: true,
+          rejectUnauthorized: false
+        };
+      }
 
       if (process.env.DATABASE_URL) {
         try {

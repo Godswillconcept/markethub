@@ -1,4 +1,5 @@
 'use strict';
+const { faker } = require('@faker-js/faker/locale/en_US');
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
@@ -6,17 +7,17 @@ module.exports = {
      * Data Reduction Strategy:
      * This seeder implements environment-based data volume control to optimize performance
      * and resource usage across different deployment environments:
-     * - Production: 5 journal entries (lowest)
-     * - Staging: 10 journal entries (medium)
-     * - Development: 20 journal entries (highest)
+     * - Production: 20 journal entries (lowest)
+     * - Staging: 30 journal entries (medium)
+     * - Development: 50 journal entries (highest)
      *
      * Rationale:
-     * - Development: 20 journal entries provide sufficient content for testing blog functionality,
-     *   content management, and basic UI/UX without overwhelming the development database
-     * - Staging: 10 journal entries allow for realistic testing of content browsing, search,
-     *   and pagination features while maintaining manageable content volume
-     * - Production: 5 journal entries ensure a rich content library for SEO, user engagement,
-     *   and establishing thought leadership while being scalable for ongoing content creation
+     * - Development: 50 journal entries provide extensive content for testing blog functionality,
+     *   content management, pagination, search, and UI/UX features
+     * - Staging: 30 journal entries allow for realistic testing of content browsing and
+     *   user engagement features while maintaining manageable content volume
+     * - Production: 20 journal entries ensure a rich content library for SEO, user engagement,
+     *   and establishing thought leadership
      *
      * Conditional Logic:
      * The strategy uses process.env.NODE_ENV to determine the current environment and sets
@@ -30,16 +31,16 @@ module.exports = {
      * - Content structure (title, content, excerpt, tags, etc.) can be easily extended
      *
      * This approach ensures:
-     * - Faster development cycles with smaller datasets
+     * - Faster development cycles with appropriate datasets
      * - Realistic content testing in staging
      * - Production-ready content volume when deployed
      * - Easy scalability for ongoing content marketing efforts
      */
     
     // Adjust journal content based on NODE_ENV
-    // Production: 5 entries (lowest), Staging: 10 entries (medium), Development: 20 entries (highest)
-    const totalJournals = process.env.NODE_ENV === 'production' ? 5 :
-                         process.env.NODE_ENV === 'staging' ? 10 : 20;
+    // Production: 20 entries, Staging: 30 entries, Development: 50 entries
+    const totalJournals = process.env.NODE_ENV === 'production' ? 20 :
+                         process.env.NODE_ENV === 'staging' ? 30 : 50;
 
     const journals = [
       {
@@ -67,9 +68,9 @@ As we embrace the warmer months, remember that fashion is about self-expression.
         category: "Fashion Trends",
         view_count: 1250,
         featured_images: JSON.stringify([
-          "fashion-trends-2024-1.jpg",
-          "spring-summer-styles.jpg",
-          "sustainable-fashion.jpg",
+          "https://picsum.photos/seed/fashion-trends-2024/800/600",
+          "https://picsum.photos/seed/spring-summer-styles/800/600",
+          "https://picsum.photos/seed/sustainable-fashion/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -101,8 +102,8 @@ Remember, building a capsule wardrobe is a journey, not a destination. Start sma
         category: "Style Guide",
         view_count: 890,
         featured_images: JSON.stringify([
-          "capsule-wardrobe-essentials.jpg",
-          "minimalist-style.jpg",
+          "https://picsum.photos/seed/capsule-wardrobe/800/600",
+          "https://picsum.photos/seed/minimalist-style/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -136,9 +137,9 @@ Remember, sustainable fashion is a journey, not perfection. Every conscious choi
         category: "Sustainable Fashion",
         view_count: 1567,
         featured_images: JSON.stringify([
-          "sustainable-fashion.jpg",
-          "eco-friendly-shopping.jpg",
-          "ethical-brands.jpg",
+          "https://picsum.photos/seed/sustainable-eco-fashion/800/600",
+          "https://picsum.photos/seed/eco-shopping/800/600",
+          "https://picsum.photos/seed/ethical-brands/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -170,9 +171,9 @@ As we look to the future, street style continues to evolve, incorporating sustai
         category: "Fashion Culture",
         view_count: 2103,
         featured_images: JSON.stringify([
-          "https://picsum.photos/seed/street-style-evolution/300/300",
-          "https://picsum.photos/seed/urban-fashion/300/300",
-          "https://picsum.photos/seed/fashion-subcultures/300/300",
+          "https://picsum.photos/seed/street-style-evolution/800/600",
+          "https://picsum.photos/seed/urban-fashion/800/600",
+          "https://picsum.photos/seed/fashion-subcultures/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -208,8 +209,8 @@ Remember, color is personal and should make you feel confident. While these guid
         category: "Style Guide",
         view_count: 745,
         featured_images: JSON.stringify([
-          "https://picsum.photos/1600/900",
-          "https://picsum.photos/1600/900",
+          "https://picsum.photos/seed/color-wheel-fashion/800/600",
+          "https://picsum.photos/seed/color-coordination/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -249,9 +250,9 @@ Building a fashion brand is a marathon, not a sprint. It requires passion, perse
         category: "Fashion Business",
         view_count: 1589,
         featured_images: JSON.stringify([
-          "https://picsum.photos/1600/900",
-          "https://picsum.photos/1600/900",
-          "https://picsum.photos/1600/900",
+          "https://picsum.photos/seed/fashion-business/800/600",
+          "https://picsum.photos/seed/brand-building/800/600",
+          "https://picsum.photos/seed/entrepreneur-fashion/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -291,9 +292,9 @@ Vintage fashion isn't just about wearing old clothes—it's about appreciating c
         category: "Fashion History",
         view_count: 934,
         featured_images: JSON.stringify([
-          "vintage-fashion.jpg",
-          "retro-styles.jpg",
-          "fashion-history.jpg",
+          "https://picsum.photos/seed/vintage-fashion/800/600",
+          "https://picsum.photos/seed/retro-styles/800/600",
+          "https://picsum.photos/seed/fashion-history/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -335,9 +336,9 @@ Finally, let your accessories reflect your personality. They're often the most p
         category: "Style Guide",
         view_count: 1123,
         featured_images: JSON.stringify([
-          "fashion-accessories.jpg",
-          "essential-bags.jpg",
-          "jewelry-styling.jpg",
+          "https://picsum.photos/seed/fashion-accessories/800/600",
+          "https://picsum.photos/seed/essential-bags/800/600",
+          "https://picsum.photos/seed/jewelry-styling/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -379,9 +380,9 @@ For those dreaming of entering the fashion industry, understanding Fashion Week'
         category: "Fashion Industry",
         view_count: 1876,
         featured_images: JSON.stringify([
-          "fashion-week-backstage.jpg",
-          "runway-show.jpg",
-          "fashion-industry.jpg",
+          "https://picsum.photos/seed/fashion-week-backstage/800/600",
+          "https://picsum.photos/seed/runway-show/800/600",
+          "https://picsum.photos/seed/fashion-industry/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
@@ -423,14 +424,100 @@ Remember, the perfect denim should feel like a second skin—comfortable enough 
         category: "Style Guide",
         view_count: 1456,
         featured_images: JSON.stringify([
-          "denim-styles.jpg",
-          "jeans-fit-guide.jpg",
-          "denim-fashion.jpg",
+          "https://picsum.photos/seed/denim-styles/800/600",
+          "https://picsum.photos/seed/jeans-fit-guide/800/600",
+          "https://picsum.photos/seed/denim-fashion/800/600",
         ]),
         created_at: new Date(),
         updated_at: new Date(),
       },
     ];
+
+    // Generate additional journals dynamically if needed
+    const predefinedCount = journals.length; // Currently 10
+    const additionalNeeded = totalJournals - predefinedCount;
+
+    if (additionalNeeded > 0) {
+      console.log(`Generating ${additionalNeeded} additional journal entries using Faker.js...`);
+      
+      const categories = [
+        'Fashion Trends', 'Style Guide', 'Sustainable Fashion', 'Fashion Culture',
+        'Fashion Business', 'Fashion History', 'Fashion Industry', 'Shopping Tips',
+        'Wardrobe Essentials', 'Seasonal Fashion'
+      ];
+
+      const topicTemplates = [
+        'The Ultimate Guide to {topic}',
+        'Mastering {topic}: Tips and Tricks',
+        '{topic} Essentials Every Fashion Lover Needs',
+        'How to Style {topic} Like a Pro',
+        'The Evolution of {topic} in Modern Fashion',
+        '{topic}: From Runway to Real Life',
+        'Sustainable Approaches to {topic}',
+        'Budget-Friendly {topic} Ideas',
+        'Celebrity-Inspired {topic} Looks',
+        'The Science Behind {topic}',
+      ];
+
+      const topics = [
+        'Layering', 'Monochrome Dressing', 'Pattern Mixing', 'Athleisure',
+        'Smart Casual', 'Evening Wear', 'Summer Dresses', 'Winter Coats',
+        'Sneaker Culture', 'Handbag Selection', 'Jewelry Layering', 'Scarf Styling',
+        'Sustainable Materials', 'Ethical Shopping', 'Thrift Shopping', 'Wardrobe Organization',
+        'Seasonal Transitions', 'Travel Fashion', 'Work Attire', 'Weekend Style',
+        'Formal Events', 'Casual Chic', 'Minimalist Fashion', 'Maximalist Style',
+        'Gender-Neutral Fashion', 'Plus-Size Fashion', 'Petite Styling', 'Tall Fashion',
+        'Fashion Photography', 'Personal Branding', 'Fashion Blogging', 'Social Media Style',
+        'Luxury Fashion', 'Fast Fashion Alternatives', 'Upcycling Clothes', 'DIY Fashion',
+        'Fashion Tech', 'Virtual Fashion', 'Fashion Sustainability', 'Circular Fashion'
+      ];
+
+      for (let i = 0; i < additionalNeeded; i++) {
+        const topic = faker.helpers.arrayElement(topics);
+        const template = faker.helpers.arrayElement(topicTemplates);
+        const title = template.replace('{topic}', topic);
+        const category = faker.helpers.arrayElement(categories);
+        
+        // Generate realistic fashion content
+        const intro = faker.lorem.paragraph(3);
+        const body1 = faker.lorem.paragraphs(2, '\n\n');
+        const body2 = faker.lorem.paragraphs(2, '\n\n');
+        const conclusion = faker.lorem.paragraph(2);
+        
+        const content = `${intro}\n\n${body1}\n\n${body2}\n\n${conclusion}`;
+        const excerpt = faker.lorem.sentence(15);
+        
+        // Generate relevant tags
+        const allTags = [
+          'fashion', 'style', 'trends', 'wardrobe', 'outfit', 'clothing',
+          'accessories', 'sustainable', 'ethical', 'shopping', 'tips',
+          'guide', 'essentials', 'seasonal', 'casual', 'formal', 'business'
+        ];
+        const tags = faker.helpers.arrayElements(allTags, faker.number.int({ min: 3, max: 6 }));
+        
+        // Generate 2-3 Picsum images with unique seeds
+        const imageCount = faker.number.int({ min: 2, max: 3 });
+        const images = [];
+        for (let j = 0; j < imageCount; j++) {
+          const seed = `${topic.toLowerCase().replace(/\s+/g, '-')}-${i}-${j}`;
+          images.push(`https://picsum.photos/seed/${seed}/800/600`);
+        }
+        
+        journals.push({
+          title,
+          content,
+          excerpt,
+          tags: JSON.stringify(tags),
+          category,
+          view_count: faker.number.int({ min: 100, max: 3000 }),
+          featured_images: JSON.stringify(images),
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+      
+      console.log(`Total journals to insert: ${journals.length}`);
+    }
 
     // Insert only the specified number of journals based on environment
     const journalsToInsert = journals.slice(0, totalJournals);

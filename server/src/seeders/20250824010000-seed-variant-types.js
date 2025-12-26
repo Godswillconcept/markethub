@@ -155,8 +155,28 @@ module.exports = {
       }
     ];
 
-    await queryInterface.bulkInsert('variant_types', variantTypes);
-    console.log(`Seeded ${variantTypes.length} variant types`);
+    // Insert variant types
+    const now = new Date();
+    for (const type of variantTypes) {
+      const [existing] = await queryInterface.sequelize.query(
+        'SELECT id FROM variant_types WHERE name = :name',
+        {
+          replacements: { name: type.name },
+          type: queryInterface.sequelize.QueryTypes.SELECT
+        }
+      );
+
+      if (!existing) {
+        await queryInterface.bulkInsert('variant_types', [{
+          name: type.name,
+          display_name: type.display_name,
+          sort_order: type.sort_order,
+          created_at: now,
+          updated_at: now
+        }]);
+      }
+    }
+    console.log(`Seeding of variant types completed`);
   },
 
   async down(queryInterface, Sequelize) {

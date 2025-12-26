@@ -6,7 +6,14 @@ const { faker } = require('@faker-js/faker');
 // Configuration
 const CONFIG = {
   BATCH_SIZE: 100, // Number of supplies to process in each batch
-  SUPPLIES_PER_VENDOR: 100, // Number of supply records per vendor
+  /**
+   * Environment-based data volume control:
+   * - Production: 10 supplies per vendor
+   * - Staging: 50 supplies per vendor
+   * - Development: 100 supplies per vendor
+   */
+  SUPPLIES_PER_VENDOR: process.env.NODE_ENV === 'production' ? 10 :
+                       process.env.NODE_ENV === 'staging' ? 50 : 100,
   MIN_QUANTITY: 10,
   MAX_QUANTITY: 100
 };
@@ -25,11 +32,15 @@ class ProgressLogger {
     const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);
     const rate = (this.processed / (elapsed || 1)).toFixed(1);
 
-    process.stdout.clearLine();
-    process.stdout.cursorTo(0);
-    process.stdout.write(`Processing: ${this.processed}/${this.total} (${percentage}%) | ${rate} recs/sec`);
+    if (process.stdout.isTTY && typeof process.stdout.clearLine === 'function' && typeof process.stdout.cursorTo === 'function') {
+      process.stdout.clearLine();
+      process.stdout.cursorTo(0);
+      process.stdout.write(`Processing: ${this.processed}/${this.total} (${percentage}%) | ${rate} recs/sec`);
+    } else if (this.processed % 100 === 0 || this.processed === this.total) {
+      console.log(`Processing: ${this.processed}/${this.total} (${percentage}%) | ${rate} recs/sec`);
+    }
 
-    if (this.processed >= this.total) {
+    if (this.processed >= this.total && process.stdout.isTTY && typeof process.stdout.write === 'function') {
       process.stdout.write('\n');
     }
   }

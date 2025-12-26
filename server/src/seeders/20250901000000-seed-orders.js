@@ -109,8 +109,12 @@ module.exports = {
       );
 
       console.log(
-        `Found ${customers.length} customers, ${addresses.length} addresses, ${products.length} products, ${variantCombinations.length} variant combinations`
+        `Found ${customers.length} customers, ${addresses.length} addresses, ${products.length} products, ${variantCombinations.length} active variant combinations with stock`
       );
+
+      if (variantCombinations.length === 0) {
+        console.warn("WARNING: No variant combinations with stock found. Orders will be created without combination associations.");
+      }
 
       const batchSize = 500;
       // Adjust order volume based on NODE_ENV
@@ -396,7 +400,7 @@ module.exports = {
 
                 // Resolve or create inventory record for the product to satisfy FK constraint
                 let inventoryIdForProduct = null;
-                const existingInventory = await queryInterface.sequelize.query(
+                const [existingInventory] = await queryInterface.sequelize.query(
                   'SELECT id FROM inventory WHERE product_id = ? LIMIT 1',
                   {
                     replacements: [item.product_id],
@@ -405,15 +409,15 @@ module.exports = {
                   }
                 );
 
-                if (existingInventory && existingInventory.length > 0) {
-                  inventoryIdForProduct = existingInventory[0].id;
+                if (existingInventory) {
+                  inventoryIdForProduct = existingInventory.id;
                 } else {
                   // Create inventory record if missing
                   await queryInterface.sequelize.query(
                     'INSERT INTO inventory (product_id, created_at, updated_at) VALUES (?, NOW(), NOW())',
                     { replacements: [item.product_id], transaction }
                   );
-                  const createdInventory = await queryInterface.sequelize.query(
+                  const [createdInventory] = await queryInterface.sequelize.query(
                     'SELECT id FROM inventory WHERE product_id = ? LIMIT 1',
                     {
                       replacements: [item.product_id],
@@ -421,7 +425,7 @@ module.exports = {
                       transaction,
                     }
                   );
-                  inventoryIdForProduct = createdInventory[0].id;
+                  inventoryIdForProduct = createdInventory.id;
                 }
 
                 // Create inventory history for combination with inventory_id
@@ -572,7 +576,7 @@ module.exports = {
          WHERE vc.id IN (
            SELECT DISTINCT combination_id
            FROM inventory_history
-           WHERE note LIKE "Order #% - Sold%units of combination%"npx sequelize-cli db:seed --seed 20250901000000-seed-orders.jsnpx sequelize-cli db:seed --seed 20250901000000-seed-orders.js
+           WHERE note LIKE "Order #% - Sold%units of combination%"
          )`,
         { transaction }
       );

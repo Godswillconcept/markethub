@@ -76,6 +76,7 @@ class VariantService {
    */
   static async createCombinationsForProduct(productId, variants, transaction = null) {
     let combinations = this.generateCombinations(variants);
+    console.log(`generateCombinations returned ${combinations.length} combinations for product ${productId}`);
 
     // If no variants, create a default combination for Simple Product
     if (combinations.length === 0 && (!variants || variants.length === 0)) {

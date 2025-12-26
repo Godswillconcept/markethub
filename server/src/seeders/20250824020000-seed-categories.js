@@ -24,13 +24,24 @@ module.exports = {
     ];
 
     // Common subcategories for each gender
-    const subcategories = [
+    const allSubcategories = [
       { name: "T-shirts", slug: "t-shirts", description: "Comfortable and stylish T-shirts" },
       { name: "Shorts", slug: "shorts", description: "Casual and trendy shorts" },
       { name: "Shirts", slug: "shirts", description: "Fashionable shirts for all occasions" },
       { name: "Hoodies", slug: "hoodies", description: "Warm and cozy hoodies" },
-      { name: "Jeans", slug: "jeans", description: "Durable and stylish jeans" }
+      { name: "Jeans", slug: "jeans", description: "Durable and stylish jeans" },
+      { name: "Skirts", slug: "skirts", description: "Elegant and fashionable skirts" }
     ];
+
+    /**
+     * Environment-based data volume control:
+     * - Production: 2 subcategories per gender (6 total subcategories + 3 main = 9 categories)
+     * - Staging: 4 subcategories per gender (12 total subcategories + 3 main = 15 categories)
+     * - Development: 6 subcategories per gender (18 total subcategories + 3 main = 21 categories)
+     */
+    const subcategoriesPerGender = process.env.NODE_ENV === 'production' ? 2 :
+                                   process.env.NODE_ENV === 'staging' ? 4 : 6;
+    const subcategories = allSubcategories.slice(0, subcategoriesPerGender);
 
     const now = new Date();
     const categoriesToInsert = [];
@@ -86,14 +97,27 @@ module.exports = {
     // Insert subcategories for each main category
     for (const mainCategory of createdCategories) {
       for (const subcategory of subcategories) {
-        await queryInterface.bulkInsert('categories', [{
-          name: `${mainCategory.name} ${subcategory.name}`,
-          slug: `${mainCategory.slug}-${subcategory.slug}`,
-          description: subcategory.description,
-          parent_id: mainCategory.id,
-          created_at: now,
-          updated_at: now
-        }]);
+        const subSlug = `${mainCategory.slug}-${subcategory.slug}`;
+        
+        // Check if subcategory already exists
+        const [existingSub] = await queryInterface.sequelize.query(
+          'SELECT id FROM categories WHERE slug = :slug',
+          {
+            replacements: { slug: subSlug },
+            type: queryInterface.sequelize.QueryTypes.SELECT
+          }
+        );
+
+        if (!existingSub) {
+          await queryInterface.bulkInsert('categories', [{
+            name: `${mainCategory.name} ${subcategory.name}`,
+            slug: subSlug,
+            description: subcategory.description,
+            parent_id: mainCategory.id,
+            created_at: now,
+            updated_at: now
+          }]);
+        }
       }
     }
     

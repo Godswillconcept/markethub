@@ -53,6 +53,7 @@ const BRANDS = {
   'shorts': ['Nike', 'Adidas', 'Puma', 'Under Armour', 'Reebok', 'Champion', 'Fila'],
   'skirts': ['Zara', 'H&M', 'Mango', 'Forever 21', 'ASOS', 'Topshop', 'Bershka'],
   'hoodies': ['Champion', 'Nike', 'Adidas', 'The North Face', 'Puma', 'Calvin Klein', 'Tommy Hilfiger'],
+  'shirts': ['Ralph Lauren', 'Tommy Hilfiger', 'Brooks Brothers', 'Uniqlo', 'H&M', 'Zara', 'Gap'],
   'jeans': ['Levis', 'Wrangler', 'Diesel', 'Calvin Klein', 'Lee', 'Guess', 'True Religion']
 };
 
@@ -102,6 +103,10 @@ const CATEGORY_PRODUCTS = {
     'Pullover Hoodie', 'Zip-Up Hoodie', 'Oversized Hoodie', 'Fleece Hoodie', 'Athletic Hoodie',
     'Graphic Hoodie', 'Sweatshirt Hoodie', 'Cropped Hoodie', 'Sherpa Hoodie', 'Hooded Jacket'
   ],
+  'shirts': [
+    'Oxford Button-Down Shirt', 'Dress Shirt', 'Flannel Shirt', 'Linen Shirt', 'Chambray Shirt',
+    'Denim Shirt', 'Short Sleeve Shirt', 'Corduroy Shirt', 'Cuban Collar Shirt', 'Striped Shirt'
+  ],
   'jeans': [
     'Slim Fit Jeans', 'Skinny Jeans', 'Straight Leg Jeans', 'Bootcut Jeans', 'Relaxed Fit Jeans',
     'Tapered Jeans', 'High Waist Jeans', 'Mom Jeans', 'Boyfriend Jeans', 'Flared Jeans'
@@ -138,6 +143,13 @@ const PRODUCT_DESCRIPTIONS = {
     'Ribbed cuffs and hem for a snug, comfortable fit that locks in heat.',
     'Durable construction designed to maintain shape and softness wash after wash.'
   ],
+  'shirts': [
+    'Classic button-down design made from high-quality fabric for a crisp look.',
+    'Versatile shirt that easily transitions from office to after-hours.',
+    'Breathable material keeps you comfortable throughout the day.',
+    'Tailored fit for a modern, polished silhouette.',
+    'Easy-iron finish for effortless maintenance and a sharp appearance.'
+  ],
   'jeans': [
     'Premium denim with just the right amount of stretch for all-day comfort.',
     'Classic five-pocket design with reinforced stitching for durability.',
@@ -173,6 +185,11 @@ const generateVariants = async (productId, category, variantTypeMap) => {
       'color': ['Black', 'Charcoal', 'Navy', 'Burgundy', 'Olive', 'Heather Gray'],
       'style': ['Pullover', 'Zip-Up']
     },
+    'shirts': {
+      'size': ['S', 'M', 'L', 'XL', 'XXL'],
+      'color': ['White', 'Light Blue', 'Navy', 'Gray', 'Black', 'Striped'],
+      'fit': ['Slim', 'Regular', 'Modern']
+    },
     'jeans': {
       'waist': ['28', '30', '32', '34', '36', '38'],
       'length': ['30"', '32"', '34"', '36"'],
@@ -205,8 +222,7 @@ const generateVariants = async (productId, category, variantTypeMap) => {
         name: typeName,
         value: value,
         hex_code: typeName.toLowerCase() === 'color' ? getColorHex(value) : null,
-        created_at: new Date(),
-        updated_at: new Date()
+        created_at: new Date()
       });
     }
   }
@@ -234,8 +250,7 @@ const generateImages = (productId, productName, category, isFeatured = false, lo
       product_id: productId,
       image_url: `/products/${selectedImages[i]}`,
       is_featured: i === 0 ? 1 : 0, // First image is featured
-      created_at: new Date(),
-      updated_at: new Date()
+      created_at: new Date()
     });
   }
   
@@ -286,6 +301,7 @@ function getBasePrice(subcategory) {
     'shorts': { min: 20, max: 70 },
     'skirts': { min: 25, max: 90 },
     'hoodies': { min: 30, max: 120 },
+    'shirts': { min: 25, max: 80 },
     'jeans': { min: 40, max: 150 }
   };
   
@@ -367,7 +383,14 @@ module.exports = {
     );
     const existingSKUsSet = new Set(existingSKUs.map(row => row.sku));
 
-    const productsPerVendor = process.env.NODE_ENV === 'production' ? 5 : 20; // Reduced for safety in prod
+    /**
+     * Environment-based data volume control:
+     * - Production: 1 product per vendor × 10 vendors = 10 total products
+     * - Staging: 7 products per vendor × 30 vendors = 210 total products  
+     * - Development: 10 products per vendor × 50 vendors = 500 total products
+     */
+    const productsPerVendor = process.env.NODE_ENV === 'production' ? 1 :
+                              process.env.NODE_ENV === 'staging' ? 7 : 10;
     console.log(`Seeding ${productsPerVendor} products per vendor in ${process.env.NODE_ENV} environment`);
     
     const usedSlugs = new Set([...existingSlugSet]);
@@ -380,7 +403,7 @@ module.exports = {
         const randomCategory = arrayElement(subCategories);
         const simpleSubCategorySlug = randomCategory.slug.split('-').pop();
 
-        let product = generateProduct(vendorIds, randomCategory, successCount + 1);
+        let product = generateProduct([vendor.id], randomCategory, successCount + 1);
         
         // Ensure slug uniqueness
         let slugCounter = 1;
@@ -404,10 +427,13 @@ module.exports = {
           // Insert product
           await queryInterface.bulkInsert('products', [product]);
 
-          // Get the actual product ID
+          // Get the actual product ID more robustly by slug
           const lastProduct = await queryInterface.sequelize.query(
-            'SELECT id FROM products ORDER BY id DESC LIMIT 1',
-            { type: queryInterface.sequelize.QueryTypes.SELECT }
+            'SELECT id FROM products WHERE slug = ? LIMIT 1',
+            { 
+              replacements: [product.slug],
+              type: queryInterface.sequelize.QueryTypes.SELECT 
+            }
           );
           const actualProductId = lastProduct[0].id;
 
@@ -431,19 +457,27 @@ module.exports = {
           if (productVariants.length > 0) {
             await queryInterface.bulkInsert('product_variants', productVariants);
 
-            // Fetch created variants to get their IDs
+            // Fetch created variants to get their IDs (robustly by product_id)
             const createdVariants = await queryInterface.sequelize.query(
               `SELECT id, product_id, variant_type_id, name, value FROM product_variants WHERE product_id = ?`,
               { replacements: [actualProductId], type: queryInterface.sequelize.QueryTypes.SELECT }
             );
 
             if (createdVariants.length > 0) {
+              console.log(`Found ${createdVariants.length} variants for product ${actualProductId}`);
               try {
-                await VariantService.createCombinationsForProduct(actualProductId, createdVariants);
+                const combinations = await VariantService.createCombinationsForProduct(actualProductId, createdVariants);
+                if (combinations && combinations.length > 0) {
+                  console.log(`Successfully created ${combinations.length} combinations for product ${actualProductId}`);
+                } else {
+                  console.log(`No combinations created for product ${actualProductId}`);
+                }
               } catch (comboError) {
                 console.error(`Failed to create combinations for product ${actualProductId}:`, comboError.message);
-                // Continue if combinations fail, product is still there
+                console.error(comboError.stack);
               }
+            } else {
+              console.log(`No variants found for product ${actualProductId}`);
             }
           }
           

@@ -126,22 +126,23 @@ const generateBankDetails = () => {
   };
 };
 
+
 module.exports = {
   up: async (queryInterface, Sequelize) => {
     /**
      * Data Reduction Strategy:
      * This seeder implements environment-based data volume control to optimize performance
      * and resource usage across different deployment environments:
-     * - Production: 5 vendors (lowest)
-     * - Staging: 10 vendors (medium)
-     * - Development: 20 vendors (highest)
+     * - Production: 10 vendors (lowest)
+     * - Staging: 30 vendors (medium)
+     * - Development: 50 vendors (highest)
      *
      * Rationale:
-     * - Development: 20 vendors provide sufficient data for testing vendor-specific functionality
+     * - Development: 50 vendors provide sufficient data for testing vendor-specific functionality
      *   (dashboard, product management, earnings) without overwhelming the development database
-     * - Staging: 10 vendors allow for realistic testing of multi-vendor scenarios, marketplace
+     * - Staging: 30 vendors allow for realistic testing of multi-vendor scenarios, marketplace
      *   interactions, and vendor competition features while maintaining manageable resource usage
-     * - Production: 5 vendors ensure a diverse marketplace with sufficient competition and
+     * - Production: 10 vendors ensure a diverse marketplace with sufficient competition and
      *   variety for customers, while providing meaningful analytics and vendor performance data
      *
      * Conditional Logic:
@@ -240,9 +241,9 @@ module.exports = {
     let storeId = maxStoreId || 1;
 
     // Adjust vendor count based on NODE_ENV
-    // Production: 5 vendors (lowest), Staging: 10 vendors (medium), Development: 20 vendors (highest)
-    const totalVendors = process.env.NODE_ENV === 'production' ? 5 :
-                         process.env.NODE_ENV === 'staging' ? 10 : 20;
+    // Production: 10 vendors (lowest), Staging: 30 vendors (medium), Development: 50 vendors (highest)
+    const totalVendors = process.env.NODE_ENV === 'production' ? 10 :
+                         process.env.NODE_ENV === 'staging' ? 30 : 50;
 
     // Generate vendors
     for (let i = 0; i < totalVendors; i++) {

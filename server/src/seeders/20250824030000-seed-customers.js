@@ -10,16 +10,16 @@ module.exports = {
      * Data Reduction Strategy:
      * This seeder implements environment-based data volume control to optimize performance
      * and resource usage across different deployment environments:
-     * - Production: 100 customers (lowest)
-     * - Staging: 500 customers (medium)
-     * - Development: 1000 customers (highest)
+     * - Production: 20 customers (lowest)
+     * - Staging: 100 customers (medium)
+     * - Development: 200 customers (highest)
      *
      * Rationale:
-     * - Development: 100 customers provide sufficient data for UI/UX testing and basic functionality
+     * - Development: 200 customers provide sufficient data for UI/UX testing and basic functionality
      *   without overwhelming local databases or slowing down development workflows
-     * - Staging: 500 customers simulate realistic user loads for performance testing, API stress testing,
+     * - Staging: 100 customers simulate realistic user loads for performance testing, API stress testing,
      *   and user experience validation while maintaining reasonable resource consumption
-     * - Production: 100 customers ensure the system can handle real-world user volumes and provides
+     * - Production: 20 customers ensure the system can handle real-world user volumes and provides
      *   meaningful analytics data while being scalable for future growth
      *
      * Conditional Logic:
@@ -58,9 +58,9 @@ module.exports = {
     const usedEmails = new Set();
 
     // Adjust customer count based on NODE_ENV
-    // Production: 100 (lowest), Staging: 500 (medium), Development: 1000 (highest)
-    const totalCustomers = process.env.NODE_ENV === 'production' ? 100 :
-                          process.env.NODE_ENV === 'staging' ? 500 : 1000;
+    // Production: 20 (lowest), Staging: 100 (medium), Development: 200 (highest)
+    const totalCustomers = process.env.NODE_ENV === 'production' ? 20 :
+                          process.env.NODE_ENV === 'staging' ? 100 : 200;
     const batchSize = 100;
     const numBatches = Math.ceil(totalCustomers / batchSize);
 
