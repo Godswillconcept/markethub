@@ -7,6 +7,7 @@ const {
   getVendorProducts,
   getVendorEarnings,
   getVendorEarningsBreakdown,
+  getVendorTopSellingProducts,
 } = require("../controllers/dashboard.controller");
 
 const { cache } = require("../utils/cache");
@@ -114,7 +115,9 @@ vendorRouter.get(
     ],
   }),
   getVendorEarningsBreakdown
-);
+); 
+
+vendorRouter.get("/top-selling-products", getVendorTopSellingProducts);
 
 // Mount vendor routes under /vendor
 router.use("/vendor", vendorRouter);

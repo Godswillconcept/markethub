@@ -4178,6 +4178,43 @@
                 },
                 "description": "Get detailed breakdown of vendor earnings with pagination"
               }
+            },
+            {
+              "name": "Get Vendor Top Selling Products",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{vendor_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/dashboard/vendor/top-selling-products?page=1&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "dashboard",
+                    "vendor",
+                    "top-selling-products"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number for pagination"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Number of items per page"
+                    }
+                  ]
+                },
+                "description": "Get top selling products for vendor dashboard with pagination"
+              }
             }
           ]
         },

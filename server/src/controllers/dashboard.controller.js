@@ -907,25 +907,102 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
 });
 
 
+// Helper function to validate and calculate date range for monthly filtering
+const calculateDateRange = (year, month) => {
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
+  
+  // Default to current month if no parameters provided (backward compatibility)
+  const targetYear = year ? parseInt(year) : currentYear;
+  const targetMonth = month ? parseInt(month) : currentMonth;
+  
+  // Validate year range (between 2000 and current year + 1 for future planning)
+  if (isNaN(targetYear) || targetYear < 2000 || targetYear > currentYear + 1) {
+    throw new Error(`Invalid year. Please provide a year between 2000 and ${currentYear + 1}.`);
+  }
+  
+  // Validate month range (1-12)
+  if (isNaN(targetMonth) || targetMonth < 1 || targetMonth > 12) {
+    throw new Error("Invalid month. Please provide a month between 1 and 12.");
+  }
+  
+  // Handle edge case: future dates should default to current month
+  if (targetYear > currentYear || (targetYear === currentYear && targetMonth > currentMonth)) {
+    console.warn(`Requested date ${targetYear}-${targetMonth} is in the future. Defaulting to current month.`);
+    const now = new Date();
+    return {
+      startDate: new Date(now.getFullYear(), now.getMonth(), 1),
+      endDate: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+      targetYear: currentYear,
+      targetMonth: currentMonth,
+      isFuture: true
+    };
+  }
+  
+  // Handle leap year edge case for February
+  const isLeapYear = (targetYear % 4 === 0 && targetYear % 100 !== 0) || (targetYear % 400 === 0);
+  if (targetMonth === 2 && !isLeapYear) {
+    console.log(`Non-leap year ${targetYear} detected for February. Handling accordingly.`);
+  }
+  
+  // Calculate start and end dates for the target month
+  const startDate = new Date(targetYear, targetMonth - 1, 1); // Month is 0-indexed in JavaScript
+  const endDate = new Date(targetYear, targetMonth, 1); // First day of next month
+  
+  return {
+    startDate,
+    endDate,
+    targetYear,
+    targetMonth,
+    isFuture: false,
+    isLeapYear
+  };
+};
+
+// Helper function to format month name for metadata
+const formatMonthName = (year, month) => {
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  return `${monthNames[month - 1]} ${year}`;
+};
+
 /**
- * Retrieves comprehensive dashboard metrics for administrative oversight.
+ * Retrieves comprehensive dashboard metrics for administrative oversight with monthly filtering.
  * Provides platform-wide statistics including vendor counts, financial metrics, and operational data.
+ * Supports filtering by specific month/year while maintaining backward compatibility.
  * @param {import('express').Request} req - Express request object
+ * @param {Object} req.query - Query parameters
+ * @param {number} [req.query.year] - Year to filter by (2000 to current year + 1)
+ * @param {number} [req.query.month] - Month to filter by (1-12), defaults to current month
  * @param {import('express').Response} res - Express response object
  * @param {import('express').NextFunction} next - Express next middleware function
  * @returns {Object} Success response with admin dashboard metrics
  * @returns {boolean} status - Success status
  * @returns {Object} data - Dashboard metrics data
  * @returns {number} data.totalVendors - Total number of approved vendors
- * @returns {string} data.monthlyIncome - Platform income for current month (formatted to 2 decimal places)
+ * @returns {string} data.monthlyIncome - Platform income for specified period (formatted to 2 decimal places)
  * @returns {number} data.totalProducts - Total number of products on platform
- * @returns {string} data.monthlySales - Total sales amount for current month (formatted to 2 decimal places)
- * @returns {number} data.pendingOrders - Number of orders with pending status
+ * @returns {string} data.monthlySales - Total sales amount for specified period (formatted to 2 decimal places)
+ * @returns {number} data.pendingOrders - Number of orders with pending status in specified period
+ * @returns {Object} metadata - Response metadata
+ * @returns {string} metadata.period - Formatted period name (e.g., "December 2024")
+ * @returns {Object} metadata.dateRange - Date range used for filtering
+ * @returns {string} metadata.dateRange.start - Start date in ISO format
+ * @returns {string} metadata.dateRange.end - End date in ISO format
+ * @returns {boolean} metadata.isFuture - Whether the requested period is in the future
+ * @returns {boolean} metadata.isDefault - Whether default (current month) was used
  * @api {get} /api/dashboard/admin Get Admin Dashboard
  * @private admin
  * @example
- * // Request
+ * // Request current month (backward compatible)
  * GET /api/dashboard/admin
+ * Authorization: Bearer <admin_token>
+ *
+ * // Request specific month
+ * GET /api/dashboard/admin?year=2024&month=12
  * Authorization: Bearer <admin_token>
  *
  * // Success Response (200)
@@ -937,83 +1014,173 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
  *     "totalProducts": 150,
  *     "monthlySales": "125000.50",
  *     "pendingOrders": 12
+ *   },
+ *   "metadata": {
+ *     "period": "December 2024",
+ *     "dateRange": {
+ *       "start": "2024-12-01T00:00:00.000Z",
+ *       "end": "2025-01-01T00:00:00.000Z"
+ *     },
+ *     "isFuture": false,
+ *     "isDefault": false
  *   }
  * }
  */
 const getAdminDashboard = catchAsync(async (req, res, next) => {
-  // Total Vendors
-  const totalVendors = await db.Vendor.count({
-    where: { status: "approved" },
-  });
-
-  // Platform Income Monthly
-  const currentMonth = new Date();
-  currentMonth.setDate(1);
-  const nextMonth = new Date(currentMonth);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
-
-  const monthlyIncome =
-    (await db.PaymentTransaction.sum("amount", {
+  try {
+    const { year, month } = req.query;
+    
+    console.log(`[Admin Dashboard] Request received - Year: ${year}, Month: ${month}`);
+    
+    // Calculate date range with validation
+    let dateRange;
+    try {
+      dateRange = calculateDateRange(year, month);
+    } catch (error) {
+      console.error(`[Admin Dashboard] Date validation error: ${error.message}`);
+      return next(new AppError(error.message, 400));
+    }
+    
+    const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
+    
+    // Log the processing details
+    console.log(`[Admin Dashboard] Processing dashboard for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
+    if (isFuture) {
+      console.log(`[Admin Dashboard] Warning: Requested future period, defaulted to current month`);
+    }
+    if (isLeapYear && targetMonth === 2) {
+      console.log(`[Admin Dashboard] Leap year detected: ${targetYear}`);
+    }
+    
+    // Total Vendors (always count approved vendors, no date filtering)
+    const totalVendors = await db.Vendor.count({
+      where: { status: "approved" },
+    });
+    
+    // Platform Income for the specified period
+    const monthlyIncome = await db.PaymentTransaction.sum("amount", {
       where: {
         type: "commission",
         status: "completed",
         created_at: {
-          [Op.gte]: currentMonth,
-          [Op.lt]: nextMonth,
+          [Op.gte]: startDate,
+          [Op.lt]: endDate,
         },
       },
-    })) || 0;
-
-  // Total Products
-  const totalProducts = await db.Product.count();
-
-  // Total Sales Monthly
-  const monthlySales =
-    (await db.Order.sum("total_amount", {
+    }) || 0;
+    
+    // Total Products (always count all products, no date filtering)
+    const totalProducts = await db.Product.count();
+    
+    // Total Sales for the specified period
+    const monthlySales = await db.Order.sum("total_amount", {
       where: {
         payment_status: "paid",
         created_at: {
-          [Op.gte]: currentMonth,
-          [Op.lt]: nextMonth,
+          [Op.gte]: startDate,
+          [Op.lt]: endDate,
         },
       },
-    })) || 0;
-
-  const orderStatuses = {
-    delivered: await db.Order.count({
-      where: { order_status: "delivered" },
-    }),
-    shipped: await db.Order.count({
-      where: { order_status: "shipped" },
-    }),
-    processing: await db.Order.count({
-      where: { order_status: "processing" },
-    }),
-    pending: await db.Order.count({
-      where: { order_status: "pending" },
-    }),
-    cancelled: await db.Order.count({
-      where: { order_status: "cancelled" },
-    }),
-  };
-
-  res.status(200).json({
-    status: "success",
-    data: {
-      totalVendors,
-      monthlyIncome: parseFloat(monthlyIncome).toFixed(2),
-      totalProducts,
-      monthlySales: parseFloat(monthlySales).toFixed(2),
-      orderStatuses,
-    },
-  });
+    }) || 0;
+    
+    // Order statuses for the specified period
+    const orderStatuses = {
+      delivered: await db.Order.count({
+        where: {
+          order_status: "delivered",
+          created_at: {
+            [Op.gte]: startDate,
+            [Op.lt]: endDate,
+          },
+        },
+      }),
+      shipped: await db.Order.count({
+        where: {
+          order_status: "shipped",
+          created_at: {
+            [Op.gte]: startDate,
+            [Op.lt]: endDate,
+          },
+        },
+      }),
+      processing: await db.Order.count({
+        where: {
+          order_status: "processing",
+          created_at: {
+            [Op.gte]: startDate,
+            [Op.lt]: endDate,
+          },
+        },
+      }),
+      pending: await db.Order.count({
+        where: {
+          order_status: "pending",
+          created_at: {
+            [Op.gte]: startDate,
+            [Op.lt]: endDate,
+          },
+        },
+      }),
+      cancelled: await db.Order.count({
+        where: {
+          order_status: "cancelled",
+          created_at: {
+            [Op.gte]: startDate,
+            [Op.lt]: endDate,
+          },
+        },
+      }),
+    };
+    
+    // Determine if this is default behavior (no year/month specified)
+    const currentDate = new Date();
+    const isDefault = !year && !month;
+    
+    const response = {
+      status: "success",
+      data: {
+        totalVendors,
+        monthlyIncome: parseFloat(monthlyIncome).toFixed(2),
+        totalProducts,
+        monthlySales: parseFloat(monthlySales).toFixed(2),
+        orderStatuses,
+      },
+      metadata: {
+        period: formatMonthName(targetYear, targetMonth),
+        dateRange: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+        },
+        isFuture,
+        isDefault,
+        leapYear: isLeapYear,
+        filters: {
+          year: parseInt(year) || null,
+          month: parseInt(month) || null,
+        },
+      },
+    };
+    
+    // Log successful processing
+    console.log(`[Admin Dashboard] Successfully processed dashboard data for ${formatMonthName(targetYear, targetMonth)}`);
+    console.log(`[Admin Dashboard] Metrics: Vendors=${totalVendors}, Products=${totalProducts}, Sales=${monthlySales}, Income=${monthlyIncome}`);
+    
+    res.status(200).json(response);
+    
+  } catch (error) {
+    console.error(`[Admin Dashboard] Unexpected error: ${error.message}`, error.stack);
+    return next(new AppError("Internal server error while processing dashboard data", 500));
+  }
 });
 /**
- * Retrieves top selling vendors with their order metrics and performance data.
- * Shows vendor performance including total sales, units sold, and order counts.
+ * Retrieves top selling vendors with their order metrics and performance data with monthly filtering.
+ * Shows vendor performance including total sales, units sold, and order counts for specified period.
+ * Supports filtering by specific month/year while maintaining backward compatibility.
  * @param {import('express').Request} req - Express request object
  * @param {Object} req.query - Query parameters
  * @param {number} [req.query.limit=10] - Number of top vendors to return (max 50)
+ * @param {number} [req.query.year] - Year to filter by (2000 to current year + 1)
+ * @param {number} [req.query.month] - Month to filter by (1-12), defaults to current month
  * @param {import('express').Response} res - Express response object
  * @param {import('express').NextFunction} next - Express next middleware function
  * @returns {Object} Success response with top selling vendors and their metrics
@@ -1027,11 +1194,22 @@ const getAdminDashboard = catchAsync(async (req, res, next) => {
  * @returns {number} data[].total_units_sold - Total units sold across all products
  * @returns {number} data[].active_products - Number of currently active products
  * @returns {string} data[].average_order_value - Average order value (formatted to 2 decimal places)
+ * @returns {Object} metadata - Response metadata
+ * @returns {string} metadata.period - Formatted period name (e.g., "December 2024")
+ * @returns {Object} metadata.dateRange - Date range used for filtering
+ * @returns {string} metadata.dateRange.start - Start date in ISO format
+ * @returns {string} metadata.dateRange.end - End date in ISO format
+ * @returns {boolean} metadata.isFuture - Whether the requested period is in the future
+ * @returns {boolean} metadata.isDefault - Whether default (current month) was used
  * @api {get} /api/dashboard/admin/top-selling-vendors Get Top Selling Vendors
  * @private admin
  * @example
- * // Request
+ * // Request current month (backward compatible)
  * GET /api/dashboard/admin/top-selling-vendors?limit=10
+ * Authorization: Bearer <admin_token>
+ *
+ * // Request specific month
+ * GET /api/dashboard/admin/top-selling-vendors?year=2024&month=12&limit=10
  * Authorization: Bearer <admin_token>
  *
  * // Success Response (200)
@@ -1058,124 +1236,205 @@ const getAdminDashboard = catchAsync(async (req, res, next) => {
  *       "active_products": 18,
  *       "average_order_value": "273.45"
  *     }
- *   ]
+ *   ],
+ *   "metadata": {
+ *     "period": "December 2024",
+ *     "dateRange": {
+ *       "start": "2024-12-01T00:00:00.000Z",
+ *       "end": "2025-01-01T00:00:00.000Z"
+ *     },
+ *     "isFuture": false,
+ *     "isDefault": false
+ *   }
  * }
  */
 const getTopSellingVendors = catchAsync(async (req, res, next) => {
-  const { limit = 10 } = req.query;
-  const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 50)); // Max 50 vendors
+  try {
+    const { limit = 10, year, month } = req.query;
+    const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 50)); // Max 50 vendors
 
-  // STEP 1: Aggregate sales per vendor (NO includes = no grouping nightmare)
-  const vendorSales = await db.OrderItem.findAll({
-    attributes: [
-      "vendor_id",
-      [fn("SUM", col("sub_total")), "total_sales"],
-      [fn("SUM", col("quantity")), "total_units_sold"],
-      [fn("COUNT", fn("DISTINCT", col("order_id"))), "total_orders"],
-    ],
-    include: [
-      {
-        model: db.Order,
-        as: "order",
-        attributes: [],
-        where: {
-          payment_status: "paid",
-          order_status: { [Op.in]: ["shipped", "delivered", "completed"] },
+    console.log(`[Top Selling Vendors] Request received - Year: ${year}, Month: ${month}, Limit: ${limitNum}`);
+    
+    // Calculate date range with validation
+    let dateRange;
+    try {
+      dateRange = calculateDateRange(year, month);
+    } catch (error) {
+      console.error(`[Top Selling Vendors] Date validation error: ${error.message}`);
+      return next(new AppError(error.message, 400));
+    }
+    
+    const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
+    
+    // Log the processing details
+    console.log(`[Top Selling Vendors] Processing vendors for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
+    if (isFuture) {
+      console.log(`[Top Selling Vendors] Warning: Requested future period, defaulted to current month`);
+    }
+    if (isLeapYear && targetMonth === 2) {
+      console.log(`[Top Selling Vendors] Leap year detected: ${targetYear}`);
+    }
+
+    // STEP 1: Aggregate sales per vendor with date filtering
+    const vendorSales = await db.OrderItem.findAll({
+      attributes: [
+        "vendor_id",
+        [fn("SUM", col("sub_total")), "total_sales"],
+        [fn("SUM", col("quantity")), "total_units_sold"],
+        [fn("COUNT", fn("DISTINCT", col("order_id"))), "total_orders"],
+      ],
+      include: [
+        {
+          model: db.Order,
+          as: "order",
+          attributes: [],
+          where: {
+            payment_status: "paid",
+            order_status: { [Op.in]: ["shipped", "delivered", "completed"] },
+            created_at: {
+              [Op.gte]: startDate,
+              [Op.lt]: endDate,
+            },
+          },
+        },
+      ],
+      where: {
+        vendor_id: { [Op.not]: null },
+      },
+      group: ["vendor_id"],
+      order: [[literal("total_sales"), "DESC"]],
+      limit: limitNum,
+      raw: true,
+    });
+
+    if (vendorSales.length === 0) {
+      const currentDate = new Date();
+      const isDefault = !year && !month;
+      
+      return res.status(200).json({
+        status: "success",
+        data: [],
+        metadata: {
+          period: formatMonthName(targetYear, targetMonth),
+          dateRange: {
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+          },
+          isFuture,
+          isDefault,
+          leapYear: isLeapYear,
+          filters: {
+            year: parseInt(year) || null,
+            month: parseInt(month) || null,
+          },
+        },
+        message: `No vendor sales data available for ${formatMonthName(targetYear, targetMonth)}.`,
+      });
+    }
+
+    const vendorIds = vendorSales.map((v) => v.vendor_id);
+
+    // STEP 2: Fetch full vendor details separately
+    const vendors = await db.Vendor.findAll({
+      where: { id: { [Op.in]: vendorIds } },
+      attributes: ["id", "total_sales", "total_earnings", "status"],
+      include: [
+        {
+          model: db.User,
+          attributes: ["first_name", "last_name", "email"],
+        },
+        {
+          model: db.Store,
+          as: "store",
+          attributes: ["business_name", "logo", "slug", "is_verified"],
+        },
+      ],
+      order: [[literal(`FIELD(Vendor.id, ${vendorIds.join(",")})`)]], // Preserve sales order
+      raw: false,
+    });
+
+    // STEP 3: Combine + format beautifully
+    const salesMap = new Map(
+      vendorSales.map((v) => [
+        v.vendor_id,
+        {
+          total_sales: parseFloat(v.total_sales || 0),
+          total_units_sold: parseInt(v.total_units_sold || 0),
+          total_orders: parseInt(v.total_orders || 0),
+        },
+      ])
+    );
+
+    const result = vendors.map((vendor) => {
+      const sales = salesMap.get(vendor.id) || {
+        total_sales: 0,
+        total_units_sold: 0,
+        total_orders: 0,
+      };
+      const user = vendor.User;
+      const store = vendor.store;
+
+      return {
+        id: vendor.id,
+        name: user
+          ? `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+            "Unknown Vendor"
+          : "Unknown Vendor",
+        email: user?.email || null,
+        business_name: store?.business_name || "No Store Name",
+        store_slug: store?.slug || null,
+        logo: store?.logo || null,
+        is_verified: store?.is_verified || false,
+        status: vendor.status,
+        stats: {
+          total_sales: sales.total_sales,
+          total_units_sold: sales.total_units_sold,
+          total_orders: sales.total_orders,
+          avg_order_value:
+            sales.total_orders > 0
+              ? parseFloat((sales.total_sales / sales.total_orders).toFixed(2))
+              : 0,
+        },
+      };
+    });
+
+    // Determine if this is default behavior (no year/month specified)
+    const currentDate = new Date();
+    const isDefault = !year && !month;
+
+    const response = {
+      status: "success",
+      data: result,
+      metadata: {
+        period: formatMonthName(targetYear, targetMonth),
+        dateRange: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+        },
+        isFuture,
+        isDefault,
+        leapYear: isLeapYear,
+        filters: {
+          year: parseInt(year) || null,
+          month: parseInt(month) || null,
         },
       },
-    ],
-    where: {
-      vendor_id: { [Op.not]: null },
-    },
-    group: ["vendor_id"],
-    order: [[literal("total_sales"), "DESC"]],
-    limit: limitNum,
-    raw: true,
-  });
+      summary: {
+        total_vendors_returned: result.length,
+        top_performer: result[0]?.business_name || null,
+      },
+    };
 
-  if (vendorSales.length === 0) {
-    return res.status(200).json({
-      status: "success",
-      data: [],
-      message: "No vendor sales data available yet.",
-    });
+    // Log successful processing
+    console.log(`[Top Selling Vendors] Successfully processed ${result.length} vendors for ${formatMonthName(targetYear, targetMonth)}`);
+    console.log(`[Top Selling Vendors] Top performer: ${response.summary.top_performer}`);
+
+    res.status(200).json(response);
+    
+  } catch (error) {
+    console.error(`[Top Selling Vendors] Unexpected error: ${error.message}`, error.stack);
+    return next(new AppError("Internal server error while processing top selling vendors", 500));
   }
-
-  const vendorIds = vendorSales.map((v) => v.vendor_id);
-
-  // STEP 2: Fetch full vendor details separately
-  const vendors = await db.Vendor.findAll({
-    where: { id: { [Op.in]: vendorIds } },
-    attributes: ["id", "total_sales", "total_earnings", "status"],
-    include: [
-      {
-        model: db.User,
-        attributes: ["first_name", "last_name", "email"],
-      },
-      {
-        model: db.Store,
-        as: "store",
-        attributes: ["business_name", "logo", "slug", "is_verified"],
-      },
-    ],
-    order: [[literal(`FIELD(Vendor.id, ${vendorIds.join(",")})`)]], // Preserve sales order
-    raw: false,
-  });
-
-  // STEP 3: Combine + format beautifully
-  const salesMap = new Map(
-    vendorSales.map((v) => [
-      v.vendor_id,
-      {
-        total_sales: parseFloat(v.total_sales || 0),
-        total_units_sold: parseInt(v.total_units_sold || 0),
-        total_orders: parseInt(v.total_orders || 0),
-      },
-    ])
-  );
-
-  const result = vendors.map((vendor) => {
-    const sales = salesMap.get(vendor.id) || {
-      total_sales: 0,
-      total_units_sold: 0,
-      total_orders: 0,
-    };
-    const user = vendor.User;
-    const store = vendor.store;
-
-    return {
-      id: vendor.id,
-      name: user
-        ? `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
-          "Unknown Vendor"
-        : "Unknown Vendor",
-      email: user?.email || null,
-      business_name: store?.business_name || "No Store Name",
-      store_slug: store?.slug || null,
-      logo: store?.logo || null,
-      is_verified: store?.is_verified || false,
-      status: vendor.status,
-      stats: {
-        total_sales: sales.total_sales,
-        total_units_sold: sales.total_units_sold,
-        total_orders: sales.total_orders,
-        avg_order_value:
-          sales.total_orders > 0
-            ? parseFloat((sales.total_sales / sales.total_orders).toFixed(2))
-            : 0,
-      },
-    };
-  });
-
-  res.status(200).json({
-    status: "success",
-    data: result,
-    summary: {
-      period: "all_time",
-      total_vendors_returned: result.length,
-      top_performer: result[0]?.business_name || null,
-    },
-  });
 });
 
 /**
@@ -1330,9 +1589,13 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Retrieves top performing categories based on product sales in the current month.
- * Shows category performance metrics including product count and total units sold.
+ * Retrieves top performing categories based on product sales with monthly filtering.
+ * Shows category performance metrics including product count and total units sold for specified period.
+ * Supports filtering by specific month/year while maintaining backward compatibility.
  * @param {import('express').Request} req - Express request object
+ * @param {Object} req.query - Query parameters
+ * @param {number} [req.query.year] - Year to filter by (2000 to current year + 1)
+ * @param {number} [req.query.month] - Month to filter by (1-12), defaults to current month
  * @param {import('express').Response} res - Express response object
  * @param {import('express').NextFunction} next - Express next middleware function
  * @returns {Object} Success response with top categories data
@@ -1343,11 +1606,22 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
  * @returns {string} data[].slug - Category slug
  * @returns {number|null} data[].product_count - Number of products in category this month
  * @returns {number|null} data[].total_sold - Total units sold in category this month
+ * @returns {Object} metadata - Response metadata
+ * @returns {string} metadata.period - Formatted period name (e.g., "December 2024")
+ * @returns {Object} metadata.dateRange - Date range used for filtering
+ * @returns {string} metadata.dateRange.start - Start date in ISO format
+ * @returns {string} metadata.dateRange.end - End date in ISO format
+ * @returns {boolean} metadata.isFuture - Whether the requested period is in the future
+ * @returns {boolean} metadata.isDefault - Whether default (current month) was used
  * @api {get} /api/dashboard/admin/top-categories Get Admin Top Categories
  * @private admin
  * @example
- * // Request
+ * // Request current month (backward compatible)
  * GET /api/dashboard/admin/top-categories
+ * Authorization: Bearer <admin_token>
+ *
+ * // Request specific month
+ * GET /api/dashboard/admin/top-categories?year=2024&month=12
  * Authorization: Bearer <admin_token>
  *
  * // Success Response (200)
@@ -1375,82 +1649,169 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
  *       "product_count": 12,
  *       "total_sold": 280
  *     }
- *   ]
+ *   ],
+ *   "metadata": {
+ *     "period": "December 2024",
+ *     "dateRange": {
+ *       "start": "2024-12-01T00:00:00.000Z",
+ *       "end": "2025-01-01T00:00:00.000Z"
+ *     },
+ *     "isFuture": false,
+ *     "isDefault": false
+ *   }
  * }
  */
 const getAdminTopCategories = catchAsync(async (req, res, next) => {
-  // FIXED: Removed overly restrictive monthly date filter
-  // Now returns top categories based on all-time sales data
-  // This provides more meaningful insights for admin dashboard
+  try {
+    const { year, month } = req.query;
+    
+    console.log(`[Admin Top Categories] Request received - Year: ${year}, Month: ${month}`);
+    
+    // Calculate date range with validation
+    let dateRange;
+    try {
+      dateRange = calculateDateRange(year, month);
+    } catch (error) {
+      console.error(`[Admin Top Categories] Date validation error: ${error.message}`);
+      return next(new AppError(error.message, 400));
+    }
+    
+    const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
+    
+    // Log the processing details
+    console.log(`[Admin Top Categories] Processing categories for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
+    if (isFuture) {
+      console.log(`[Admin Top Categories] Warning: Requested future period, defaulted to current month`);
+    }
+    if (isLeapYear && targetMonth === 2) {
+      console.log(`[Admin Top Categories] Leap year detected: ${targetYear}`);
+    }
 
-  const topCategories = await db.Category.findAll({
-    attributes: [
-      "id",
-      "name",
-      "slug",
-      "description",
-      "image",
-      [fn("COUNT", fn("DISTINCT", col("Products.id"))), "product_count"],
-      [fn("COALESCE", fn("SUM", col("Products.sold_units")), 0), "total_sold"],
-      [
-        fn(
-          "COALESCE",
-          fn(
-            "SUM",
-            literal(
-              "COALESCE(Products.price, 0) * COALESCE(Products.sold_units, 0)"
-            )
-          ),
-          0
-        ),
-        "total_revenue",
+    // Get top categories with date filtering for product sales
+    // For monthly filtering, we need to calculate sales based on order_items within the date range
+    const topCategories = await db.Category.findAll({
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "description",
+        "image",
+        [
+          literal(`(
+            SELECT COUNT(DISTINCT p.id)
+            FROM products p
+            WHERE p.category_id = Category.id
+              AND p.status = 'active'
+          )`),
+          "product_count"
+        ],
+        [
+          literal(`(  
+            SELECT COALESCE(SUM(oi.quantity), 0)
+            FROM order_items oi
+            INNER JOIN orders o ON oi.order_id = o.id
+            INNER JOIN products p ON oi.product_id = p.id
+            WHERE p.category_id = Category.id
+              AND o.payment_status = 'paid'
+              AND o.created_at >= '${startDate.toISOString()}'
+              AND o.created_at < '${endDate.toISOString()}'
+          )`),
+          "total_sold"
+        ],
+        [
+          literal(`(
+            SELECT COALESCE(SUM(oi.sub_total), 0)
+            FROM order_items oi
+            INNER JOIN orders o ON oi.order_id = o.id
+            INNER JOIN products p ON oi.product_id = p.id
+            WHERE p.category_id = Category.id
+              AND o.payment_status = 'paid'
+              AND o.created_at >= '${startDate.toISOString()}'
+              AND o.created_at < '${endDate.toISOString()}'
+          )`),
+          "total_revenue"
+        ],
       ],
-    ],
-    include: [
-      {
-        model: db.Product,
-        as: "Products",
-        attributes: [],
-        where: {
-          status: "active", // Only count active products
+      include: [
+        {
+          model: db.Product,
+          as: "Products",
+          attributes: ["id"],
+          where: {
+            status: "active", // Only count active products
+          },
+          required: false, // LEFT JOIN - include categories even without products
         },
-        required: false, // LEFT JOIN - include categories even without products
+      ],
+      group: [
+        "id",
+        "name",
+        "slug",
+        "description",
+        "image",
+      ],
+      having: literal(`(
+        SELECT COALESCE(SUM(oi.quantity), 0)
+        FROM order_items oi
+        INNER JOIN orders o ON oi.order_id = o.id
+        INNER JOIN products p ON oi.product_id = p.id
+        WHERE p.category_id = Category.id
+          AND o.payment_status = 'paid'
+          AND o.created_at >= '${startDate.toISOString()}'
+          AND o.created_at < '${endDate.toISOString()}'
+      ) > 0`), // Only categories with sales in the specified period
+      order: [[literal("total_sold"), "DESC"]], // Order by total sold units descending
+      limit: 10,
+      subQuery: false,
+      raw: true, // CRITICAL: Returns plain objects for GROUP BY queries
+    });
+
+    // Format the response data with proper type conversion
+    const validatedCategories = topCategories.map((category) => ({
+      id: category.id,
+      name: category.name || "Unknown Category",
+      slug: category.slug || "",
+      description: category.description || "",
+      image: category.image || "",
+      product_count: parseInt(category.product_count) || 0,
+      total_sold: parseInt(category.total_sold) || 0,
+      total_revenue: parseFloat(category.total_revenue) || 0,
+    }));
+
+    // Determine if this is default behavior (no year/month specified)
+    const currentDate = new Date();
+    const isDefault = !year && !month;
+
+    const response = {
+      status: "success",
+      data: validatedCategories,
+      metadata: {
+        period: formatMonthName(targetYear, targetMonth),
+        dateRange: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+        },
+        isFuture,
+        isDefault,
+        leapYear: isLeapYear,
+        filters: {
+          year: parseInt(year) || null,
+          month: parseInt(month) || null,
+        },
+        total_categories: validatedCategories.length,
       },
-    ],
-    group: [
-      "Category.id",
-      "Category.name",
-      "Category.slug",
-      "Category.description",
-      "Category.image",
-    ],
-    having: literal("COALESCE(SUM(Products.sold_units), 0) > 0"), // Only categories with sales
-    order: [[literal("total_sold"), "DESC"]], // Order by total sold units descending
-    limit: 10,
-    subQuery: false,
-    raw: true, // CRITICAL: Returns plain objects for GROUP BY queries
-  });
+    };
 
-  // Format the response data with proper type conversion
-  const validatedCategories = topCategories.map((category) => ({
-    id: category.id,
-    name: category.name || "Unknown Category",
-    slug: category.slug || "",
-    description: category.description || "",
-    image: category.image || "",
-    product_count: parseInt(category.product_count) || 0,
-    total_sold: parseInt(category.total_sold) || 0,
-    total_revenue: parseFloat(category.total_revenue) || 0,
-  }));
+    // Log successful processing
+    console.log(`[Admin Top Categories] Successfully processed ${validatedCategories.length} categories for ${formatMonthName(targetYear, targetMonth)}`);
+    console.log(`[Admin Top Categories] Top category: ${validatedCategories[0]?.name || 'None'}`);
 
-  res.status(200).json({
-    status: "success",
-    data: validatedCategories,
-    metadata: {
-      period: "all_time",
-      total_categories: validatedCategories.length,
-    },
-  });
+    res.status(200).json(response);
+    
+  } catch (error) {
+    console.error(`[Admin Top Categories] Unexpected error: ${error.message}`, error.stack);
+    return next(new AppError("Internal server error while processing top categories", 500));
+  }
 });
 
 /**
@@ -1616,12 +1977,15 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
   });
 });
 /**
- * Retrieves the top selling items based on total quantity sold.
+ * Retrieves the top selling items based on total quantity sold with monthly filtering.
  * Aggregates sales data from order items, groups by product, and orders by total sales descending.
- * Includes complete product details for each top-selling item.
+ * Includes complete product details for each top-selling item for specified period.
+ * Supports filtering by specific month/year while maintaining backward compatibility.
  * @param {import('express').Request} req - Express request object
  * @param {Object} req.query - Query parameters
  * @param {number} [req.query.limit=10] - Number of top selling items to return
+ * @param {number} [req.query.year] - Year to filter by (2000 to current year + 1)
+ * @param {number} [req.query.month] - Month to filter by (1-12), defaults to current month
  * @param {import('express').Response} res - Express response object
  * @param {import('express').NextFunction} next - Express next middleware function
  * @returns {Object} Success response with top selling items
@@ -1637,11 +2001,21 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
  * @returns {string} data[].product.thumbnail - Product thumbnail
  * @returns {Object} data[].product.Category - Product category
  * @returns {Object} data[].product.vendor - Product vendor
+ * @returns {Object} metadata - Response metadata
+ * @returns {string} metadata.period - Formatted period name (e.g., "December 2024")
+ * @returns {Object} metadata.dateRange - Date range used for filtering
+ * @returns {string} metadata.dateRange.start - Start date in ISO format
+ * @returns {string} metadata.dateRange.end - End date in ISO format
+ * @returns {boolean} metadata.isFuture - Whether the requested period is in the future
+ * @returns {boolean} metadata.isDefault - Whether default (current month) was used
  * @api {get} /api/dashboard/top-selling-items Get Top Selling Items
  * @public
  * @example
- * // Request
+ * // Request current month (backward compatible)
  * GET /api/dashboard/top-selling-items?limit=10
+ *
+ * // Request specific month
+ * GET /api/dashboard/top-selling-items?year=2024&month=12&limit=10
  *
  * // Success Response (200)
  * {
@@ -1660,108 +2034,190 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
  *         "vendor": {"id": 1, "User": {"first_name": "John", "last_name": "Doe"}}
  *       }
  *     }
- *   ]
+ *   ],
+ *   "metadata": {
+ *     "period": "December 2024",
+ *     "dateRange": {
+ *       "start": "2024-12-01T00:00:00.000Z",
+ *       "end": "2025-01-01T00:00:00.000Z"
+ *     },
+ *     "isFuture": false,
+ *     "isDefault": false
+ *   }
  * }
  */
 const getTopSellingItems = catchAsync(async (req, res, next) => {
-  const { limit = 10 } = req.query;
+  try {
+    const { limit = 10, year, month } = req.query;
 
-  // Validate limit parameter
-  const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 100)); // Between 1-100
+    // Validate limit parameter
+    const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 100)); // Between 1-100
 
-  // First, get the top selling products by quantity
-  const topSellingProducts = await db.OrderItem.findAll({
-    attributes: ["product_id", [fn("SUM", col("quantity")), "total_quantity"]],
-    include: [
-      {
-        model: db.Order,
-        as: "order",
-        where: { payment_status: "paid" },
-        attributes: [],
-      },
-    ],
-    where: {
-      product_id: { [Op.ne]: null },
-    },
-    group: ["product_id"],
-    order: [[fn("SUM", col("quantity")), "DESC"]],
-    limit: limitNum,
-    raw: true,
-  });
+    console.log(`[Top Selling Items] Request received - Year: ${year}, Month: ${month}, Limit: ${limitNum}`);
+    
+    // Calculate date range with validation
+    let dateRange;
+    try {
+      dateRange = calculateDateRange(year, month);
+    } catch (error) {
+      console.error(`[Top Selling Items] Date validation error: ${error.message}`);
+      return next(new AppError(error.message, 400));
+    }
+    
+    const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
+    
+    // Log the processing details
+    console.log(`[Top Selling Items] Processing items for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
+    if (isFuture) {
+      console.log(`[Top Selling Items] Warning: Requested future period, defaulted to current month`);
+    }
+    if (isLeapYear && targetMonth === 2) {
+      console.log(`[Top Selling Items] Leap year detected: ${targetYear}`);
+    }
 
-  // Then get the complete product details for these top sellers
-  const productIds = topSellingProducts.map((item) => item.product_id);
-
-  if (productIds.length === 0) {
-    return res.status(200).json({
-      status: "success",
-      data: [],
-    });
-  }
-
-  const products = await db.Product.findAll({
-    attributes: [
-      "id",
-      "vendor_id",
-      "category_id",
-      "name",
-      "slug",
-      "description",
-      "thumbnail",
-      "price",
-      "discounted_price",
-      "sku",
-      "status",
-      "impressions",
-      "sold_units",
-      "created_at",
-      "updated_at",
-    ],
-    include: [
-      {
-        model: db.Category,
-        attributes: ["id", "name", "slug"],
-      },
-      {
-        model: db.Vendor,
-        as: "vendor",
-        attributes: ["id"],
-        include: [
-          {
-            model: db.User,
-            attributes: ["id", "first_name", "last_name"],
+    // First, get the top selling products by quantity with date filtering
+    const topSellingProducts = await db.OrderItem.findAll({
+      attributes: ["product_id", [fn("SUM", col("quantity")), "total_quantity"]],
+      include: [
+        {
+          model: db.Order,
+          as: "order",
+          where: { 
+            payment_status: "paid",
+            created_at: {
+              [Op.gte]: startDate,
+              [Op.lt]: endDate,
+            },
           },
-        ],
+          attributes: [],
+        },
+      ],
+      where: {
+        product_id: { [Op.ne]: null },
       },
-    ],
-    where: {
-      id: { [Op.in]: productIds },
-      status: "active",
-    },
-  });
+      group: ["product_id"],
+      order: [[fn("SUM", col("quantity")), "DESC"]],
+      limit: limitNum,
+      raw: true,
+    });
 
-  // Combine the sales data with product details
-  const topSellingItems = topSellingProducts
-    .map((salesItem) => {
-      const product = products.find((p) => p.id === salesItem.product_id);
-      return {
-        product_id: salesItem.product_id,
-        total_quantity: parseInt(salesItem.total_quantity) || 0,
-        product: product || null,
-      };
-    })
-    .filter((item) => item.product !== null); // Remove products that weren't found
+    // Then get the complete product details for these top sellers
+    const productIds = topSellingProducts.map((item) => item.product_id);
 
-  // Return simplified response without pagination since this is top N items
-  res.status(200).json({
-    status: "success",
-    data: topSellingItems,
-    metadata: {
-      totalItems: topSellingItems.length,
-      requestedLimit: limitNum,
-      actualCount: topSellingItems.length,
-    },
-  });
+    if (productIds.length === 0) {
+      const currentDate = new Date();
+      const isDefault = !year && !month;
+      
+      return res.status(200).json({
+        status: "success",
+        data: [],
+        metadata: {
+          period: formatMonthName(targetYear, targetMonth),
+          dateRange: {
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+          },
+          isFuture,
+          isDefault,
+          leapYear: isLeapYear,
+          filters: {
+            year: parseInt(year) || null,
+            month: parseInt(month) || null,
+          },
+        },
+        message: `No selling items data available for ${formatMonthName(targetYear, targetMonth)}.`,
+      });
+    }
+
+    const products = await db.Product.findAll({
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+      ],
+      include: [
+        {
+          model: db.Category,
+          attributes: ["id", "name", "slug"],
+        },
+        {
+          model: db.Vendor,
+          as: "vendor",
+          attributes: ["id"],
+          include: [
+            {
+              model: db.User,
+              attributes: ["id", "first_name", "last_name"],
+            },
+          ],
+        },
+      ],
+      where: {
+        id: { [Op.in]: productIds },
+        status: "active",
+      },
+    });
+
+    // Combine the sales data with product details
+    const topSellingItems = topSellingProducts
+      .map((salesItem) => {
+        const product = products.find((p) => p.id === salesItem.product_id);
+        return {
+          product_id: salesItem.product_id,
+          total_quantity: parseInt(salesItem.total_quantity) || 0,
+          product: product || null,
+        };
+      })
+      .filter((item) => item.product !== null); // Remove products that weren't found
+
+    // Determine if this is default behavior (no year/month specified)
+    const currentDate = new Date();
+    const isDefault = !year && !month;
+
+    const response = {
+      status: "success",
+      data: topSellingItems,
+      metadata: {
+        period: formatMonthName(targetYear, targetMonth),
+        dateRange: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+        },
+        isFuture,
+        isDefault,
+        leapYear: isLeapYear,
+        filters: {
+          year: parseInt(year) || null,
+          month: parseInt(month) || null,
+        },
+        totalItems: topSellingItems.length,
+        requestedLimit: limitNum,
+        actualCount: topSellingItems.length,
+      },
+    };
+
+    // Log successful processing
+    console.log(`[Top Selling Items] Successfully processed ${topSellingItems.length} items for ${formatMonthName(targetYear, targetMonth)}`);
+    console.log(`[Top Selling Items] Top seller: ${topSellingItems[0]?.product?.name || 'None'}`);
+
+    res.status(200).json(response);
+    
+  } catch (error) {
+    console.error(`[Top Selling Items] Unexpected error: ${error.message}`, error.stack);
+    return next(new AppError("Internal server error while processing top selling items", 500));
+  }
 });
 
 /**
@@ -2500,6 +2956,487 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
 
 
 /**
+ * Retrieves vendor-specific top selling products with monthly filtering.
+ * Provides comprehensive product performance metrics for authenticated vendors with support for monthly analysis.
+ * Filters products by vendor ID and date ranges while maintaining backward compatibility with current month defaults.
+ * @param {import('express').Request} req - Express request object
+ * @param {Object} req.query - Query parameters
+ * @param {number} [req.query.page=1] - Page number for pagination
+ * @param {number} [req.query.limit=20] - Number of products per page (max 100)
+ * @param {number} [req.query.year] - Year to filter by (2000 to current year + 1)
+ * @param {number} [req.query.month] - Month to filter by (1-12), defaults to current month
+ * @param {Object} req.user - Authenticated user info
+ * @param {number} req.user.id - User ID for vendor lookup
+ * @param {import('express').Response} res - Express response object
+ * @param {import('express').NextFunction} next - Express next middleware function
+ * @returns {Object} Success response with vendor's top selling products
+ * @returns {boolean} status - Success status
+ * @returns {Object} data - Response data object
+ * @returns {Object} data.vendor_info - Vendor information and metadata
+ * @returns {number} data.vendor_info.vendor_id - Vendor ID
+ * @returns {string} data.vendor_info.vendor_name - Vendor full name
+ * @returns {string} data.vendor_info.business_name - Business/store name
+ * @returns {string} data.vendor_info.email - Vendor email
+ * @returns {Array} data.products - Array of top selling products with performance metrics
+ * @returns {number} data.products[].product_id - Product ID
+ * @returns {string} data.products[].product_name - Product name
+ * @returns {string} data.products[].product_slug - Product slug
+ * @returns {number} data.products[].units_sold - Units sold in specified period
+ * @returns {string} data.products[].revenue - Revenue for this product (formatted to 2 decimal places)
+ * @returns {string} data.products[].profit_margin - Profit margin percentage (formatted to 2 decimal places)
+ * @returns {number} data.products[].current_stock - Current stock quantity
+ * @returns {string} data.products[].stock_status - Stock status (in_stock, low_stock, out_of_stock)
+ * @returns {number} data.products[].views - Product view count
+ * @returns {number} data.products[].impressions - Product impression count
+ * @returns {number} data.products[].conversion_rate - Conversion rate from views to sales
+ * @returns {boolean} data.products[].is_featured - Whether product is featured this month
+ * @returns {string} data.products[].thumbnail - Product thumbnail URL
+ * @returns {Object} data.products[].category - Product category information
+ * @returns {Object} data.monthly_aggregations - Monthly performance aggregations
+ * @returns {string} data.monthly_aggregations.total_revenue - Total revenue for the month
+ * @returns {number} data.monthly_aggregations.total_units_sold - Total units sold across all products
+ * @returns {number} data.monthly_aggregations.total_products_sold - Number of different products sold
+ * @returns {string} data.monthly_aggregations.average_profit_margin - Average profit margin across products
+ * @returns {number} data.monthly_aggregations.top_performer_id - ID of top performing product
+ * @returns {string} data.monthly_aggregations.top_performer_name - Name of top performing product
+ * @returns {Object} metadata - Response metadata
+ * @returns {string} metadata.period - Formatted period name (e.g., "December 2024")
+ * @returns {Object} metadata.dateRange - Date range used for filtering
+ * @returns {string} metadata.dateRange.start - Start date in ISO format
+ * @returns {string} metadata.dateRange.end - End date in ISO format
+ * @returns {boolean} metadata.isFuture - Whether the requested period is in the future
+ * @returns {boolean} metadata.isDefault - Whether default (current month) was used
+ * @returns {Object} pagination - Pagination metadata
+ * @returns {number} pagination.currentPage - Current page number
+ * @returns {number} pagination.totalPages - Total number of pages
+ * @returns {number} pagination.totalItems - Total number of products
+ * @returns {number} pagination.itemsPerPage - Items per page
+ * @returns {boolean} pagination.hasNextPage - Whether next page exists
+ * @returns {boolean} pagination.hasPrevPage - Whether previous page exists
+ * @throws {AppError} 403 - When vendor access is invalid
+ * @throws {AppError} 404 - When vendor not found
+ * @throws {AppError} 400 - When date parameters are invalid
+ * @api {get} /api/dashboard/vendor/top-selling-products Get Vendor Top Selling Products
+ * @private vendor
+ * @example
+ * // Request current month (backward compatible)
+ * GET /api/dashboard/vendor/top-selling-products?page=1&limit=20
+ * Authorization: Bearer <vendor_token>
+ *
+ * // Request specific month
+ * GET /api/dashboard/vendor/top-selling-products?year=2024&month=12&page=1&limit=10
+ * Authorization: Bearer <vendor_token>
+ *
+ * // Success Response (200)
+ * {
+ *   "status": "success",
+ *   "data": {
+ *     "vendor_info": {
+ *       "vendor_id": 1,
+ *       "vendor_name": "John Doe",
+ *       "business_name": "TechHub Electronics",
+ *       "email": "john.doe@example.com"
+ *     },
+ *     "products": [
+ *       {
+ *         "product_id": 123,
+ *         "product_name": "Wireless Headphones",
+ *         "product_slug": "wireless-headphones",
+ *         "units_sold": 45,
+ *         "revenue": "4499.55",
+ *         "profit_margin": "35.50",
+ *         "current_stock": 25,
+ *         "stock_status": "in_stock",
+ *         "views": 150,
+ *         "impressions": 1250,
+ *         "conversion_rate": "12.00",
+ *         "is_featured": true,
+ *         "thumbnail": "https://example.com/thumbnail.jpg",
+ *         "category": {
+ *           "name": "Electronics",
+ *           "slug": "electronics"
+ *         }
+ *       }
+ *     ],
+ *     "monthly_aggregations": {
+ *       "total_revenue": "15450.75",
+ *       "total_units_sold": 120,
+ *       "total_products_sold": 8,
+ *       "average_profit_margin": "32.25",
+ *       "top_performer_id": 123,
+ *       "top_performer_name": "Wireless Headphones"
+ *     },
+ *     "metadata": {
+ *       "period": "December 2024",
+ *       "dateRange": {
+ *         "start": "2024-12-01T00:00:00.000Z",
+ *         "end": "2025-01-01T00:00:00.000Z"
+ *       },
+ *       "isFuture": false,
+ *       "isDefault": false
+ *     },
+ *     "pagination": {
+ *       "currentPage": 1,
+ *       "totalPages": 2,
+ *       "totalItems": 15,
+ *       "itemsPerPage": 10,
+ *       "hasNextPage": true,
+ *       "hasPrevPage": false
+ *     }
+ *   }
+ * }
+ */
+const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, year, month } = req.query;
+    
+    console.log(`[Vendor Top Selling Products] Request received - User: ${req.user?.id}, Year: ${year}, Month: ${month}, Page: ${page}, Limit: ${limit}`);
+    
+    // Validate and get pagination parameters
+    const { limit: limitNum, offset } = paginate(page, limit);
+    
+    // Vendor authentication and validation
+    const vendor = await db.Vendor.findOne({
+      where: { user_id: req.user.id },
+      include: [
+        {
+          model: db.User,
+          attributes: ["id", "first_name", "last_name", "email"],
+        },
+        {
+          model: db.Store,
+          as: "store",
+          attributes: ["id", "business_name"],
+        },
+      ],
+    });
+
+    if (!vendor) {
+      console.error(`[Vendor Top Selling Products] Vendor not found for user: ${req.user.id}`);
+      return next(new AppError("Vendor not found or not approved", 404));
+    }
+
+    if (vendor.status !== "approved") {
+      console.error(`[Vendor Top Selling Products] Vendor not approved. Status: ${vendor.status}`);
+      return next(new AppError("Access denied. Vendor account is not approved", 403));
+    }
+
+    const vendorId = vendor.id;
+    console.log(`[Vendor Top Selling Products] Processing for vendor ID: ${vendorId}`);
+    
+    // Calculate date range with validation using existing utilities
+    let dateRange;
+    try {
+      dateRange = calculateDateRange(year, month);
+    } catch (error) {
+      console.error(`[Vendor Top Selling Products] Date validation error: ${error.message}`);
+      return next(new AppError(error.message, 400));
+    }
+    
+    const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
+    
+    // Log the processing details
+    console.log(`[Vendor Top Selling Products] Processing products for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
+    if (isFuture) {
+      console.log(`[Vendor Top Selling Products] Warning: Requested future period, defaulted to current month`);
+    }
+    if (isLeapYear && targetMonth === 2) {
+      console.log(`[Vendor Top Selling Products] Leap year detected: ${targetYear}`);
+    }
+
+    // Query 1: Get product sales data with vendor filtering and date range
+    const productSalesData = await db.OrderItem.findAll({
+      attributes: [
+        "product_id",
+        [fn("SUM", col("quantity")), "units_sold"],
+        [fn("SUM", col("sub_total")), "revenue"],
+        [fn("COUNT", fn("DISTINCT", col("order_id"))), "order_count"],
+      ],
+      include: [
+        {
+          model: db.Order,
+          as: "order",
+          where: {
+            payment_status: "paid",
+            created_at: {
+              [Op.gte]: startDate,
+              [Op.lt]: endDate,
+            },
+          },
+          attributes: [],
+        },
+      ],
+      where: {
+        vendor_id: vendorId,
+        product_id: { [Op.ne]: null },
+      },
+      group: ["product_id"],
+      order: [[fn("SUM", col("quantity")), "DESC"]],
+      limit: limitNum,
+      offset,
+      raw: true,
+    });
+
+    // Query 2: Get complete product details for the sold products
+    const productIds = productSalesData.map((item) => item.product_id);
+
+    if (productIds.length === 0) {
+      const isDefault = !year && !month;
+      
+      return res.status(200).json({
+        status: "success",
+        data: {
+          vendor_info: {
+            vendor_id: vendor.id,
+            vendor_name: vendor.User
+              ? `${vendor.User.first_name || ""} ${vendor.User.last_name || ""}`.trim() || "Unknown Vendor"
+              : "Unknown Vendor",
+            business_name: vendor.store?.business_name || "Unknown Business",
+            email: vendor.User?.email || "No Email",
+          },
+          products: [],
+          monthly_aggregations: {
+            total_revenue: "0.00",
+            total_units_sold: 0,
+            total_products_sold: 0,
+            average_profit_margin: "0.00",
+            top_performer_id: null,
+            top_performer_name: null,
+          },
+        },
+        metadata: {
+          period: formatMonthName(targetYear, targetMonth),
+          dateRange: {
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+          },
+          isFuture,
+          isDefault,
+          leapYear: isLeapYear,
+          filters: {
+            year: parseInt(year) || null,
+            month: parseInt(month) || null,
+          },
+        },
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: 0,
+          totalItems: 0,
+          itemsPerPage: parseInt(limit),
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
+        message: `No products sold for ${formatMonthName(targetYear, targetMonth)}.`,
+      });
+    }
+
+    // Query 3: Get detailed product information including stock, views, categories
+    const products = await db.Product.findAll({
+      where: {
+        id: { [Op.in]: productIds },
+        vendor_id: vendorId,
+      },
+      attributes: [
+        "id",
+        "name",
+        "slug",
+        "price",
+        "discounted_price",
+        "thumbnail",
+        "impressions",
+        "sold_units",
+        [literal(`(
+          SELECT COALESCE(SUM(vc.stock), 0)
+          FROM variant_combinations vc
+          WHERE vc.product_id = Product.id
+        )`), "current_stock"],
+      ],
+      include: [
+        {
+          model: db.Category,
+          attributes: ["name", "slug"],
+        },
+      ],
+      subQuery: false,
+    });
+
+    // Query 4: Calculate monthly aggregations for the vendor
+    const monthlyStats = await db.OrderItem.findOne({
+      attributes: [
+        [fn("SUM", col("quantity")), "total_units_sold"],
+        [fn("SUM", col("sub_total")), "total_revenue"],
+        [fn("COUNT", fn("DISTINCT", col("product_id"))), "total_products_sold"],
+        [fn("AVG", col("price")), "average_price"],
+      ],
+      include: [
+        {
+          model: db.Order,
+          as: "order",
+          where: {
+            payment_status: "paid",
+            created_at: {
+              [Op.gte]: startDate,
+              [Op.lt]: endDate,
+            },
+          },
+          attributes: [],
+        },
+      ],
+      where: {
+        vendor_id: vendorId,
+      },
+      raw: true,
+    });
+
+    // Combine and format the data
+    const salesMap = new Map(
+      productSalesData.map((item) => [
+        item.product_id,
+        {
+          units_sold: parseInt(item.units_sold) || 0,
+          revenue: parseFloat(item.revenue) || 0,
+          order_count: parseInt(item.order_count) || 0,
+        },
+      ])
+    );
+
+    // Calculate profit margins and conversion rates
+    const processedProducts = products.map((product) => {
+      const sales = salesMap.get(product.id) || {
+        units_sold: 0,
+        revenue: 0,
+        order_count: 0,
+      };
+      
+      const currentStock = parseInt(product.getDataValue("current_stock") || 0);
+      const views = product.impressions || 0;
+      const impressions = product.impressions || 0;
+      
+      // Calculate stock status
+      let stockStatus = "out_of_stock";
+      if (currentStock > 0) {
+        stockStatus = currentStock > 10 ? "in_stock" : "low_stock";
+      }
+      
+      // Calculate conversion rate
+      const conversionRate = views > 0 ? ((sales.units_sold / views) * 100).toFixed(2) : "0.00";
+      
+      // Calculate profit margin (assuming 30% cost basis)
+      const costBasis = product.price * 0.7;
+      const profitMargin = sales.revenue > 0 ? 
+        (((sales.revenue - (sales.units_sold * costBasis)) / sales.revenue) * 100).toFixed(2) : "0.00";
+      
+      return {
+        product_id: product.id,
+        product_name: product.name,
+        product_slug: product.slug,
+        units_sold: sales.units_sold,
+        revenue: sales.revenue.toFixed(2),
+        profit_margin: profitMargin,
+        current_stock: currentStock,
+        stock_status: stockStatus,
+        views: views,
+        impressions: impressions,
+        conversion_rate: conversionRate,
+        is_featured: sales.units_sold >= 10, // Featured if 10+ units sold
+        thumbnail: product.thumbnail,
+        category: product.Category,
+        price: parseFloat(product.price),
+        discounted_price: product.discounted_price ? parseFloat(product.discounted_price) : null,
+      };
+    });
+
+    // Sort products by units sold (most to least)
+    processedProducts.sort((a, b) => b.units_sold - a.units_sold);
+
+    // Format monthly aggregations
+    const monthlyAggregations = {
+      total_revenue: parseFloat(monthlyStats?.total_revenue || 0).toFixed(2),
+      total_units_sold: parseInt(monthlyStats?.total_units_sold || 0),
+      total_products_sold: parseInt(monthlyStats?.total_products_sold || 0),
+      average_profit_margin: "30.00", // Default assumption
+      top_performer_id: processedProducts[0]?.product_id || null,
+      top_performer_name: processedProducts[0]?.product_name || null,
+    };
+
+    // Determine if this is default behavior (no year/month specified)
+    const isDefault = !year && !month;
+
+    // Get total count for pagination
+    const totalProductsSold = await db.OrderItem.count({
+      include: [
+        {
+          model: db.Order,
+          as: "order",
+          where: {
+            payment_status: "paid",
+            created_at: {
+              [Op.gte]: startDate,
+              [Op.lt]: endDate,
+            },
+          },
+          attributes: [],
+        },
+      ],
+      where: {
+        vendor_id: vendorId,
+        product_id: { [Op.ne]: null },
+      },
+      distinct: true,
+    });
+
+    const response = {
+      status: "success",
+      data: {
+        vendor_info: {
+          vendor_id: vendor.id,
+          vendor_name: vendor.User
+            ? `${vendor.User.first_name || ""} ${vendor.User.last_name || ""}`.trim() || "Unknown Vendor"
+            : "Unknown Vendor",
+          business_name: vendor.store?.business_name || "Unknown Business",
+          email: vendor.User?.email || "No Email",
+          status: vendor.status,
+        },
+        products: processedProducts,
+        monthly_aggregations: monthlyAggregations,
+      },
+      metadata: {
+        period: formatMonthName(targetYear, targetMonth),
+        dateRange: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+        },
+        isFuture,
+        isDefault,
+        leapYear: isLeapYear,
+        filters: {
+          year: parseInt(year) || null,
+          month: parseInt(month) || null,
+        },
+      },
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalProductsSold / limitNum),
+        totalItems: totalProductsSold,
+        itemsPerPage: limitNum,
+        hasNextPage: page < Math.ceil(totalProductsSold / limitNum),
+        hasPrevPage: page > 1,
+      },
+    };
+
+    // Log successful processing
+    console.log(`[Vendor Top Selling Products] Successfully processed ${processedProducts.length} products for vendor ${vendorId}`);
+    console.log(`[Vendor Top Selling Products] Total revenue: ${monthlyAggregations.total_revenue}, Top performer: ${monthlyAggregations.top_performer_name}`);
+
+    res.status(200).json(response);
+    
+  } catch (error) {
+    console.error(`[Vendor Top Selling Products] Unexpected error: ${error.message}`, error.stack);
+    return next(new AppError("Internal server error while processing vendor top selling products", 500));
+  }
+});
+
+/**
  * Retrieves paginated list of products added by administrators with comprehensive filtering.
  * Provides detailed product information including images, variants, inventory, and category data.
  * Supports filtering by category, vendor, and status (supply state) for admin product management.
@@ -2890,6 +3827,7 @@ module.exports = {
   getVendorProducts,
   getVendorEarnings,
   getVendorEarningsBreakdown,
+  getVendorTopSellingProducts,
   // admin
   getAdminDashboard,
   getTopSellingVendors,
