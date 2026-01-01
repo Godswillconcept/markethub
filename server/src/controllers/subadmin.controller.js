@@ -79,6 +79,41 @@ const createSubAdmin = catchAsync(async (req, res, next) => {
       }
     }
 
+    // Admin-level permission check
+    // Only system-level permissions that control the permission system itself should be restricted
+    const adminLevelPermissions = [
+      'system_manage', 'system_backup', 'system_logs', 'system_maintenance',
+      'webhooks_create', 'webhooks_read', 'webhooks_update', 'webhooks_delete'
+    ];
+    
+    // Check if any admin-level permissions are being assigned
+    if (permission_groups && permission_groups.length > 0) {
+      // Get all permissions for the specified groups
+      const groupPermissions = PermissionService.getPermissionsByGroups(permission_groups);
+      const permissionNames = groupPermissions.map(p => p.name);
+      
+      // Check if any admin-level permissions are included
+      const hasAdminLevelPermission = permissionNames.some(name => adminLevelPermissions.includes(name));
+      if (hasAdminLevelPermission) {
+        return next(new AppError("Cannot assign admin-level permissions to sub-admins", 403));
+      }
+    }
+
+    if (permission_ids && permission_ids.length > 0) {
+      // Get all permissions to check their names
+      const allPermissions = await Permission.findAll({
+        where: { id: permission_ids }
+      });
+      
+      const permissionNames = allPermissions.map(p => p.name);
+      
+      // Check if any admin-level permissions are included
+      const hasAdminLevelPermission = permissionNames.some(name => adminLevelPermissions.includes(name));
+      if (hasAdminLevelPermission) {
+        return next(new AppError("Cannot assign admin-level permissions to sub-admins", 403));
+      }
+    }
+
     // Hash password (outside transaction for security)
     const hashedPassword = await bcrypt.hash(password, 12);
 
@@ -341,6 +376,41 @@ const getSubAdmin = catchAsync(async (req, res, next) => {
 const updateSubAdminPermissions = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const { role_id = 4, permission_ids, permission_groups } = req.body;
+
+  // Admin-level permission check
+  // Only system-level permissions that control the permission system itself should be restricted
+  const adminLevelPermissions = [
+    'system_manage', 'system_backup', 'system_logs', 'system_maintenance',
+    'webhooks_create', 'webhooks_read', 'webhooks_update', 'webhooks_delete'
+  ];
+  
+  // Check if any admin-level permissions are being assigned
+  if (permission_groups && permission_groups.length > 0) {
+    // Get all permissions for the specified groups
+    const groupPermissions = PermissionService.getPermissionsByGroups(permission_groups);
+    const permissionNames = groupPermissions.map(p => p.name);
+    
+    // Check if any admin-level permissions are included
+    const hasAdminLevelPermission = permissionNames.some(name => adminLevelPermissions.includes(name));
+    if (hasAdminLevelPermission) {
+      return next(new AppError("Cannot assign admin-level permissions to sub-admins", 403));
+    }
+  }
+
+  if (permission_ids && permission_ids.length > 0) {
+    // Get all permissions to check their names
+    const allPermissions = await Permission.findAll({
+      where: { id: permission_ids }
+    });
+    
+    const permissionNames = allPermissions.map(p => p.name);
+    
+    // Check if any admin-level permissions are included
+    const hasAdminLevelPermission = permissionNames.some(name => adminLevelPermissions.includes(name));
+    if (hasAdminLevelPermission) {
+      return next(new AppError("Cannot assign admin-level permissions to sub-admins", 403));
+    }
+  }
 
   // Start database transaction
   const transaction = await sequelize.transaction();

@@ -2,7 +2,7 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../app');
 const { User, Role } = require('../models');
-const tokenBlacklistService = require('../services/token-blacklist.service');
+const tokenBlacklistService = require('../services/token-blacklist-enhanced.service');
 
 describe('Token Blacklisting Tests', () => {
   let authToken;

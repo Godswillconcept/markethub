@@ -5,7 +5,8 @@ const { Op } = require("sequelize");
 const AppError = require("../utils/appError");
 const { User, Role, Permission } = require("../models");
 const PermissionService = require("../services/permission.service");
-const tokenBlacklistService = require("../services/token-blacklist.service");
+const tokenBlacklistService = require("../services/token-blacklist-enhanced.service");
+const logger = require("../utils/logger");
 
 /**
  * Middleware to handle local authentication using Passport
@@ -84,50 +85,92 @@ const setUser = (req, res, next) => {
  * Protect routes - check if user is authenticated using JWT
  * Attaches user object to req.user with roles
  */
-const protect = (req, res, next) => {
-  return passport.authenticate(
-    "jwt",
-    { session: false },
-    async (err, user, info) => {
-      if (err) {
-        return next(err);
-      }
-
-      if (!user) {
-        let message = "You are not authorized to access this resource";
-        if (info) {
-          if (info.name === "TokenExpiredError") {
-            message = "Your token has expired! Please log in again.";
-          } else if (info.message) {
-            message = info.message;
-          }
-        }
-        return next(new AppError(message, 401));
-      }
-
-      // Check if token is blacklisted
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.split(" ")[1];
-        const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(
-          token
-        );
-
-        if (isBlacklisted) {
-          return next(
-            new AppError(
-              "Token has been invalidated. Please log in again.",
-              401
-            )
-          );
-        }
-      }
-
-      // Attach user to request object
-      req.user = user;
-      return next();
+const protect = async (req, res, next) => {
+  try {
+    // 1) Get token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return next(new AppError("You are not authorized to access this resource", 401));
     }
-  )(req, res, next);
+    
+    const token = authHeader.split(" ")[1];
+
+    // 2) Check if token is blacklisted FIRST (before JWT verification)
+    const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(token);
+    if (isBlacklisted) {
+      return next(
+        new AppError(
+          "Token has been invalidated. Please log in again.",
+          401
+        )
+      );
+    }
+
+    // 3) Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      issuer: process.env.APP_NAME || "Stylay",
+      audience: "user"
+    });
+
+    // 4) Check if user still exists
+    const currentUser = await User.findByPk(decoded.id, {
+      include: [
+        {
+          model: Role,
+          as: "roles",
+          include: [
+            {
+              model: Permission,
+              as: "permissions",
+              through: { attributes: [] },
+            },
+          ],
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    if (!currentUser) {
+      return next(new AppError("The user belonging to this token no longer exists.", 401));
+    }
+
+    // 5) Check if user is active
+    if (!currentUser.is_active) {
+      return next(new AppError("Your account has been deactivated. Please contact support.", 401));
+    }
+
+    // 6) Attach user to request object
+    req.user = currentUser;
+
+    // 7) Session tracking - if session ID is provided, validate and update activity
+    const sessionId = req.headers['x-session-id'] || req.body.session_id;
+    if (sessionId) {
+      try {
+        const { UserSession } = require("../models/user-session.model");
+        const session = await UserSession.getSessionById(sessionId);
+        
+        if (session && session.isValid() && session.user_id === currentUser.id) {
+          await session.updateActivity();
+          req.session = session;
+        }
+      } catch (sessionError) {
+        logger.warn("Session tracking failed:", sessionError);
+        // Don't fail authentication if session tracking fails
+      }
+    }
+
+    return next();
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return next(new AppError("Invalid token. Please log in again.", 401));
+    }
+    if (error.name === "TokenExpiredError") {
+      return next(new AppError("Your token has expired! Please log in again.", 401));
+    }
+    
+    logger.error("Protect middleware error:", error);
+    return next(new AppError("Authentication failed", 401));
+  }
 };
 
 /**
@@ -196,6 +239,13 @@ const isLoggedIn = async (req, res, next) => {
   if (req.headers.authorization?.startsWith("Bearer")) {
     try {
       const token = req.headers.authorization.split(" ")[1];
+      
+      // Check blacklist first
+      const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        return next(); // Skip setting user if token is blacklisted
+      }
+
       const decoded = await promisify(jwt.verify)(
         token,
         process.env.JWT_SECRET
@@ -558,6 +608,270 @@ const restrictToPermission = (permissions) => {
   };
 };
 
+/**
+ * Enhanced logout middleware with session management
+ * Blacklists token and handles session cleanup
+ */
+const enhancedLogout = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const sessionId = req.headers['x-session-id'] || req.body.session_id;
+    const logoutAll = req.body.logout_all === true;
+
+    if (logoutAll) {
+      // Logout all devices - revoke all sessions and tokens for user
+      if (req.user) {
+        const sessionService = require("../services/session.service");
+        const refreshTokenService = require("../services/refresh-token.service");
+        
+        await sessionService.revokeAllUserSessions(req.user.id);
+        await refreshTokenService.revokeAllUserRefreshTokens(req.user.id);
+        
+        // Blacklist current token if provided
+        if (token) {
+          await tokenBlacklistService.blacklistToken(token, 'access', {
+            reason: 'logout_all',
+            userId: req.user.id
+          });
+        }
+      }
+    } else if (sessionId) {
+      // Logout specific session
+      const sessionService = require("../services/session.service");
+      const refreshTokenService = require("../services/refresh-token.service");
+      
+      await sessionService.revokeSession(sessionId);
+      await refreshTokenService.revokeSessionTokens(sessionId);
+      
+      // Blacklist current token if provided
+      if (token) {
+        await tokenBlacklistService.blacklistToken(token, 'access', {
+          reason: 'logout',
+          userId: req.user?.id,
+          sessionId: sessionId
+        });
+      }
+    } else if (token) {
+      // Simple token blacklist
+      await tokenBlacklistService.blacklistToken(token, 'access', {
+        reason: 'logout',
+        userId: req.user?.id
+      });
+    }
+
+    // Clear JWT cookie if it exists
+    if (req.cookies?.jwt) {
+      res.clearCookie("jwt", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+      });
+    }
+
+    next();
+  } catch (error) {
+    logger.error("Enhanced logout middleware error:", error);
+    // Don't block the logout process even if there's an error
+    next();
+  }
+};
+
+/**
+ * Enhanced authentication middleware with refresh token validation
+ * Combines protect with refresh token checking for enhanced security
+ */
+const enhancedAuth = async (req, res, next) => {
+  try {
+    // First, run the standard protect middleware
+    await protect(req, res, async (err) => {
+      if (err) {
+        return next(err);
+      }
+
+      // Check for refresh token in body or headers
+      const refreshToken = req.body.refresh_token || req.headers['x-refresh-token'];
+      
+      if (refreshToken) {
+        try {
+          const refreshTokenService = require("../services/refresh-token.service");
+          const isValid = await refreshTokenService.validateRefreshToken(refreshToken);
+          
+          if (!isValid) {
+            return next(new AppError("Invalid or expired refresh token", 401));
+          }
+
+          // Check if refresh token is blacklisted
+          const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(refreshToken);
+          if (isBlacklisted) {
+            return next(new AppError("Refresh token has been invalidated", 401));
+          }
+
+          // Attach refresh token info to request
+          req.refreshToken = refreshToken;
+        } catch (tokenError) {
+          return next(new AppError("Refresh token validation failed", 401));
+        }
+      }
+
+      // Session tracking with enhanced validation
+      const sessionId = req.headers['x-session-id'] || req.body.session_id;
+      if (sessionId && req.user) {
+        try {
+          const { UserSession } = require("../models/user-session.model");
+          const session = await UserSession.getSessionById(sessionId);
+          
+          if (session) {
+            // Check if session is valid and belongs to the user
+            if (!session.isValid()) {
+              return next(new AppError("Session has expired", 401));
+            }
+            
+            if (session.user_id !== req.user.id) {
+              return next(new AppError("Session does not belong to user", 401));
+            }
+
+            // Check if session is revoked
+            if (session.is_revoked) {
+              return next(new AppError("Session has been revoked", 401));
+            }
+
+            // Update session activity
+            await session.updateActivity();
+            req.session = session;
+          }
+        } catch (sessionError) {
+          logger.warn("Enhanced session validation failed:", sessionError);
+          // Don't fail authentication if session tracking fails
+        }
+      }
+
+      next();
+    });
+  } catch (error) {
+    logger.error("Enhanced auth middleware error:", error);
+    next(error);
+  }
+};
+
+/**
+ * Refresh token validation middleware
+ * Validates refresh tokens without requiring access token
+ */
+const validateRefreshToken = async (req, res, next) => {
+  try {
+    const refreshToken = req.body.refresh_token || req.headers['x-refresh-token'];
+    
+    if (!refreshToken) {
+      return next(new AppError("Refresh token is required", 401));
+    }
+
+    const refreshTokenService = require("../services/refresh-token.service");
+    const isValid = await refreshTokenService.validateRefreshToken(refreshToken);
+
+    if (!isValid) {
+      return next(new AppError("Invalid or expired refresh token", 401));
+    }
+
+    // Check blacklist
+    const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(refreshToken);
+    if (isBlacklisted) {
+      return next(new AppError("Refresh token has been invalidated", 401));
+    }
+
+    // Get token data
+    const tokenData = await refreshTokenService.getRefreshTokenData(refreshToken);
+    if (!tokenData) {
+      return next(new AppError("Refresh token not found", 401));
+    }
+
+    // Attach token data to request
+    req.refreshTokenData = tokenData;
+    req.refreshToken = refreshToken;
+
+    next();
+  } catch (error) {
+    logger.error("Refresh token validation middleware error:", error);
+    next(new AppError("Refresh token validation failed", 401));
+  }
+};
+
+/**
+ * Session validation middleware
+ * Validates session ID and ensures it belongs to the authenticated user
+ */
+const validateSession = async (req, res, next) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || req.body.session_id;
+    
+    if (!sessionId) {
+      return next(new AppError("Session ID is required", 400));
+    }
+
+    if (!req.user) {
+      return next(new AppError("User authentication required", 401));
+    }
+
+    const { UserSession } = require("../models/user-session.model");
+    const session = await UserSession.getSessionById(sessionId);
+
+    if (!session) {
+      return next(new AppError("Session not found", 404));
+    }
+
+    // Verify session belongs to authenticated user
+    if (session.user_id !== req.user.id) {
+      return next(new AppError("Session does not belong to user", 403));
+    }
+
+    // Check if session is valid
+    if (!session.isValid()) {
+      return next(new AppError("Session has expired", 401));
+    }
+
+    // Check if session is revoked
+    if (session.is_revoked) {
+      return next(new AppError("Session has been revoked", 401));
+    }
+
+    // Update session activity
+    await session.updateActivity();
+
+    // Attach session to request
+    req.session = session;
+
+    next();
+  } catch (error) {
+    logger.error("Session validation middleware error:", error);
+    next(new AppError("Session validation failed", 500));
+  }
+};
+
+/**
+ * Rate limiting middleware for authentication endpoints
+ * Prevents brute force attacks on auth routes
+ */
+const authRateLimit = async (req, res, next) => {
+  try {
+    const ip = req.ip || req.connection.remoteAddress;
+    const identifier = req.body.email || ip;
+    
+    const rateLimitService = require("../services/rate-limit.service");
+    const isAllowed = await rateLimitService.checkAuthRateLimit(identifier);
+    
+    if (!isAllowed) {
+      return next(new AppError("Too many authentication attempts. Please try again later.", 429));
+    }
+
+    next();
+  } catch (error) {
+    logger.error("Rate limit middleware error:", error);
+    // Don't block request if rate limiting fails
+    next();
+  }
+};
+
 module.exports = {
   localAuth,
   protect,
@@ -577,4 +891,9 @@ module.exports = {
   hasAllPermissions,
   restrictToPermission,
   setUser,
+  enhancedLogout,
+  enhancedAuth,
+  validateRefreshToken,
+  validateSession,
+  authRateLimit,
 };

@@ -129,6 +129,16 @@ initializePerformanceTracking(db);
 initializePassport(passport);
 
 // ============================================
+// SCHEDULED CLEANUP JOBS
+// ============================================
+// Start cleanup jobs for expired tokens and sessions
+if (process.env.NODE_ENV !== 'test') {
+  const cleanupJob = require('./src/jobs/cleanup.job');
+  cleanupJob.start();
+  logger.info('Scheduled cleanup jobs initialized');
+}
+
+// ============================================
 // SECURITY HEADERS WITH HELMET
 // ============================================
 app.use(

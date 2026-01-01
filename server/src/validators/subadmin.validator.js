@@ -1,5 +1,6 @@
 const { body, param, query, validationResult } = require('express-validator');
 const AppError = require('../utils/appError');
+const { Permission } = require('../models');
 
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
@@ -9,6 +10,33 @@ const handleValidationErrors = (req, res, next) => {
     return next(new AppError(errorMessages.join(', '), 400));
   }
   next();
+};
+
+// Custom validator to check if permission IDs exist in the database
+const validatePermissionIdsExist = async (permissionIds) => {
+  if (!permissionIds || !Array.isArray(permissionIds) || permissionIds.length === 0) {
+    return true; // No permissions to validate
+  }
+
+  // Check if all permission IDs are integers
+  const invalidIds = permissionIds.filter(id => !Number.isInteger(id) || id < 1);
+  if (invalidIds.length > 0) {
+    throw new Error(`Invalid permission IDs: ${invalidIds.join(', ')}`);
+  }
+
+  // Query database to check if all permissions exist
+  const existingPermissions = await Permission.findAll({
+    where: { id: permissionIds }
+  });
+
+  const existingPermissionIds = existingPermissions.map(p => p.id);
+  const missingPermissionIds = permissionIds.filter(id => !existingPermissionIds.includes(id));
+
+  if (missingPermissionIds.length > 0) {
+    throw new Error(`Permission(s) not found: ${missingPermissionIds.join(', ')}`);
+  }
+
+  return true;
 };
 
 // Validation rules for creating a sub-admin
@@ -58,6 +86,14 @@ const createSubAdminValidation = [
     .isInt({ min: 1 })
     .withMessage('Each permission ID must be a positive integer'),
 
+  // Custom async validation to check if all permission IDs exist
+  body('permission_ids')
+    .optional()
+    .custom(async (value) => {
+      await validatePermissionIdsExist(value);
+      return true;
+    }),
+
   handleValidationErrors
 ];
 
@@ -81,6 +117,14 @@ const updateSubAdminPermissionsValidation = [
     .optional()
     .isInt({ min: 1 })
     .withMessage('Each permission ID must be a positive integer'),
+
+  // Custom async validation to check if all permission IDs exist
+  body('permission_ids')
+    .optional()
+    .custom(async (value) => {
+      await validatePermissionIdsExist(value);
+      return true;
+    }),
 
   handleValidationErrors
 ];

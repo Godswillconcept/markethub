@@ -14,7 +14,7 @@ class ImageProcessor {
   constructor(options = {}) {
     this.allowedTypes = options.allowedTypes || ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
     this.maxSize = options.maxSize || 10 * 1024 * 1024; // 10MB
-    this.uploadPath = options.uploadPath || 'product-images';
+    this.uploadPath = options.uploadPath || 'products';
   }
 
   /**
@@ -180,7 +180,7 @@ class ImageProcessor {
       fs.writeFileSync(filepath, imageBuffer);
 
       // Generate URL
-      const url = `${process.env.APP_URL || 'http://localhost:5000'}/uploads/${this.uploadPath}/${filename}`;
+      const url = `/${this.uploadPath}/${filename}`;
 
       return {
         url,

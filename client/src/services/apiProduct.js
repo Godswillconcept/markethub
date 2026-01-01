@@ -190,6 +190,15 @@ export async function deleteReview(reviewId) {
         throw new Error(error.response?.data?.message || "Failed to delete review");
     }
 }
+
+export async function getProductAnalysis(productId) {
+    try {
+        const { data } = await axiosInstance.get(`/products/${productId}/analytics`);
+        return data;
+    } catch (error) {
+        throw new Error(error.response?.data?.message || "Failed to get product analysis");
+    }
+}
 // export async function searchProducts(searchQuery, page) {
 //     try {
 //         const { data } = await axiosInstance.get(`/products`, {

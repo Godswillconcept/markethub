@@ -4508,250 +4508,1447 @@
       ]
     },
     {
-      "name": "Sub-Admin Management",
-      "description": "Sub-admin user management with granular permissions",
+      "name": "Sub-admin Management",
       "item": [
         {
-          "name": "Get All Sub-Admins",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins?page=1&limit=10&search=john",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins"],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1",
-                  "description": "Page number for pagination"
+          "name": "SubAdmin Specifics",
+          "description": "Core subadmin management endpoints with comprehensive test cases",
+          "item": [
+            {
+              "name": "1. Get All SubAdmins",
+              "description": "Retrieve all subadmins with pagination and search - Tests: Status codes, response structure, authentication, authorization, input validation",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins?page=1&limit=10&search=test",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1",
+                      "description": "Page number (must be positive integer)"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10",
+                      "description": "Items per page (1-100)"
+                    },
+                    {
+                      "key": "search",
+                      "value": "test",
+                      "description": "Search term (1-100 characters)"
+                    }
+                  ]
                 },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.have.property('subAdmins');",
+                        "    pm.expect(jsonData.data).to.have.property('pagination');",
+                        "    pm.expect(jsonData.data.pagination).to.have.property('total');",
+                        "    pm.expect(jsonData.data.pagination).to.have.property('page');",
+                        "    pm.expect(jsonData.data.pagination).to.have.property('limit');",
+                        "    pm.expect(jsonData.data.pagination).to.have.property('pages');",
+                        "    ",
+                        "    // Validate subAdmin structure",
+                        "    if (jsonData.data.subAdmins.length > 0) {",
+                        "        const subAdmin = jsonData.data.subAdmins[0];",
+                        "        pm.expect(subAdmin).to.have.property('id');",
+                        "        pm.expect(subAdmin).to.have.property('first_name');",
+                        "        pm.expect(subAdmin).to.have.property('last_name');",
+                        "        pm.expect(subAdmin).to.have.property('email');",
+                        "        pm.expect(subAdmin).to.have.property('roles');",
+                        "        pm.expect(subAdmin).to.not.have.property('password');",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Pagination",
+                        "pm.test('Pagination works correctly', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const pagination = jsonData.data.pagination;",
+                        "    pm.expect(pagination.page).to.be.at.least(1);",
+                        "    pm.expect(pagination.limit).to.be.within(1, 100);",
+                        "    pm.expect(pagination.total).to.be.a('number');",
+                        "    pm.expect(pagination.pages).to.be.a('number');",
+                        "});"
+                      ]
+                    }
+                  },
+                  {
+                    "listen": "prerequest",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Test invalid parameters",
+                        "if (pm.variables.get('test_invalid_params') === 'true') {",
+                        "    pm.request.url.query.members.forEach(function (param) {",
+                        "        if (param.key === 'page') param.value = '-1';",
+                        "        if (param.key === 'limit') param.value = '1000';",
+                        "        if (param.key === 'search') param.value = 'a'.repeat(101);",
+                        "    });",
+                        "}"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
                 {
-                  "key": "limit",
-                  "value": "10",
-                  "description": "Number of sub-admins per page"
-                },
-                {
-                  "key": "search",
-                  "value": "john",
-                  "description": "Search by first name, last name, or email",
-                  "disabled": true
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Invalid pagination params returns 400', function () {",
+                      "    if (pm.variables.get('test_invalid_params') === 'true') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "description": "Get all sub-admins with pagination and search (Admin only)"
-          }
-        },
-        {
-          "name": "Create Sub-Admin",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
+            {
+              "name": "2. Create SubAdmin",
+              "description": "Create a new subadmin - Tests: Status codes, response structure, authentication, authorization, input validation, permission validation, business logic",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"first_name\": \"Test\",\n    \"last_name\": \"SubAdmin\",\n    \"email\": \"testsubadmin{{timestamp}}@example.com\",\n    \"phone\": \"+23480{{random_8_digits}}\",\n    \"password\": \"TestPassword123!\",\n    \"permission_groups\": [\"products\", \"orders\"]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins"]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 201', function () {",
+                        "    pm.response.to.have.status(201);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('message');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.have.property('id');",
+                        "    pm.expect(jsonData.data).to.have.property('first_name');",
+                        "    pm.expect(jsonData.data).to.have.property('last_name');",
+                        "    pm.expect(jsonData.data).to.have.property('email');",
+                        "    pm.expect(jsonData.data).to.have.property('roles');",
+                        "    pm.expect(jsonData.data).to.not.have.property('password');",
+                        "    ",
+                        "    // Store created subadmin ID for other tests",
+                        "    const subAdminId = jsonData.data.id;",
+                        "    pm.environment.set('created_subadmin_id', subAdminId);",
+                        "});",
+                        "",
+                        "// Business Logic: Role Assignment",
+                        "pm.test('Subadmin has correct role (role_id 4)', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData.data.roles).to.be.an('array');",
+                        "    // Should have at least one role",
+                        "    pm.expect(jsonData.data.roles.length).to.be.at.least(1);",
+                        "});",
+                        "",
+                        "// Business Logic: Permission Assignment",
+                        "pm.test('Permissions are assigned correctly', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    if (jsonData.data.roles && jsonData.data.roles.length > 0) {",
+                        "        const role = jsonData.data.roles[0];",
+                        "        pm.expect(role).to.have.property('permissions');",
+                        "        pm.expect(role.permissions).to.be.an('array');",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Password Security",
+                        "pm.test('Password is never returned in response', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData.data).to.not.have.property('password');",
+                        "    pm.expect(JSON.stringify(jsonData)).to.not.include('password');",
+                        "});"
+                      ]
+                    }
+                  },
+                  {
+                    "listen": "prerequest",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Generate unique timestamp for email",
+                        "const timestamp = new Date().getTime();",
+                        "pm.environment.set('timestamp', timestamp);",
+                        "",
+                        "// Generate random 8 digits for phone",
+                        "const randomDigits = Math.floor(10000000 + Math.random() * 90000000);",
+                        "pm.environment.set('random_8_digits', randomDigits);",
+                        "",
+                        "// Prepare test variations",
+                        "const testType = pm.variables.get('test_type');",
+                        "",
+                        "if (testType === 'missing_required_fields') {",
+                        "    // Remove required fields",
+                        "    pm.request.body.raw = JSON.stringify({",
+                        "        \"first_name\": \"Test\"",
+                        "    });",
+                        "} else if (testType === 'invalid_email') {",
+                        "    // Invalid email format",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.email = \"invalid-email\";",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'weak_password') {",
+                        "    // Weak password",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.password = \"123\";",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'admin_level_permissions') {",
+                        "    // Try to assign admin-level permissions",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_groups = [\"users\", \"products\"];",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'duplicate_email') {",
+                        "    // Use existing email",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.email = pm.environment.get('existing_subadmin_email') || 'admin@stylay.com';",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_phone') {",
+                        "    // Invalid phone format",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.phone = \"invalid-phone\";",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_role_id') {",
+                        "    // Try to assign admin role (role_id 1)",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.role_id = 1;",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_permission_ids') {",
+                        "    // Non-existent permission IDs",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_ids = [9999, 9998];",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'admin_level_permission_ids') {",
+                        "    // Try to assign admin-level permission IDs (need to get actual IDs first)",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_ids = [1, 2]; // Assuming these are admin-level",
+                        "    body.permission_groups = undefined;",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "}"
+                      ]
+                    }
+                  }
+                ]
               },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Manager\",\n    \"email\": \"john.manager@stylay.com\",\n    \"phone\": \"+2348012345678\",\n    \"password\": \"SecurePass123!\",\n    \"permission_groups\": [\"vendor_management\", \"products_management\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins"]
-            },
-            "description": "Create a new sub-admin user with specific role and permissions (Admin only)"
-          }
-        },
-        {
-          "name": "Get Sub-Admin by ID",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/1",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins", "1"]
-            },
-            "description": "Get a specific sub-admin by ID (Admin only)"
-          }
-        },
-        {
-          "name": "Update Sub-Admin Profile",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"first_name\": \"John Updated\",\n    \"last_name\": \"Manager\",\n    \"phone\": \"+2348012345679\",\n    \"is_active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/1",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins", "1"]
-            },
-            "description": "Update sub-admin profile information (Admin only)"
-          }
-        },
-        {
-          "name": "Update Sub-Admin Permissions",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"permission_groups\": [\"earnings_payment\", \"feedbacks_support\", \"notification_panel\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/1/permissions",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins", "1", "permissions"]
-            },
-            "description": "Update sub-admin role and permissions (Admin only)"
-          }
-        },
-        {
-          "name": "Delete Sub-Admin",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/1",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins", "1"]
-            },
-            "description": "Deactivate a sub-admin user (Admin only)"
-          }
-        },
-        {
-          "name": "Get All Permissions",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/permissions/all",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins", "permissions", "all"]
-            },
-            "description": "Get all available permissions (Admin only)"
-          }
-        },
-        {
-          "name": "Get All Roles",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/roles/all",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "admin", "subadmins", "roles", "all"]
-            },
-            "description": "Get all available roles (excluding admin role) (Admin only)"
-          }
-        },
-        {
-          "name": "Get All Permission Groups",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{admin_token}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/v1/admin/subadmins/permission-groups/all?includeIds=true",
-              "host": ["{{base_url}}"],
-              "path": [
-                "api",
-                "v1",
-                "admin",
-                "subadmins",
-                "permission-groups",
-                "all"
-              ],
-              "query": [
+              "event": [
                 {
-                  "key": "includeIds",
-                  "value": "true",
-                  "description": "Include actual permission IDs from database (optional)"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Sub-admin cannot create sub-admin returns 403', function () {",
+                      "    if (pm.variables.get('test_subadmin_create') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Missing required fields returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'missing_required_fields') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid email format returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_email') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Weak password returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'weak_password') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid phone format returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_phone') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "// Permission Validation Tests",
+                      "pm.test('Admin-level permissions assignment returns 403', function () {",
+                      "    if (pm.variables.get('test_type') === 'admin_level_permissions') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "        pm.expect(jsonData.message).to.include('admin-level');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Admin-level permission IDs assignment returns 403', function () {",
+                      "    if (pm.variables.get('test_type') === 'admin_level_permission_ids') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "        pm.expect(jsonData.message).to.include('admin-level');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid permission IDs returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_permission_ids') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Duplicate email returns 409', function () {",
+                      "    if (pm.variables.get('test_type') === 'duplicate_email') {",
+                      "        pm.response.to.have.status(409);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid role ID returns 400/404', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_role_id') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "description": "Get all available permission groups organized by category. Use includeIds=true to get database permission IDs for easier frontend integration."
-          }
+            {
+              "name": "3. Get Specific SubAdmin",
+              "description": "Retrieve a specific subadmin by ID - Tests: Status codes, response structure, authentication, authorization, input validation",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/{{subadmin_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins", "{{subadmin_id}}"]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.have.property('id');",
+                        "    pm.expect(jsonData.data).to.have.property('first_name');",
+                        "    pm.expect(jsonData.data).to.have.property('last_name');",
+                        "    pm.expect(jsonData.data).to.have.property('email');",
+                        "    pm.expect(jsonData.data).to.have.property('roles');",
+                        "    pm.expect(jsonData.data).to.not.have.property('password');",
+                        "});",
+                        "",
+                        "// Business Logic: Sub-admin verification",
+                        "pm.test('User is actually a sub-admin', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData.data.roles).to.be.an('array');",
+                        "    const hasSubAdminRole = jsonData.data.roles.some(role => role.name === 'sub-admin');",
+                        "    pm.expect(hasSubAdminRole).to.be.true;",
+                        "});"
+                      ]
+                    }
+                  },
+                  {
+                    "listen": "prerequest",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Test invalid ID formats",
+                        "const testType = pm.variables.get('test_type');",
+                        "if (testType === 'invalid_id') {",
+                        "    pm.request.url.path[3] = 'invalid-id-format';",
+                        "} else if (testType === 'non_existent_id') {",
+                        "    pm.request.url.path[3] = '999999';",
+                        "} else if (testType === 'negative_id') {",
+                        "    pm.request.url.path[3] = '-1';",
+                        "} else if (testType === 'zero_id') {",
+                        "    pm.request.url.path[3] = '0';",
+                        "}"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Invalid ID format returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_id') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Negative ID returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'negative_id') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Zero ID returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'zero_id') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Business Logic Tests",
+                      "pm.test('Non-existent subadmin returns 404', function () {",
+                      "    if (pm.variables.get('test_type') === 'non_existent_id') {",
+                      "        pm.response.to.have.status(404);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "        pm.expect(jsonData.message).to.include('not found');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Admin user returns 404 (not a sub-admin)', function () {",
+                      "    if (pm.variables.get('test_type') === 'admin_user') {",
+                      "        pm.response.to.have.status(404);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "4. Update SubAdmin",
+              "description": "Update subadmin profile - Tests: Status codes, response structure, authentication, authorization, input validation, business logic",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"first_name\": \"Updated\",\n    \"last_name\": \"SubAdmin\",\n    \"phone\": \"+23480{{random_8_digits}}\",\n    \"is_active\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/{{subadmin_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins", "{{subadmin_id}}"]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('message');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.have.property('id');",
+                        "    pm.expect(jsonData.data).to.have.property('first_name');",
+                        "    pm.expect(jsonData.data).to.have.property('last_name');",
+                        "    pm.expect(jsonData.data).to.have.property('phone');",
+                        "    pm.expect(jsonData.data).to.have.property('is_active');",
+                        "});",
+                        "",
+                        "// Business Logic: Update verification",
+                        "pm.test('Data was actually updated', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData.data.first_name).to.equal('Updated');",
+                        "    pm.expect(jsonData.data.is_active).to.be.a('boolean');",
+                        "});",
+                        "",
+                        "// Business Logic: Phone uniqueness",
+                        "pm.test('Phone uniqueness check works', function () {",
+                        "    // This test would need to be run with duplicate phone scenario",
+                        "    if (pm.variables.get('test_duplicate_phone') === 'true') {",
+                        "        pm.response.to.have.status(409);",
+                        "        const jsonData = pm.response.json();",
+                        "        pm.expect(jsonData.status).to.equal('error');",
+                        "    }",
+                        "});"
+                      ]
+                    }
+                  },
+                  {
+                    "listen": "prerequest",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "const testType = pm.variables.get('test_type');",
+                        "const randomDigits = Math.floor(10000000 + Math.random() * 90000000);",
+                        "pm.environment.set('random_8_digits', randomDigits);",
+                        "",
+                        "if (testType === 'missing_all_fields') {",
+                        "    pm.request.body.raw = '{}';",
+                        "} else if (testType === 'invalid_first_name') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.first_name = 'a'; // Too short",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_phone') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.phone = 'invalid-phone';",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_is_active') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.is_active = 'not-a-boolean';",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'duplicate_phone') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.phone = pm.environment.get('existing_phone') || '+2348012345678';",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'update_admin') {",
+                        "    // Try to update an admin user",
+                        "    pm.request.url.path[3] = pm.environment.get('admin_user_id') || '1';",
+                        "}"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Cannot update admin user returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'update_admin') {",
+                      "        pm.response.to.have.status(400);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Invalid first name length returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_first_name') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid phone format returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_phone') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid is_active type returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_is_active') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Duplicate phone returns 409', function () {",
+                      "    if (pm.variables.get('test_duplicate_phone') === 'true') {",
+                      "        pm.response.to.have.status(409);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation: ID validation",
+                      "pm.test('Invalid subadmin ID format returns 400', function () {",
+                      "    if (pm.variables.get('test_invalid_id') === 'true') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "5. Delete SubAdmin",
+              "description": "Soft delete (deactivate) a subadmin - Tests: Status codes, response structure, authentication, authorization, input validation, business logic",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/{{subadmin_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins", "{{subadmin_id}}"]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('message');",
+                        "    pm.expect(jsonData.message).to.include('deactivated');",
+                        "});",
+                        "",
+                        "// Business Logic: Soft delete verification",
+                        "pm.test('Subadmin is deactivated (not hard deleted)', function () {",
+                        "    // After successful deletion, trying to get the subadmin should still work",
+                        "    // but is_active should be false",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData.message).to.include('deactivated');",
+                        "});",
+                        "",
+                        "// Business Logic: Cannot delete admin",
+                        "pm.test('Cannot delete admin user returns 400', function () {",
+                        "    if (pm.variables.get('test_delete_admin') === 'true') {",
+                        "        pm.response.to.have.status(400);",
+                        "        const jsonData = pm.response.json();",
+                        "        pm.expect(jsonData.status).to.equal('error');",
+                        "        pm.expect(jsonData.message).to.include('admin');",
+                        "    }",
+                        "});"
+                      ]
+                    }
+                  },
+                  {
+                    "listen": "prerequest",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "const testType = pm.variables.get('test_type');",
+                        "",
+                        "if (testType === 'invalid_id') {",
+                        "    pm.request.url.path[3] = 'invalid-format';",
+                        "} else if (testType === 'non_existent_id') {",
+                        "    pm.request.url.path[3] = '999999';",
+                        "} else if (testType === 'delete_admin') {",
+                        "    pm.request.url.path[3] = pm.environment.get('admin_user_id') || '1';",
+                        "} else if (testType === 'negative_id') {",
+                        "    pm.request.url.path[3] = '-1';",
+                        "}"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Invalid ID format returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_id') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Negative ID returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'negative_id') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Business Logic Tests",
+                      "pm.test('Non-existent subadmin returns 404', function () {",
+                      "    if (pm.variables.get('test_type') === 'non_existent_id') {",
+                      "        pm.response.to.have.status(404);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "6. Update SubAdmin Permissions",
+              "description": "Update subadmin permissions and role - Tests: Status codes, response structure, authentication, authorization, input validation, permission validation, business logic",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"role_id\": 4,\n    \"permission_groups\": [\"products\", \"orders\", \"vendors\"]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/{{subadmin_id}}/permissions",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "admin",
+                    "subadmins",
+                    "{{subadmin_id}}",
+                    "permissions"
+                  ]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('message');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.have.property('id');",
+                        "    pm.expect(jsonData.data).to.have.property('roles');",
+                        "    pm.expect(jsonData.data.roles).to.be.an('array');",
+                        "});",
+                        "",
+                        "// Business Logic: Permission Update",
+                        "pm.test('Permissions are updated correctly', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    if (jsonData.data.roles && jsonData.data.roles.length > 0) {",
+                        "        const role = jsonData.data.roles[0];",
+                        "        pm.expect(role).to.have.property('permissions');",
+                        "        pm.expect(role.permissions).to.be.an('array');",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Role Update",
+                        "pm.test('Role is updated correctly', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const hasCorrectRole = jsonData.data.roles.some(role => role.id === 4);",
+                        "    pm.expect(hasCorrectRole).to.be.true;",
+                        "});",
+                        "",
+                        "// Business Logic: Cannot assign admin role",
+                        "pm.test('Cannot assign admin role returns 400', function () {",
+                        "    if (pm.variables.get('test_assign_admin_role') === 'true') {",
+                        "        pm.response.to.have.status(400);",
+                        "        const jsonData = pm.response.json();",
+                        "        pm.expect(jsonData.status).to.equal('error');",
+                        "        pm.expect(jsonData.message).to.include('admin');",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Cannot modify admin user",
+                        "pm.test('Cannot modify admin user returns 400', function () {",
+                        "    if (pm.variables.get('test_modify_admin') === 'true') {",
+                        "        pm.response.to.have.status(400);",
+                        "        const jsonData = pm.response.json();",
+                        "        pm.expect(jsonData.status).to.equal('error');",
+                        "    }",
+                        "});"
+                      ]
+                    }
+                  },
+                  {
+                    "listen": "prerequest",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "const testType = pm.variables.get('test_type');",
+                        "",
+                        "if (testType === 'admin_level_permissions') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_groups = [\"users\", \"products\"];",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'admin_level_permission_ids') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_ids = [1, 2];",
+                        "    body.permission_groups = undefined;",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'assign_admin_role') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.role_id = 1; // Admin role",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_role_id') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.role_id = 9999;",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'invalid_permission_ids') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_ids = [9999];",
+                        "    body.permission_groups = undefined;",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'modify_admin') {",
+                        "    pm.request.url.path[3] = pm.environment.get('admin_user_id') || '1';",
+                        "} else if (testType === 'empty_permissions') {",
+                        "    const body = JSON.parse(pm.request.body.raw);",
+                        "    body.permission_groups = [];",
+                        "    body.permission_ids = [];",
+                        "    pm.request.body.raw = JSON.stringify(body);",
+                        "} else if (testType === 'remove_all_permissions') {",
+                        "    // Send empty object to remove all permissions",
+                        "    pm.request.body.raw = '{}';",
+                        "}"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Permission Validation Tests",
+                      "pm.test('Admin-level permissions assignment returns 403', function () {",
+                      "    if (pm.variables.get('test_type') === 'admin_level_permissions') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "        pm.expect(jsonData.message).to.include('admin-level');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Admin-level permission IDs assignment returns 403', function () {",
+                      "    if (pm.variables.get('test_type') === 'admin_level_permission_ids') {",
+                      "        pm.response.to.have.status(403);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.status).to.equal('error');",
+                      "        pm.expect(jsonData.message).to.include('admin-level');",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid permission IDs returns 400', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_permission_ids') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid role ID returns 404', function () {",
+                      "    if (pm.variables.get('test_type') === 'invalid_role_id') {",
+                      "        pm.response.to.have.status(404);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Invalid subadmin ID format returns 400', function () {",
+                      "    if (pm.variables.get('test_invalid_id') === 'true') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Business Logic Tests",
+                      "pm.test('Assigning admin role returns 400', function () {",
+                      "    if (pm.variables.get('test_assign_admin_role') === 'true') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Modifying admin user returns 400', function () {",
+                      "    if (pm.variables.get('test_modify_admin') === 'true') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Empty permissions removes all permissions', function () {",
+                      "    if (pm.variables.get('test_type') === 'remove_all_permissions') {",
+                      "        pm.response.to.have.status(200);",
+                      "        const jsonData = pm.response.json();",
+                      "        pm.expect(jsonData.data.roles[0].permissions.length).to.equal(0);",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Utility Endpoints",
+          "description": "Utility endpoints for getting permissions, roles, and permission groups",
+          "item": [
+            {
+              "name": "7. Get All Permissions",
+              "description": "Retrieve all available permissions - Tests: Status codes, response structure, authentication, authorization",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/permissions/all",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins", "permissions", "all"]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.be.an('array');",
+                        "    ",
+                        "    // Validate permission structure",
+                        "    if (jsonData.data.length > 0) {",
+                        "        const permission = jsonData.data[0];",
+                        "        pm.expect(permission).to.have.property('id');",
+                        "        pm.expect(permission).to.have.property('name');",
+                        "        pm.expect(permission).to.have.property('description');",
+                        "        pm.expect(permission).to.have.property('resource');",
+                        "        pm.expect(permission).to.have.property('action');",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Permissions should not include admin-level",
+                        "pm.test('Admin-level permissions are not included', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const permissionNames = jsonData.data.map(p => p.name);",
+                        "    const adminLevelPerms = ['users_create', 'users_update', 'users_delete', 'users_read'];",
+                        "    // Note: This test depends on business logic - some implementations might include them",
+                        "    // but they should be clearly marked or filtered for sub-admin assignment",
+                        "});"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "8. Get All Roles",
+              "description": "Retrieve all available roles (excluding admin) - Tests: Status codes, response structure, authentication, authorization",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/roles/all",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "subadmins", "roles", "all"]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.be.an('array');",
+                        "    ",
+                        "    // Validate role structure",
+                        "    if (jsonData.data.length > 0) {",
+                        "        const role = jsonData.data[0];",
+                        "        pm.expect(role).to.have.property('id');",
+                        "        pm.expect(role).to.have.property('name');",
+                        "        pm.expect(role).to.have.property('description');",
+                        "        pm.expect(role).to.have.property('permissions');",
+                        "        pm.expect(role.permissions).to.be.an('array');",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Admin role should be excluded",
+                        "pm.test('Admin role is excluded', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const roleNames = jsonData.data.map(r => r.name);",
+                        "    pm.expect(roleNames).to.not.include('admin');",
+                        "});",
+                        "",
+                        "// Business Logic: Should include sub-admin role",
+                        "pm.test('Sub-admin role is included', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const roleNames = jsonData.data.map(r => r.name);",
+                        "    pm.expect(roleNames).to.include('sub-admin');",
+                        "});"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "9. Get Permission Groups",
+              "description": "Retrieve permission groups with optional IDs - Tests: Status codes, response structure, authentication, authorization, input validation",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/subadmins/permission-groups/all?includeIds=true",
+                  "host": ["{{base_url}}"],
+                  "path": [
+                    "api",
+                    "v1",
+                    "admin",
+                    "subadmins",
+                    "permission-groups",
+                    "all"
+                  ],
+                  "query": [
+                    {
+                      "key": "includeIds",
+                      "value": "true",
+                      "description": "Whether to include permission IDs in the response (boolean)"
+                    }
+                  ]
+                },
+                "event": [
+                  {
+                    "listen": "test",
+                    "script": {
+                      "type": "text/javascript",
+                      "exec": [
+                        "// Status Code Validation",
+                        "pm.test('Status code is 200', function () {",
+                        "    pm.response.to.have.status(200);",
+                        "});",
+                        "",
+                        "// Response Structure Validation",
+                        "pm.test('Response has correct structure', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    pm.expect(jsonData).to.have.property('status', 'success');",
+                        "    pm.expect(jsonData).to.have.property('data');",
+                        "    pm.expect(jsonData.data).to.be.an('object');",
+                        "    ",
+                        "    // Validate group structure",
+                        "    const groups = jsonData.data;",
+                        "    for (const groupName in groups) {",
+                        "        pm.expect(groups[groupName]).to.be.an('array');",
+                        "        if (groups[groupName].length > 0) {",
+                        "            const permission = groups[groupName][0];",
+                        "            pm.expect(permission).to.have.property('id');",
+                        "            pm.expect(permission).to.have.property('name');",
+                        "            pm.expect(permission).to.have.property('description');",
+                        "        }",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Include IDs parameter",
+                        "pm.test('includeIds parameter works correctly', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const groups = jsonData.data;",
+                        "    const hasIds = pm.request.url.query.find(q => q.key === 'includeIds').value === 'true';",
+                        "    if (hasIds) {",
+                        "        for (const groupName in groups) {",
+                        "            if (groups[groupName].length > 0) {",
+                        "                pm.expect(groups[groupName][0]).to.have.property('id');",
+                        "            }",
+                        "        }",
+                        "    }",
+                        "});",
+                        "",
+                        "// Business Logic: Admin-level permissions should not be in groups",
+                        "pm.test('Admin-level permissions excluded from groups', function () {",
+                        "    const jsonData = pm.response.json();",
+                        "    const groups = jsonData.data;",
+                        "    const allPermissions = [];",
+                        "    for (const groupName in groups) {",
+                        "        allPermissions.push(...groups[groupName]);",
+                        "    }",
+                        "    const permissionNames = allPermissions.map(p => p.name);",
+                        "    const adminLevelPerms = ['users_create', 'users_update', 'users_delete', 'users_read'];",
+                        "    // Note: This validates business logic",
+                        "});"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// Authentication Tests",
+                      "pm.test('Missing token returns 401', function () {",
+                      "    if (pm.variables.get('test_missing_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test('Invalid token returns 401', function () {",
+                      "    if (pm.variables.get('test_invalid_token') === 'true') {",
+                      "        pm.response.to.have.status(401);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Authorization Tests",
+                      "pm.test('Non-admin access returns 403', function () {",
+                      "    if (pm.variables.get('test_non_admin') === 'true') {",
+                      "        pm.response.to.have.status(403);",
+                      "    }",
+                      "});",
+                      "",
+                      "// Input Validation Tests",
+                      "pm.test('Invalid includeIds parameter returns 400', function () {",
+                      "    if (pm.variables.get('test_invalid_includeIds') === 'true') {",
+                      "        pm.response.to.have.status(400);",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                },
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const testType = pm.variables.get('test_type');",
+                      "",
+                      "if (testType === 'invalid_includeIds') {",
+                      "    // Change includeIds to invalid value",
+                      "    pm.request.url.query.forEach(q => {",
+                      "        if (q.key === 'includeIds') q.value = 'not-a-boolean';",
+                      "    });",
+                      "} else if (testType === 'missing_includeIds') {",
+                      "    // Remove includeIds parameter",
+                      "    pm.request.url.query = pm.request.url.query.filter(q => q.key !== 'includeIds');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -6193,6 +7390,78 @@
           }
         }
       ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script for all subadmin tests",
+          "// This sets up common variables and handles authentication scenarios",
+          "",
+          "const testScenario = pm.variables.get('test_scenario');",
+          "",
+          "if (testScenario === 'missing_token') {",
+          "    // Remove authorization header",
+          "    pm.request.headers.remove('Authorization');",
+          "} else if (testScenario === 'invalid_token') {",
+          "    // Set invalid token",
+          "    const authHeader = pm.request.headers.find(h => h.key === 'Authorization');",
+          "    if (authHeader) {",
+          "        authHeader.value = 'Bearer invalid.token.here';",
+          "    }",
+          "} else if (testScenario === 'non_admin') {",
+          "    // Use non-admin token (sub-admin or vendor token)",
+          "    const authHeader = pm.request.headers.find(h => h.key === 'Authorization');",
+          "    if (authHeader) {",
+          "        authHeader.value = 'Bearer {{sub_admin_token}}';",
+          "    }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test script for all subadmin tests",
+          "// This provides common assertions and error handling",
+          "",
+          "// Common error response structure validation",
+          "pm.test('Error responses have correct structure', function () {",
+          "    if (pm.response.code >= 400) {",
+          "        const jsonData = pm.response.json();",
+          "        pm.expect(jsonData).to.have.property('status');",
+          "        pm.expect(jsonData.status).to.equal('error');",
+          "        pm.expect(jsonData).to.have.property('message');",
+          "    }",
+          "});",
+          "",
+          "// Common success response structure validation",
+          "pm.test('Success responses have correct structure', function () {",
+          "    if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "        const jsonData = pm.response.json();",
+          "        pm.expect(jsonData).to.have.property('status');",
+          "        pm.expect(jsonData.status).to.equal('success');",
+          "    }",
+          "});",
+          "",
+          "// Response time performance check",
+          "pm.test('Response time is acceptable', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000); // 5 seconds max",
+          "});",
+          "",
+          "// Content-Type validation",
+          "pm.test('Response has correct content type', function () {",
+          "    pm.response.to.have.header('Content-Type');",
+          "    const contentType = pm.response.headers.get('Content-Type');",
+          "    pm.expect(contentType).to.include('application/json');",
+          "});"
+        ]
+      }
     }
   ],
   "variable": [

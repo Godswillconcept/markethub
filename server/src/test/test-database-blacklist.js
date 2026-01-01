@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const tokenBlacklistService = require('../services/token-blacklist.service');
+const tokenBlacklistService = require('../services/token-blacklist-enhanced.service');
 
 /**
  * Test script to verify database blacklist functionality

@@ -7,7 +7,7 @@ import { formatCurrency } from "../../utils/formatCurrency.js";
 import { useForm, Controller } from "react-hook-form";
 import InputField from "../../ui/InputField.jsx";
 import PhoneInput from "../../ui/PhoneInput.jsx";
-import { useProductAnalysis } from "../admin/vendorProduct/useProductAnalysis.js";
+import { useVendorProductAnalysis } from "./useVendorProductAnalysis.js";
 import { getImageUrl } from "../../utils/imageUtil.js";
 
 function VendorProductDetail() {
@@ -19,8 +19,8 @@ function VendorProductDetail() {
   const productId = productFromState?.id || urlProductId;
 
   // Fetch analytics data using the hook
-  const { productAnalysis, isLoading, isError, error } =
-    useProductAnalysis(productId);
+  const { data: productAnalysis, isLoading, isError, error } =
+    useVendorProductAnalysis(productId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const {

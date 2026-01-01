@@ -9,6 +9,11 @@ const logger = require("../utils/logger");
 const rateLimit = require('express-rate-limit'); // Import rate-limiter
 const fs = require('fs');
 
+// Import enhanced services for refresh token functionality
+const refreshTokenService = require('../services/refresh-token.service');
+const sessionService = require('../services/session.service');
+const tokenBlacklistService = require('../services/token-blacklist-enhanced.service');
+
 // Generate a random 6-digit code and expiration time (10 minutes from now)
 const generateVerificationCode = () => {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -50,6 +55,41 @@ const createSendToken = (user, statusCode, res) => {
   });
 };
 
+// Create and send token with refresh token support
+const createSendTokenWithRefresh = async (user, statusCode, res, req) => {
+  const token = signToken(user.id);
+
+  // Remove password from output
+  user.password = undefined;
+
+  // Create session and refresh token
+  const refreshTokenData = await refreshTokenService.createRefreshToken(user.id, req);
+
+  res.status(statusCode).json({
+    status: "success",
+    data: {
+      user,
+      tokens: {
+        access: {
+          token: token,
+          expires_in: 900, // 15 minutes
+          type: "Bearer"
+        },
+        refresh: {
+          token: refreshTokenData.token,
+          expires_in: 2592000 // 30 days
+        }
+      },
+      session: {
+        id: refreshTokenData.sessionId,
+        device_info: refreshTokenData.deviceInfo,
+        ip_address: refreshTokenData.deviceInfo?.ip,
+        last_activity: new Date()
+      }
+    }
+  });
+};
+
 // Rate limiting configurations
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -61,6 +101,18 @@ const passwordResetLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 5, // Limit each IP to 5 password reset requests per hour
   message: 'Too many password reset attempts. Please try again after an hour.'
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 50, // Limit each IP to 50 refresh requests per windowMs
+  message: 'Too many refresh attempts from this IP, please try again after 15 minutes'
+});
+
+const logoutLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Limit each IP to 20 logout requests per hour
+  message: 'Too many logout attempts, please try again after an hour'
 });
 
 // SECURITY FIX 3: Rate limiting for bootstrap admin endpoint
@@ -434,6 +486,49 @@ exports.login = async (req, res, next) => {
           createSendToken(user, 200, res);
         } catch (err) {
           logger.error(`Error in login passport authenticate callback: ${err.message}`, { error: err });
+          next(new AppError("An error occurred during login. Please try again.", 500));
+        }
+      })(req, res, next);
+    });
+  } catch (err) {
+    logger.error(`Error in login: ${err.message}`, { error: err });
+    next(new AppError("An error occurred during login. Please try again.", 500));
+  }
+};
+
+/**
+ * Enhanced login with refresh token support
+ * Returns both access token (15 min) and refresh token (30 days)
+ */
+exports.loginEnhanced = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return next(new AppError("Please provide email and password!", 400));
+    }
+
+    loginLimiter(req, res, async () => {
+      passport.authenticate('local', { session: false }, async (err, user, info) => {
+        try {
+          if (err) {
+            return next(err);
+          }
+
+          if (!user) {
+            return next(new AppError(info?.message || 'Authentication failed', 401));
+          }
+
+          if (!user.email_verified_at) {
+            return next(new AppError("Please verify your email address first", 401));
+          }
+
+          // Create session and refresh token
+          await createSendTokenWithRefresh(user, 200, res, req);
+
+          logger.info(`User ${user.id} logged in successfully with refresh token`);
+        } catch (err) {
+          logger.error(`Error in enhanced login: ${err.message}`, { error: err });
           next(new AppError("An error occurred during login. Please try again.", 500));
         }
       })(req, res, next);
@@ -1065,11 +1160,11 @@ exports.logout = async (req, res) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       
-      // Import the blacklist service
-      const tokenBlacklistService = require('../services/token-blacklist.service');
-      
-      // Add token to blacklist
-      await tokenBlacklistService.blacklistToken(token);
+      // Use blacklist service
+      await tokenBlacklistService.blacklistToken(token, 'access', {
+        reason: 'logout',
+        userId: req.user?.id
+      });
     }
 
     // If using token-based auth, the client should remove the token
@@ -1085,6 +1180,346 @@ exports.logout = async (req, res) => {
       status: "success",
       message: "Successfully logged out",
     });
+  }
+};
+
+/**
+ * Refresh access token using refresh token
+ * Implements token rotation for enhanced security
+ */
+exports.refreshToken = async (req, res, next) => {
+  try {
+    const { refresh_token, session_id } = req.body;
+
+    if (!refresh_token || !session_id) {
+      return next(new AppError('Refresh token and session ID are required', 400));
+    }
+
+    refreshLimiter(req, res, async () => {
+      try {
+        // Validate refresh token and session
+        const validation = await refreshTokenService.validateRefreshToken(refresh_token, session_id);
+        
+        // Generate new access token
+        const newAccessToken = signToken(validation.userId);
+        
+        // Generate new refresh token (rotation)
+        const newRefreshToken = await refreshTokenService.createRefreshToken(validation.userId, req);
+        
+        // Update session activity
+        await sessionService.updateSessionActivity(session_id);
+
+        res.status(200).json({
+          status: 'success',
+          data: {
+            access: {
+              token: newAccessToken,
+              expires_in: 900, // 15 minutes
+              type: 'Bearer'
+            },
+            refresh: {
+              token: newRefreshToken.token,
+              expires_in: 2592000 // 30 days
+            }
+          }
+        });
+
+        logger.info(`Tokens refreshed for user ${validation.userId}, session ${session_id}`);
+      } catch (err) {
+        logger.error(`Error refreshing token: ${err.message}`, { error: err });
+        if (err instanceof AppError) {
+          next(err);
+        } else {
+          next(new AppError('Invalid refresh token', 401));
+        }
+      }
+    });
+  } catch (err) {
+    logger.error(`Error in refresh token endpoint: ${err.message}`, { error: err });
+    next(new AppError('Error processing token refresh', 500));
+  }
+};
+
+/**
+ * Get user sessions
+ */
+exports.getSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const sessions = await sessionService.getUserSessions(userId);
+
+    // Mark current session
+    const currentSessionId = req.headers['x-session-id'] || req.body.session_id;
+    const currentSession = sessions.find(s => s.id === currentSessionId);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        current_session: currentSession ? {
+          id: currentSession.id,
+          device_info: currentSession.device_info,
+          ip_address: currentSession.ip_address,
+          last_activity: currentSession.last_activity,
+          is_current: true
+        } : null,
+        other_sessions: sessions
+          .filter(s => s.id !== currentSessionId)
+          .map(s => ({
+            id: s.id,
+            device_info: s.device_info,
+            ip_address: s.ip_address,
+            last_activity: s.last_activity,
+            is_current: false
+          }))
+      }
+    });
+  } catch (err) {
+    logger.error(`Error getting sessions: ${err.message}`, { error: err });
+    next(new AppError('Error retrieving sessions', 500));
+  }
+};
+
+/**
+ * Revoke specific session
+ */
+exports.revokeSession = async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.id;
+
+    // Get the session to verify it belongs to the user
+    const session = await sessionService.getSession(sessionId);
+    if (!session || session.user_id !== userId) {
+      return next(new AppError('Session not found', 404));
+    }
+
+    await sessionService.revokeSession(sessionId);
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Session revoked successfully'
+    });
+  } catch (err) {
+    logger.error(`Error revoking session: ${err.message}`, { error: err });
+    next(new AppError('Error revoking session', 500));
+  }
+};
+
+/**
+ * Revoke all sessions except current
+ */
+exports.revokeAllSessions = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const currentSessionId = req.headers['x-session-id'] || req.body.session_id;
+
+    const revokedCount = await sessionService.revokeAllUserSessions(userId, currentSessionId);
+
+    res.status(200).json({
+      status: 'success',
+      message: `Revoked ${revokedCount} sessions successfully`
+    });
+  } catch (err) {
+    logger.error(`Error revoking all sessions: ${err.message}`, { error: err });
+    next(new AppError('Error revoking sessions', 500));
+  }
+};
+
+/**
+ * Enhanced logout with session management
+ */
+exports.logoutEnhanced = async (req, res, next) => {
+  try {
+    const { session_id, logout_all = false } = req.body;
+    const userId = req.user.id;
+
+    logoutLimiter(req, res, async () => {
+      try {
+        if (logout_all) {
+          // Revoke all sessions for user
+          await sessionService.revokeAllUserSessions(userId);
+          await refreshTokenService.revokeAllUserRefreshTokens(userId);
+        } else if (session_id) {
+          // Revoke specific session
+          await sessionService.revokeSession(session_id);
+          // Revoke associated refresh tokens
+          await refreshTokenService.revokeSessionTokens(session_id);
+        } else {
+          // Default logout behavior - blacklist JWT token
+          if (req.cookies?.jwt) {
+            res.clearCookie("jwt", {
+              httpOnly: true,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "strict",
+              path: "/",
+            });
+          }
+
+          const authHeader = req.headers.authorization;
+          if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            await tokenBlacklistService.blacklistToken(token, 'access', {
+              reason: 'logout',
+              userId: userId,
+              sessionId: session_id
+            });
+          }
+        }
+
+        res.status(200).json({
+          status: "success",
+          message: "Successfully logged out"
+        });
+
+        logger.info(`User ${userId} logged out successfully`);
+      } catch (err) {
+        logger.error(`Error during enhanced logout: ${err.message}`, { error: err });
+        // Still return success to prevent user being stuck
+        res.status(200).json({
+          status: "success",
+          message: "Successfully logged out"
+        });
+      }
+    });
+  } catch (err) {
+    logger.error(`Error in logout endpoint: ${err.message}`, { error: err });
+    res.status(200).json({
+      status: "success",
+      message: "Successfully logged out"
+    });
+  }
+};
+
+/**
+ * Logout all devices for user
+ */
+exports.logoutAllDevices = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Revoke all sessions
+    const sessionCount = await sessionService.revokeAllUserSessions(userId);
+    
+    // Revoke all refresh tokens
+    const tokenCount = await refreshTokenService.revokeAllUserRefreshTokens(userId);
+
+    // Blacklist current access token
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      await tokenBlacklistService.blacklistToken(token, 'access', {
+        reason: 'logout_all_devices',
+        userId: userId
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Logged out from all devices successfully',
+      data: {
+        sessions_revoked: sessionCount,
+        tokens_revoked: tokenCount
+      }
+    });
+
+    logger.info(`User ${userId} logged out from all devices: ${sessionCount} sessions, ${tokenCount} tokens`);
+  } catch (err) {
+    logger.error(`Error logging out all devices: ${err.message}`, { error: err });
+    next(new AppError('Error logging out from all devices', 500));
+  }
+};
+
+/**
+ * Get token statistics for current user
+ */
+exports.getTokenStats = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const tokenStats = await refreshTokenService.getUserTokenStats(userId);
+    const sessionStats = await sessionService.getUserSessionStats(userId);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        tokens: tokenStats,
+        sessions: sessionStats
+      }
+    });
+  } catch (err) {
+    logger.error(`Error getting token stats: ${err.message}`, { error: err });
+    next(new AppError('Error retrieving token statistics', 500));
+  }
+};
+
+/**
+ * Revoke specific refresh token
+ */
+exports.revokeRefreshToken = async (req, res, next) => {
+  try {
+    const { refresh_token } = req.body;
+    const userId = req.user.id;
+
+    if (!refresh_token) {
+      return next(new AppError('Refresh token is required', 400));
+    }
+
+    // Verify token ownership
+    const isOwner = await refreshTokenService.verifyTokenOwnership(refresh_token, userId);
+    if (!isOwner) {
+      return next(new AppError('You can only revoke your own refresh tokens', 403));
+    }
+
+    const revoked = await refreshTokenService.revokeRefreshToken(refresh_token);
+
+    if (!revoked) {
+      return next(new AppError('Failed to revoke refresh token', 500));
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Refresh token revoked successfully'
+    });
+
+    logger.info(`User ${userId} revoked a refresh token`);
+  } catch (err) {
+    logger.error(`Error revoking refresh token: ${err.message}`, { error: err });
+    next(new AppError('Error revoking refresh token', 500));
+  }
+};
+
+/**
+ * Get blacklist statistics (admin only)
+ */
+exports.getBlacklistStats = async (req, res, next) => {
+  try {
+    const stats = await tokenBlacklistService.getStats();
+
+    res.status(200).json({
+      status: 'success',
+      data: stats
+    });
+  } catch (err) {
+    logger.error(`Error getting blacklist stats: ${err.message}`, { error: err });
+    next(new AppError('Error retrieving blacklist statistics', 500));
+  }
+};
+
+/**
+ * Get user blacklist entries
+ */
+exports.getUserBlacklist = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const entries = await tokenBlacklistService.getUserBlacklist(userId);
+
+    res.status(200).json({
+      status: 'success',
+      data: entries
+    });
+  } catch (err) {
+    logger.error(`Error getting user blacklist: ${err.message}`, { error: err });
+    next(new AppError('Error retrieving blacklist entries', 500));
   }
 };
 

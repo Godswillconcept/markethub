@@ -196,6 +196,7 @@ const cacheManager = new CacheManager();
  * @returns {Function} Express middleware
  */
 const cache = (options = {}) => {
+  options.ttl = 0;
   // Handle both number and object options
   const config = {
     ttl: typeof options === 'number' ? options : options.ttl || 300,

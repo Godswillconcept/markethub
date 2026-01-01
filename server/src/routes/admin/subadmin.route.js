@@ -21,19 +21,19 @@ router.use(loadUserPermissions);
 // Sub-admin management routes
 router
   .route('/')
-  .get(getSubAdminsValidation, requirePermission('users_read'), subAdminController.getSubAdmins)
+  .get(getSubAdminsValidation, auth.isAdmin, requirePermission('users_read'), subAdminController.getSubAdmins)
   .post(createSubAdminValidation, requirePermission('users_create'), subAdminController.createSubAdmin);
 
 router
   .route('/:id')
-  .get(getSubAdminValidation, requirePermission('users_read'), subAdminController.getSubAdmin)
+  .get(getSubAdminValidation, auth.isAdmin, requirePermission('users_read'), subAdminController.getSubAdmin)
   .patch(updateSubAdminValidation, requirePermission('users_update'), subAdminController.updateSubAdmin)
-  .delete(deleteSubAdminValidation, requirePermission('users_delete'), subAdminController.deleteSubAdmin);
+  .delete(deleteSubAdminValidation, auth.isAdmin, requirePermission('users_delete'), subAdminController.deleteSubAdmin);
 
 // Permission management routes
 router
   .route('/:id/permissions')
-  .patch(updateSubAdminPermissionsValidation, requirePermission('users_update'), subAdminController.updateSubAdminPermissions);
+  .patch(updateSubAdminPermissionsValidation, auth.isAdmin, requirePermission('users_update'), subAdminController.updateSubAdminPermissions);
 
 // Utility routes for getting available permissions and roles
 router.get('/permissions/all', requirePermission('users_read'), subAdminController.getPermissions);
