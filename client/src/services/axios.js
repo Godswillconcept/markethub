@@ -16,9 +16,7 @@ const getApiUrl = () => {
 
   // Second priority: Detect if we're in production
   if (import.meta.env.PROD) {
-    console.log("debugging second", import.meta.env.PROD);
-    console.log("[Axios] Production mode detected, using relative API path for single-domain setup");
-    // For single-domain production (server serves client), use relative URL
+    console.log("[Axios] Production mode detected, using relative API path for Vercel/Clever split");
     return "/api/v1";
   }
 

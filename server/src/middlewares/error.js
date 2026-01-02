@@ -27,60 +27,31 @@ const handleJWTExpiredError = () =>
 
 // Send detailed error in development
 const sendErrorDev = (err, req, res) => {
-  // API
-  if (req.originalUrl.startsWith('/api')) {
-    return res.status(err.statusCode).json({
-      status: err.status,
-      error: err,
-      message: err.message,
-      stack: err.stack,
-    });
-  }
-  
-  // Rendered website
-  console.error('ERROR 💥', err);
-  return res.status(err.statusCode).render('error', {
-    title: 'Something went wrong!',
-    msg: err.message,
+  // Always send JSON in this API/SPA architecture
+  return res.status(err.statusCode).json({
+    status: err.status,
+    error: err,
+    message: err.message,
+    stack: err.stack,
   });
 };
 
 // Send limited error in production
 const sendErrorProd = (err, req, res) => {
-  // API
-  if (req.originalUrl.startsWith('/api')) {
-    // Operational, trusted error: send message to client
-    if (err.isOperational) {
-      const errorResponse = {
-        status: err.status,
-        message: err.message,
-      };
-
-      // Add additional error details if available
-      if (err.code) errorResponse.code = err.code;
-      if (err.expiresAt) errorResponse.expiresAt = err.expiresAt;
-      if (err.isExpired !== undefined) errorResponse.isExpired = err.isExpired;
-
-      return res.status(err.statusCode).json(errorResponse);
-    }
-    
-    // Programming or other unknown error: don't leak error details
-    // 1) Log error
-    logger.error('ERROR 💥', err);
-    
-    // 2) Send generic message
-    return res.status(500).json({
-      status: 'error',
-      message: 'Something went very wrong!',
-    });
-  }
-  
-  // Rendered website
+  // API and general errors in production
+  // Operational, trusted error: send message to client
   if (err.isOperational) {
-    return res.status(err.statusCode).render('error', {
-      title: 'Something went wrong!',
-      msg: 'Please try again later.',
-    });
+    const errorResponse = {
+      status: err.status,
+      message: err.message,
+    };
+
+    // Add additional error details if available
+    if (err.code) errorResponse.code = err.code;
+    if (err.expiresAt) errorResponse.expiresAt = err.expiresAt;
+    if (err.isExpired !== undefined) errorResponse.isExpired = err.isExpired;
+
+    return res.status(err.statusCode).json(errorResponse);
   }
   
   // Programming or other unknown error: don't leak error details
@@ -88,9 +59,9 @@ const sendErrorProd = (err, req, res) => {
   logger.error('ERROR 💥', err);
   
   // 2) Send generic message
-  return res.status(err.statusCode).render('error', {
-    title: 'Something went wrong!',
-    msg: 'Please try again later.',
+  return res.status(500).json({
+    status: 'error',
+    message: 'Something went very wrong!',
   });
 };
 

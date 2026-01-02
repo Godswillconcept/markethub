@@ -470,7 +470,15 @@ if (process.env.NODE_ENV === "production") {
   app.get("*", (req, res) => {
     // Check if the request is not an API request
     if (!req.path.startsWith("/api/")) {
-      res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+      const indexPath = path.join(__dirname, "../client/dist/index.html");
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          console.error("❌ Error sending index.html:", err.message);
+          res.status(500).send(
+            "Frontend build not found. Please ensure the client is built (npm run build --prefix client)."
+          );
+        }
+      });
     } else {
       // If it is an API request that reached here, it's a 404
       res.status(404).json({
