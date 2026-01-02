@@ -1738,7 +1738,7 @@ const getAdminTopCategories = catchAsync(async (req, res, next) => {
       include: [
         {
           model: db.Product,
-          as: "Products",
+          as: "products",
           attributes: ["id"],
           where: {
             status: "active", // Only count active products
@@ -3647,6 +3647,7 @@ const getAdminProducts = catchAsync(async (req, res, next) => {
   const includeArray = [
     {
       model: db.Category,
+      as: "category",
       attributes: ["id", "name", "slug"],
       where: categoryFilter,
       required: !!categoryFilter,
@@ -3798,7 +3799,7 @@ const getAdminProducts = catchAsync(async (req, res, next) => {
       sku: product.sku,
       thumbnail: product.thumbnail,
       status: product.status,
-      Category: product.Category,
+      category: product.category,
       vendor: vendorInfo,
       images: product.images || [],
       stock_quantity: stockQuantity,

@@ -208,7 +208,7 @@ class SuggestionService {
       // Score based on recency and frequency
       const scoredProducts = recentViews.map(view => {
         const score = this.calculateRecentlyViewedScore(view);
-        return { ...view.Product.toJSON(), score, viewed_at: view.viewed_at };
+        return { ...view.product.toJSON(), score, viewed_at: view.viewed_at };
       });
 
       scoredProducts.sort((a, b) => b.score - a.score);
@@ -373,7 +373,7 @@ class SuggestionService {
     const baseScore = 0.6;
     const recencyHours = (Date.now() - new Date(view.viewed_at).getTime()) / (1000 * 60 * 60);
     const recencyScore = Math.max(0.4 - (recencyHours * 0.01), 0.1);
-    const frequencyScore = Math.min(view.Product.impressions * 0.0001, 0.2);
+    const frequencyScore = Math.min(view.product.impressions * 0.0001, 0.2);
     return Math.min(baseScore + recencyScore + frequencyScore, 1.0);
   }
 

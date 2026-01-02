@@ -328,7 +328,7 @@ app.use("/api", limiter);
 
 // Dashboard-specific rate limiting
 const dashboardLimiter = rateLimit({
-  max: 20,
+  max: 100,
   windowMs: 60 * 1000,
   message: "Too many dashboard requests, please try again in 1 minute!",
   keyGenerator: (req) => {
