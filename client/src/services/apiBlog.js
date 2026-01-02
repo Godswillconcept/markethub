@@ -25,7 +25,9 @@ export async function getBlogs({ page }) {
         // Normalize all blogs
         const blogs = items.map((blog) => ({
             ...blog,
-            featured_images: JSON.parse(blog.featured_images || "[]"),
+            featured_images: typeof blog.featured_images === 'string'
+                ? JSON.parse(blog.featured_images || "[]")
+                : (blog.featured_images || []),
             date: new Date(blog.created_at).toLocaleDateString(),
         }));
 
