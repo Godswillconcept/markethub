@@ -9,10 +9,14 @@
       }
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/dist/$1"
+      "source": "/api/v1/:path*",
+      "destination": "https://markethub-server.cleverapps.io/api/v1/:path*"
+    },
+    {
+      "source": "/((?!api/v1).*)",
+      "destination": "/index.html"
     }
   ],
   "env": {

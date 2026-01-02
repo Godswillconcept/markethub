@@ -464,6 +464,24 @@ app.use("/api/v1/messages", vendorMessageRoutes);
 app.use("/api/v1/payouts", payoutRoutes);
 
 // ============================================
+// SPA CATCH-ALL ROUTE (PRODUCTION)
+// ============================================
+if (process.env.NODE_ENV === "production") {
+  app.get("*", (req, res) => {
+    // Check if the request is not an API request
+    if (!req.path.startsWith("/api/")) {
+      res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+    } else {
+      // If it is an API request that reached here, it's a 404
+      res.status(404).json({
+        status: "fail",
+        message: `Can't find ${req.originalUrl} on this server!`,
+      });
+    }
+  });
+}
+
+// ============================================
 // ERROR HANDLING
 // ============================================
 app.use(errorHandler);

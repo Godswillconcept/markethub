@@ -34,8 +34,7 @@ const getDomainUrl = () => {
   }
   console.log(import.meta.env.PROD);
   if (import.meta.env.PROD) {
-    // return 'https://stylay.cleverapps.io';
-    return "https://unflaking-actionable-man.ngrok-free.dev";
+    return window.location.origin;
   }
 
   return "http://localhost:5000";
