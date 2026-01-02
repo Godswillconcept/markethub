@@ -467,25 +467,19 @@ app.use("/api/v1/payouts", payoutRoutes);
 // SPA CATCH-ALL ROUTE (PRODUCTION)
 // ============================================
 if (process.env.NODE_ENV === "production") {
+  app.get("/", (req, res) => {
+    res.status(200).json({
+      status: "success",
+      message: "Stylay API is running. Client should be accessed via Vercel.",
+    });
+  });
+
   app.get("*", (req, res) => {
-    // Check if the request is not an API request
-    if (!req.path.startsWith("/api/")) {
-      const indexPath = path.join(__dirname, "../client/dist/index.html");
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          console.error("❌ Error sending index.html:", err.message);
-          res.status(500).send(
-            "Frontend build not found. Please ensure the client is built (npm run build --prefix client)."
-          );
-        }
-      });
-    } else {
-      // If it is an API request that reached here, it's a 404
-      res.status(404).json({
-        status: "fail",
-        message: `Can't find ${req.originalUrl} on this server!`,
-      });
-    }
+    // If it reached here, it's not a matched API route
+    res.status(404).json({
+      status: "fail",
+      message: `Endpoint ${req.originalUrl} not found on this server.`,
+    });
   });
 }
 

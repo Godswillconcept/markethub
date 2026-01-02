@@ -130,6 +130,7 @@ class SuggestionService {
         include: [
           {
             model: this.Category,
+            as: 'category',
             attributes: ['id', 'name', 'slug']
           },
           {
@@ -188,6 +189,7 @@ class SuggestionService {
             include: [
               {
                 model: this.Category,
+                as: 'category',
                 attributes: ['id', 'name', 'slug']
               },
               {
