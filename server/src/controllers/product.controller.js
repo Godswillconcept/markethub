@@ -989,8 +989,8 @@ const updateProductStatus = async (req, res, next) => {
         id: product.id,
         name: product.name,
         status: product.status,
-        vendor: product.Vendor,
-        category: product.Category,
+        vendor: product.vendor,
+        category: product.category,
       },
     });
   } catch (error) {

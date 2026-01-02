@@ -167,7 +167,7 @@ class ProductService {
       category_id: product.category_id,
       thumbnail: product.thumbnail,
       thumbnailUrl: product.thumbnailUrl || product.thumbnail,
-      Category: product.Category,
+      category: product.category,
       vendor: product.vendor,
       variants: product.variants || [],
       combinations: product.combinations || [],
@@ -749,7 +749,7 @@ class ProductService {
     // Validate product exists with associations
     const product = await this.validateProductExists(productId, [
       { model: Vendor, attributes: ["id", "user_id"], as: "vendor" },
-      { model: Category, attributes: ["id", "name"] },
+      { model: Category, attributes: ["id", "name"], as: "category" },
       { model: ProductImage, as: "images", attributes: ["image_url"] },
       {
         model: VariantCombination,
@@ -885,7 +885,7 @@ class ProductService {
       product: {
         id: product.id,
         name: product.name,
-        category: product.Category.name,
+        category: product.category?.name || "Uncategorized",
         price: product.price,
         impressions: product.impressions,
         thumbnail: product.thumbnail,
