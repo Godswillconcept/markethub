@@ -303,39 +303,20 @@ const invalidate = {
    * Invalidate cache when admin data changes
    * @param {Object} options - Invalidation options
    */
-  admin: async (options = {}) => {
-    const keys = [
-      cacheManager.generateKey('admin', '/metrics'),
-      cacheManager.generateKey('admin', '/recent-orders'),
-      cacheManager.generateKey('admin', '/top-selling-vendors'),
-      cacheManager.generateKey('admin', '/top-selling-items'),
-      cacheManager.generateKey('admin', '/sales-stats'),
-      cacheManager.generateKey('admin', '/top-categories'),
-      cacheManager.generateKey('admin', '/vendor-onboarding-stats'),
-      cacheManager.generateKey('admin', '/products'),
-    ];
-    
-    // Add specific vendor overview if vendorId provided
-    if (options.vendorId) {
-      keys.push(cacheManager.generateKey('admin', `/vendor-overview/${options.vendorId}`));
-    }
-    
-    return await cacheManager.invalidateKeys(keys);
+  admin: async () => {
+    // Admin caching generated overhead and stale data issues, so it was removed.
+    // This method is kept as a no-op for compatibility.
+    return 0;
   },
 
   /**
    * Invalidate cache when vendor data changes
    * @param {Object} options - Invalidation options
    */
-  vendor: async (options = {}) => {
-    const keys = [
-      cacheManager.generateKey('dashboard', '/vendor/metrics'),
-      cacheManager.generateKey('dashboard', '/vendor/products'),
-      cacheManager.generateKey('dashboard', '/vendor/earnings'),
-      cacheManager.generateKey('dashboard', '/vendor/earnings-breakdown'),
-    ];
-    
-    return await cacheManager.invalidateKeys(keys);
+  vendor: async () => {
+    // Vendor caching generated overhead and stale data issues, so it was removed.
+    // This method is kept as a no-op for compatibility.
+    return 0;
   },
 
   /**

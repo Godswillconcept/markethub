@@ -42,17 +42,28 @@ const signToken = (id) => {
 };
 
 // Create and send token
-const createSendToken = (user, statusCode, res) => {
+const createSendToken = (user, statusCode, res, refreshTokenData = null) => {
   const token = signToken(user.id);
 
   // Remove password from output
   user.password = undefined;
 
-  res.status(statusCode).json({
+  const response = {
     status: "success",
     token,
     data: user,
-  });
+  };
+
+  // Add refresh token and session data if available
+  // This is required for the client's enhanced auth system
+  if (refreshTokenData) {
+    response.refreshToken = refreshTokenData.token;
+    response.session = {
+      id: refreshTokenData.sessionId
+    };
+  }
+
+  res.status(statusCode).json(response);
 };
 
 // Create and send token with refresh token support
@@ -254,7 +265,15 @@ exports.register = async (req, res, next) => {
       // Don't fail the registration if email sending fails
     }
 
-    createSendToken(newUser, 201, res);
+    // Create session and refresh token
+    try {
+      const refreshTokenData = await refreshTokenService.createRefreshToken(newUser.id, req);
+      createSendToken(newUser, 201, res, refreshTokenData);
+    } catch (tokenError) {
+      logger.error(`Error creating refresh token during registration: ${tokenError.message}`);
+      // Fallback to basic token if refresh token creation fails
+      createSendToken(newUser, 201, res);
+    }
   } catch (err) {
     logger.error(`Error in register: ${err.message}`, { error: err });
     next(new AppError("An error occurred during registration. Please try again.", 500));
@@ -482,8 +501,15 @@ exports.login = async (req, res, next) => {
             return next(new AppError("Please verify your email address first", 401));
           }
 
-          // 4) Send token to client
-          createSendToken(user, 200, res);
+          // 4) Generate refresh token and session
+          try {
+            const refreshTokenData = await refreshTokenService.createRefreshToken(user.id, req);
+            createSendToken(user, 200, res, refreshTokenData);
+          } catch (tokenError) {
+            logger.error(`Error creating refresh token during login: ${tokenError.message}`);
+            // Fallback to basic token if refresh token creation fails
+            createSendToken(user, 200, res);
+          }
         } catch (err) {
           logger.error(`Error in login passport authenticate callback: ${err.message}`, { error: err });
           next(new AppError("An error occurred during login. Please try again.", 500));

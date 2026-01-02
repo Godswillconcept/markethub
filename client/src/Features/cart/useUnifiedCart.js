@@ -431,9 +431,10 @@ export function useUnifiedCart() {
 
             // Invalidate and refetch server cart
             await queryClient.invalidateQueries(["cart"]);
+            await queryClient.invalidateQueries(["cartSummary"]);
             await queryClient.refetchQueries(["cart"]);
 
-            toast.success("Cart synced to your account!");
+            toast.success(`Cart synced! ${localCartItems.length} items merged.`);
           } catch (error) {
             console.error("❌ Cart sync failed:", error);
             syncRef.current.hasSyncedOnLogin = false; // Allow retry

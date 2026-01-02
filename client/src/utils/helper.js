@@ -29,9 +29,10 @@ export function getRandomVendor(items) {
  * Formats a date string to a human-readable format
  * @param {string|Date} dateInput - Date string or Date object
  * @param {object} options - Intl.DateTimeFormat options
+ * @param {string} locale - Locale to use for formatting (default: "en-NG")
  * @returns {string} Formatted date string
  */
-export function formatDate(dateInput, options = {}) {
+export function formatDate(dateInput, options = {}, locale = "en-NG") {
   if (!dateInput) return "—";
 
   try {
@@ -45,8 +46,26 @@ export function formatDate(dateInput, options = {}) {
       ...options,
     };
 
-    return new Intl.DateTimeFormat("en-NG", defaultOptions).format(date);
+    return new Intl.DateTimeFormat(locale, defaultOptions).format(date);
   } catch {
     return dateInput; // Return original on error
   }
+}
+
+/**
+ * Formats a date string to US English format (Jan 1, 2023)
+ * @param {string|Date} dateInput - Date string or Date object
+ * @returns {string} Formatted date string in US English format
+ */
+export function formatDateUS(dateInput) {
+  return formatDate(dateInput, {}, "en-US");
+}
+
+/**
+ * Formats a date string to British English format (1 Jan 2023)
+ * @param {string|Date} dateInput - Date string or Date object
+ * @returns {string} Formatted date string in British English format
+ */
+export function formatDateGB(dateInput) {
+  return formatDate(dateInput, { day: "2-digit", month: "short", year: "numeric" }, "en-GB");
 }

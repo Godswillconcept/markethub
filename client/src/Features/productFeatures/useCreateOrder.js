@@ -10,15 +10,18 @@ export function useCreateOrder() {
     const { mutate: createDirectOrder, isPending: isCreatingOrder } = useMutation({
         mutationFn: createOrder,
         onSuccess: (data) => {
-            toast.success("Order processed successfully");
-            // navigate("/cart/summary"); // Or wherever the user wants to go. 
-            // Based on user request "take that single product to the summary page", 
-            // we might need to handle the response data specially. 
-            // For now, we'll log it and maybe navigate if data suggests it.
             console.log("Direct order success:", data);
-
-            // If the API returns a summary or redirect URL, handle it here.
-            navigate("/cart/cart-summary");
+            
+            // Check for Paystack authorization URL
+            const authUrl = data?.data?.order?.paymentData?.authorization_url;
+            
+            if (authUrl) {
+                toast.success("Redirecting to payment...");
+                window.location.href = authUrl;
+            } else {
+                toast.success("Order processed successfully");
+                navigate("/settings/orders"); // Redirect to orders page if no payment URL (e.g. cash on delivery if supported later)
+            }
         },
         onError: (err) => {
             console.error("Order creation failed", err);

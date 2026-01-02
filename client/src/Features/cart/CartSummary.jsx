@@ -3,7 +3,6 @@ import SummaryItem from "./SummaryItem.jsx";
 import { useNavigate } from "react-router";
 import { useAddresses } from "../dashboardFeature/useAddresses.js";
 import { useCartSummary } from "./useCartSummary.js";
-import { useCreateOrder } from "../productFeatures/useCreateOrder.js";
 import toast from "react-hot-toast";
 import { getImageUrl } from "../../utils/imageUtil.js";
 
@@ -17,7 +16,6 @@ const formatCurrency = (amount) => {
 
 function CartSummary() {
   const navigate = useNavigate();
-  const { createDirectOrder, isCreatingOrder } = useCreateOrder();
   
   // Fetch real data
   const { addresses, isLoading: isLoadingAddress } = useAddresses();
@@ -51,8 +49,6 @@ function CartSummary() {
     const futureDate = new Date(today);
     futureDate.setDate(today.getDate() + 5);
 
-    const options = { day: 'numeric', month: 'long' };
-    
     // Function to add ordinal suffix (st, nd, rd, th)
     const getOrdinal = (n) => {
       const s = ["th", "st", "nd", "rd"];
@@ -70,18 +66,23 @@ function CartSummary() {
   };
 
   const deliveryDateString = calculateDeliveryDate();
+  console.log('Cart items:', cartValues.items);
 
   // Map cart items from API response
   const cartItems = cartValues.items?.map(item => ({
     id: item.product?.id || Math.random(), // Fallback ID
+    productId: item.product?.id, // Add explicit productId field
     category: item.product?.category?.name || "General",
     name: item.product?.name || "Unknown Item",
     price: parseFloat(item.product?.price || 0),
     quantity: item.quantity,
     deliveryDate: deliveryDateString, 
     imageUrl: getImageUrl(item.product?.thumbnail) || "/default-product.jpg",
+    selected_variants: item.selected_variants || [],
+    combination_id: item.combination_id || null,
   })) || [];
 
+  console.log('Mapped cart items:', cartItems);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
   // Calculate or use provided summary
@@ -98,24 +99,8 @@ function CartSummary() {
       return;
     }
 
-    const payload = {
-      addressId: defaultAddress.id,
-      items: cartItems.map(item => ({
-        productId: item.id || item.productId, // Ensure we have correct ID mapping
-        quantity: item.quantity,
-        selected_variants: item?.variants || [] // Check this mapping against API response
-      })),
-      shippingCost: 1500, 
-      taxAmount: 750,
-      notes: "Checkout from Cart Summary",
-      paymentMethod: "paystack"
-    };
-
-    createDirectOrder(payload, {
-      onSuccess: () => {
-         navigate("/cart/payment"); 
-      }
-    });
+    // Instead of creating order here, navigate to payment summary
+    navigate("/cart/payment");
   };
 
   if (isLoading) {
@@ -230,11 +215,11 @@ function CartSummary() {
                 </div>
 
                 <div className="flex items-center gap-2 pt-2">
-                  <span className="text-sm text-gray-600">Promo Code</span>
+                  <span className="text-sm text-gray-600">JUST LIKE US</span>
                   <input
                     type="text"
                     placeholder="Enter code"
-                    className="flex-grow rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                    className="grow rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
                   />
                 </div>
               </div>
@@ -248,20 +233,14 @@ function CartSummary() {
 
               <button
                 onClick={handleCheckout}
-                disabled={cartItems.length === 0 || !customerAddress || isCreatingOrder}
+                disabled={cartItems.length === 0 || !customerAddress}
                 className={`w-full rounded-2xl py-4 text-base font-semibold text-white transition sm:text-lg ${
-                    cartItems.length === 0 || !customerAddress || isCreatingOrder
+                    cartItems.length === 0 || !customerAddress
                     ? "bg-gray-400 cursor-not-allowed" 
                     : "bg-black hover:bg-gray-900"
                 }`}
               >
-                {isCreatingOrder ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <FiLoader className="animate-spin" /> Processing...
-                  </span>
-                ) : (
-                  `Proceed to Checkout (${formatCurrency(orderSummary.checkoutAmount)})`
-                )}
+                Proceed to Checkout ({formatCurrency(orderSummary.checkoutAmount)})
               </button>
             </div>
           </div>

@@ -339,7 +339,7 @@ const createProduct = async (req, res, next) => {
           {
             model: ProductVariant,
             as: "variants",
-            attributes: ["id", "name", "value"],
+            attributes: ["id", "name", "value", "hex_code"],
           },
           {
             model: VariantCombination,
@@ -354,7 +354,7 @@ const createProduct = async (req, res, next) => {
             ],
           },
           { model: ProductImage, as: "images" },
-          { model: Category, attributes: ["id", "name", "slug"] },
+          { model: Category, as: "category", attributes: ["id", "name", "slug"] },
           {
             model: Vendor,
             attributes: ["id", "status"],
@@ -533,7 +533,7 @@ const getProducts = async (req, res, next) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       include: [
-        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
         {
           model: Vendor,
           attributes: ["id"],
@@ -660,7 +660,7 @@ const getProductByIdentifier = async (req, res, next) => {
         ],
       ],
       include: [
-        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
         {
           model: Vendor,
           attributes: ["id", "status"],
@@ -676,7 +676,7 @@ const getProductByIdentifier = async (req, res, next) => {
         {
           model: ProductVariant,
           as: "variants",
-          attributes: ["id", "name", "value"],
+          attributes: ["id", "name", "value", "hex_code"],
         },
         { model: ProductImage, as: "images" },
         {
@@ -921,7 +921,7 @@ const getAllProducts = async (req, res, next) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       include: [
-        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
         {
           model: Vendor,
           attributes: ["id"],
@@ -973,7 +973,7 @@ const updateProductStatus = async (req, res, next) => {
             },
           ],
         },
-        { model: Category, attributes: ["id", "name"] },
+        { model: Category, as: "category", attributes: ["id", "name"] },
       ],
     });
 
@@ -1039,7 +1039,7 @@ const getProductsByStatus = async (req, res, next) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       include: [
-        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
         {
           model: Vendor,
           attributes: ["id", "status"],
@@ -1268,7 +1268,7 @@ const getProductsByVendor = async (req, res, next) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       include: [
-        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
         { model: ProductImage, limit: 1, as: "images" }, // Only get first image for listing
       ],
       order: [["created_at", "DESC"]],

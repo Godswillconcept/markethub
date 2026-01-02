@@ -115,6 +115,12 @@ module.exports = (sequelize, DataTypes) => {
                 required: false,
                 limit: 1,
                 where: { is_featured: true }
+              },
+              {
+                model: sequelize.models.Category,
+                as: 'category',
+                attributes: ['id', 'name'],
+                required: false
               }
             ]
           }
@@ -216,6 +222,17 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.JSON,
       allowNull: true,
       comment: 'Array of selected variant objects with id, name, value, and additional_price'
+    },
+    combination_id: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+      references: {
+        model: 'variant_combinations',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL',
+      comment: 'Reference to the specific variant combination for this cart item'
     },
     notes: {
       type: DataTypes.TEXT,

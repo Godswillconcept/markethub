@@ -194,7 +194,7 @@ export async function deleteReview(reviewId) {
 export async function getProductAnalysis(productId) {
     try {
         const { data } = await axiosInstance.get(`/products/${productId}/analytics`);
-        return data;
+        return data.data;
     } catch (error) {
         throw new Error(error.response?.data?.message || "Failed to get product analysis");
     }

@@ -1,6 +1,7 @@
 import { Dialog, DialogPanel } from "@headlessui/react";
 import { BiX, BiMap } from "react-icons/bi";
 import { getImageUrl } from "../../utils/imageUtil.js";
+import { formatDateGB } from "../../utils/helper.js";
 
 // Dummy shipment data
 // const shipmentData = {
@@ -416,13 +417,7 @@ function ShipmentModal({ shipment = {}, isOpen, onClose, isLoading, error }) {
     : "No address available";
 
   // Format date
-  const orderDate = shipment.order_date
-    ? new Date(shipment.order_date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })
-    : "N/A";
+  const orderDate = shipment.order_date ? formatDateGB(shipment.order_date) : "N/A";
 
   // Get current step index
   const currentStepIndex = statusSteps[shipment.order_status] || 0;

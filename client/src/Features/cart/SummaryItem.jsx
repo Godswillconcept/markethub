@@ -11,6 +11,16 @@ function SummaryItem({ item }) {
         <p className="text-sm text-gray-500">
           Product Category: {item.category}
         </p>
+        {item.selected_variants && item.selected_variants.length > 0 && (
+          <p className="text-sm text-gray-500 capitalize">
+            {item.selected_variants.map((v, i) => (
+              <span key={i}>
+                {i > 0 && " / "}
+                {v.name}: {v.value}
+              </span>
+            ))}
+          </p>
+        )}
         <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
         <p className="text-sm text-gray-500">
           Estimated Delivery Date: {item.deliveryDate}

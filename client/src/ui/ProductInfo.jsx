@@ -8,12 +8,10 @@ import toast from "react-hot-toast";
 import { FiLoader } from "react-icons/fi";
 import { useState, useEffect, useMemo } from "react";
 
-const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userAddress }) => {
+const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false }) => {
   const { addToCart } = useUnifiedCart();
-  // const { createDirectOrder, isCreatingOrder } = useCreateOrder(); // Removed
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [selectedColor, setSelectedColor] = useState('');
-  const [selectedSize, setSelectedSize] = useState('');
+  const [selectedVariants, setSelectedVariants] = useState({});
   const [isMounted, setIsMounted] = useState(false);
   const [additionalCost, setAdditionalCost] = useState(0);
 
@@ -29,143 +27,238 @@ const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userA
     discounted_price,
     thumbnail,
     variants: variantsData = [],
+    combinations = [], // Destructure combinations
     description
   } = product;
 
-  // Transform variants into the required format
-  const transformVariants = (variants) => {
-    const variantMap = {};
+  // Transform variants into groups by type
+  const variantGroups = useMemo(() => {
+    const groups = {};
 
-    variants.forEach(variant => {
-      const variantName = variant.name.toLowerCase();
-      if (!variantMap[variantName]) {
-        variantMap[variantName] = [];
+    variantsData.forEach(variant => {
+      const type = variant.name; 
+      
+      if (!groups[type]) {
+        groups[type] = {
+          type: type,
+          options: [],
+          details: []
+        };
       }
 
-      // Add the variant value if it's not already in the array
-      if (!variantMap[variantName].includes(variant.value)) {
-        variantMap[variantName].push(variant.value);
+      if (!groups[type].options.some(opt => opt.value === variant.value)) {
+        groups[type].options.push({
+          value: variant.value,
+          label: variant.value,
+          hex_code: variant.hex_code // Include hex_code if available
+        });
       }
 
-      // Add other variant info
-      if (!variantMap[`${variantName}_details`]) {
-        variantMap[`${variantName}_details`] = [];
-      }
-      variantMap[`${variantName}_details`].push({
+      groups[type].details.push({
         id: variant.id,
         value: variant.value,
         additional_price: variant.additional_price,
         stock: variant.stock,
+        hex_code: variant.hex_code,
         created_at: variant.created_at
       });
     });
 
-    return variantMap;
+    return Object.values(groups);
+  }, [variantsData]);
+
+  // Check if a specific option value is available given the current OTHER selections
+  const checkOptionAvailability = (type, value) => {
+    // If no combinations data, default to available (fallback)
+    if (!combinations || combinations.length === 0) return true;
+
+    // Create a temporary selection with the option being checked
+    const testSelection = { ...selectedVariants, [type]: value };
+
+    // Find any combination that matches this test selection
+    // We only care about combinations that include ALL currently selected variants + the tested one
+    // But we need to be careful: if we have 3 types (Color, Size, Material) and only Color is selected,
+    // and we test Size=S, we should check if there exists ANY combination with Color=Selected AND Size=S.
+    
+    // Filter combinations that match the test selection
+    const possibleCombinations = combinations.filter(combo => {
+      if (!combo.is_active || (combo.stock !== undefined && combo.stock <= 0)) return false;
+
+      // Check if every selected variant (including the test one) is present in this combination
+      return Object.entries(testSelection).every(([variantType, variantValue]) => {
+        // If the variant type isn't selected yet in testSelection (shouldn't happen for the one we're testing), skip
+        if (!variantValue) return true;
+
+        // Find the variant in the combination's variant list
+        const variantInCombo = combo.variants.find(v => v.name === variantType && v.value === variantValue);
+        return !!variantInCombo;
+      });
+    });
+
+    return possibleCombinations.length > 0;
   };
 
-  const variants = useMemo(() => transformVariants(variantsData), [variantsData]);
+  // Find the exact matching combination for all currently selected variants
+  const getMatchingCombination = () => {
+    if (!combinations || combinations.length === 0) return null;
 
-  // For backward compatibility - memoized to prevent unnecessary re-renders
-  const productColor = useMemo(() => {
-    return variants.color_details?.map(variant => ({
-      value: variant.value,
-      label: variant.value,
-      additional_price: variant.additional_price,
-      stock: variant.stock
-    })) || [];
-  }, [variants.color_details]);
+    return combinations.find(combo => {
+      // Must match ALL selected variants
+      const allSelectedMatch = Object.entries(selectedVariants).every(([type, value]) => {
+        return combo.variants.some(v => v.name === type && v.value === value);
+      });
 
-  const productSize = useMemo(() => {
-    return variants.size_details?.map(variant => ({
-      value: variant.value,
-      label: variant.value,
-      additional_price: variant.additional_price,
-      stock: variant.stock
-    })) || [];
-  }, [variants.size_details]);
+      // And combination must have same number of variants as selected (assuming full selection)
+      // Or at least, we usually want the most specific one. 
+      // If we differ in length, it might be a partial match, but for price calculation we usually want full match.
+      return allSelectedMatch && combo.variants.length === Object.keys(selectedVariants).length;
+    });
+  };
 
+  const currentCombination = getMatchingCombination();
+
+  // Initialize selected variants
   useEffect(() => {
-    if (productColor.length > 0 && !selectedColor) {
-      setSelectedColor(productColor[0]?.value || '');
-    }
-    if (productSize.length > 0 && !selectedSize) {
-      setSelectedSize(productSize[0]?.value || '');
-    }
-  }, [productColor.length, productSize.length, selectedColor, selectedSize, productColor, productSize]);
+    if (variantGroups.length > 0) {
+      setSelectedVariants(prev => {
+        const next = { ...prev };
+        // If completely empty, start fresh
+        if (Object.keys(next).length === 0) {
+           // Find the first valid combination (active and in stock)
+           const validCombo = combinations?.find(c => c.is_active && c.stock > 0);
+           
+           if (validCombo) {
+             validCombo.variants.forEach(v => {
+               next[v.name] = v.value;
+             });
+             return next;
+           }
+           
+           // Fallback if no combinations data or no valid combo found: just select first options
+           variantGroups.forEach(group => {
+             if (group.options.length > 0) {
+               next[group.type] = group.options[0].value;
+             }
+           });
+           return next;
+        }
 
-  // Calculate additional cost based on selected variants
+        // If partially selected (e.g. from props or re-mount), ensure we fill gaps if needed?
+        // For now, let's stick to the initialize-empty logic or preserve existing.
+        
+        return prev;
+      });
+    }
+  }, [variantGroups, combinations]); // Added combinations to dependency
+
+  // Calculate generic additional cost as fallback or specific combination price
   useEffect(() => {
+    // If we have a specific combination with a price modifier, use that
+    if (currentCombination) {
+      setAdditionalCost(parseFloat(currentCombination.price_modifier) || 0);
+      return;
+    }
+
+    // Fallback: Sum individual variant costs (if legacy mode or no combinations)
     let totalAdditional = 0;
-
-    // Add color additional price if selected
-    if (selectedColor) {
-      const colorVariant = variants.color_details?.find(v => v.value === selectedColor);
-      if (colorVariant?.additional_price) {
-        totalAdditional += parseFloat(colorVariant.additional_price) || 0;
+    Object.entries(selectedVariants).forEach(([type, value]) => {
+      const group = variantGroups.find(g => g.type === type);
+      if (group) {
+        const variant = group.details.find(v => v.value === value);
+        if (variant?.additional_price) {
+          totalAdditional += parseFloat(variant.additional_price) || 0;
+        }
       }
-    }
-
-    // Add size additional price if selected
-    if (selectedSize) {
-      const sizeVariant = variants.size_details?.find(v => v.value === selectedSize);
-      if (sizeVariant?.additional_price) {
-        totalAdditional += parseFloat(sizeVariant.additional_price) || 0;
-      }
-    }
-
+    });
     setAdditionalCost(totalAdditional);
-  }, [selectedColor, selectedSize, variants]);
+  }, [selectedVariants, variantGroups, currentCombination]);
 
-  // Calculate final price including any additional costs from variants
+  const handleVariantChange = (type, value) => {
+    // Before switching, we could check if it leads to a valid state. 
+    // For now, we allow the switch. If it results in an invalid combination, 
+    // the user will see that (e.g. "Add to Cart" disabled or visually indicated).
+    // Or we could try to auto-select valid options for other types if the new selection breaks compatibility.
+    
+    setSelectedVariants(prev => ({
+      ...prev,
+      [type]: value
+    }));
+  };
+
   const finalPrice = (parseFloat(discounted_price || price) + additionalCost).toFixed(2);
   const navigate = useNavigate();
 
-  const handleBuyNow = async () => {
-    if (productColor.length > 0 && !selectedColor) {
-      toast.error('Please select a color');
-      return;
+  const validateSelection = () => {
+    // 1. Check if all types are selected
+    for (const group of variantGroups) {
+      if (!selectedVariants[group.type]) {
+        toast.error(`Please select a ${group.type}`);
+        return false;
+      }
     }
 
-    if (productSize.length > 0 && !selectedSize) {
-      toast.error('Please select a size');
-      return;
+    // 2. Check if the combination is valid/in-stock via backend data
+    if (combinations && combinations.length > 0) {
+      if (!currentCombination) {
+        toast.error("Selected combination is unavailable");
+        return false;
+      }
+      if (!currentCombination.is_active) {
+         toast.error("Selected combination is currently inactive");
+         return false;
+      }
+      if (currentCombination.stock <= 0) {
+        toast.error("Selected combination is out of stock");
+        return false;
+      }
     }
-
-    // Reuse the logic from handleAddToCart but add navigation
-    // We can't reuse handleAddToCart directly because it's async and we want to navigate AFTER
-    // constructing the item. 
-    // Ideally werefactor the item construction into a helper, but for now we duplicate the construction
-    // or simply call addToCart and navigate. 
-    // Since addToCart in `useUnifiedCart` might be async/optimistic, we can just call it.
     
-    // Construct item
-    const newItem = {
-        id: `${id}-${selectedColor || ''}-${selectedSize || ''}`,
-        productId: id,
-        name,
-        newPrice: parseFloat(finalPrice),
-        price: parseFloat(discounted_price || price),
-        additionalCost,
-        thumbnail,
-        color: selectedColor,
-        size: selectedSize,
-        quantity: 1,
-        selected_variants: [
-          ...(selectedColor ? [{
-            name: 'color',
-            id: variants.color_details?.find(v => v.value === selectedColor)?.id || selectedColor,
-            value: selectedColor,
-            additional_price: parseFloat(variants.color_details?.find(v => v.value === selectedColor)?.additional_price || 0),
-          }] : []),
-          ...(selectedSize ? [{
-            name: 'size',
-            id: variants.size_details?.find(v => v.value === selectedSize)?.id || selectedSize,
-            value: selectedSize,
-            additional_price: parseFloat(variants.size_details?.find(v => v.value === selectedSize)?.additional_price || 0),
-          }] : []),
-        ].filter(Boolean),
-      };
+    return true;
+  };
 
+  const constructCartItem = () => {
+    // If we have a matching combination, we should probably record its ID
+    const combinationId = currentCombination?.id;
+
+    const selectedVariantDetails = Object.entries(selectedVariants).map(([type, value]) => {
+      const group = variantGroups.find(g => g.type === type);
+      const detail = group?.details.find(v => v.value === value);
+      
+      if (!detail) return null;
+
+      return {
+        name: type.toLowerCase(),
+        id: detail.id,
+        value: value,
+        hex_code: detail.hex_code, // Pass hex_code if available
+        additional_price: parseFloat(detail.additional_price || 0)
+      };
+    }).filter(Boolean);
+
+    const variantIdSuffix = Object.values(selectedVariants).sort().join('-');
+    const itemId = `${id}-${variantIdSuffix}`;
+
+    return {
+      id: itemId,
+      productId: id,
+      name,
+      newPrice: parseFloat(finalPrice),
+      price: parseFloat(discounted_price || price),
+      additionalCost,
+      thumbnail,
+      combinationId, // Store validation reference
+      // Explicitly map color/size for backward compatibility
+      color: selectedVariants['Color'] || selectedVariants['color'],
+      size: selectedVariants['Size'] || selectedVariants['size'],
+      quantity: 1,
+      selected_variants: selectedVariantDetails,
+    };
+  };
+
+  const handleBuyNow = async () => {
+    if (!validateSelection()) return;
+
+    const newItem = constructCartItem();
     addToCart(id, 1, newItem);
     toast.success("Proceeding to summary...");
     navigate("/cart/summary");
@@ -173,50 +266,13 @@ const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userA
 
   const handleAddToCart = async () => {
     if (!isMounted) return;
+    if (!validateSelection()) return;
 
     try {
-      if (productColor.length > 0 && !selectedColor) {
-        toast.error('Please select a color');
-        return;
-      }
-
-      if (productSize.length > 0 && !selectedSize) {
-        toast.error('Please select a size');
-        return;
-      }
-
       setIsAddingToCart(true);
-
-      // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const newItem = {
-        id: `${id}-${selectedColor || ''}-${selectedSize || ''}`,
-        productId: id,
-        name,
-        newPrice: parseFloat(finalPrice), // Final price including additional costs
-        price: parseFloat(discounted_price || price), // Original price without additional costs
-        additionalCost, // Additional cost from variants
-        thumbnail,
-        color: selectedColor,
-        size: selectedSize,
-        quantity: 1,
-        selected_variants: [
-          ...(selectedColor ? [{
-            name: 'color',
-            id: variants.color_details?.find(v => v.value === selectedColor)?.id || selectedColor,
-            value: selectedColor,
-            additional_price: parseFloat(variants.color_details?.find(v => v.value === selectedColor)?.additional_price || 0),
-          }] : []),
-          ...(selectedSize ? [{
-            name: 'size',
-            id: variants.size_details?.find(v => v.value === selectedSize)?.id || selectedSize,
-            value: selectedSize,
-            additional_price: parseFloat(variants.size_details?.find(v => v.value === selectedSize)?.additional_price || 0),
-          }] : []),
-          // Add any other variant types here following the same pattern
-        ].filter(Boolean), // Remove any undefined entries
-      };
+      const newItem = constructCartItem();
       console.log({ newItem });
       addToCart(id, 1, newItem);
 
@@ -232,13 +288,10 @@ const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userA
   };
 
   return (
-    // Main container with vertical spacing between child elements
     <div className="flex flex-col space-y-6">
-      {/* Product Title */}
       <h1 className="text-text-primary text-3xl font-bold lg:text-4xl">
         {name}
       </h1>
-      {/* Price */}
       <div className="space-y-1">
         <div className="flex items-baseline gap-4">
           <span className="text-text-primary text-2xl font-medium lg:text-3xl">
@@ -250,47 +303,52 @@ const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userA
             </span>
           )}
         </div>
-        {additionalCost > 0 && (
+        {additionalCost !== 0 && (
           <p className="text-sm text-gray-500">
-            +{formatCurrency(additionalCost)} additional for selected variants
+            {additionalCost > 0 ? '+' : ''}{formatCurrency(additionalCost)} modifier
           </p>
         )}
       </div>
-      {/* Product Description */}
       <p className="text-text-secondary leading-relaxed">{description}</p>
-      {/* Swatch Groups */}
+      
       <div className="space-y-6">
-        {productColor.length > 0 && (
+        {variantGroups.map((group) => (
           <SwatchGroup
-            label="Color"
-            type="color"
-            options={productColor}
-            selectedValue={selectedColor}
-            onChange={setSelectedColor}
+            key={group.type}
+            label={group.type}
+            type={group.type}
+            options={group.options} // Now includes hex_code
+            selectedValue={selectedVariants[group.type]}
+            onChange={(value) => handleVariantChange(group.type, value)}
+            getOptionStatus={(value) => {
+               // Optional: Pass capability to check if this option is valid given OTHER current selections
+               const isAvailable = checkOptionAvailability(group.type, value);
+               return { disabled: !isAvailable };
+            }}
           />
-        )}
-        {productSize.length > 0 && (
-          <SwatchGroup
-            label="Size"
-            type="size"
-            options={productSize}
-            selectedValue={selectedSize}
-            onChange={setSelectedSize}
-          />
-        )}
+        ))}
       </div>
-      {/* Delivery Info */}
+
       <div className="py-4 text-sm">
         <p className="font-semibold">
+           {currentCombination && currentCombination.stock > 0 
+             ? `In Stock (${currentCombination.stock} available)` 
+             : currentCombination 
+               ? "Out of Stock" 
+               : "Select options to see availability"
+           }
+        </p>
+         <p className="font-normal text-gray-500 mt-1">
           Buy now and receive between February 12th - 14th!
         </p>
       </div>
-      {/* Action Buttons */}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Button 
           variant="secondary" 
           onClick={handleBuyNow}
           className="w-full bg-gray-950 text-gray-50 cursor-pointer flex items-center justify-center gap-2"
+          disabled={currentCombination?.stock <= 0}
         >
           {`Proceed to Payment (${formatCurrency(finalPrice)})`}
         </Button>
@@ -299,7 +357,7 @@ const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userA
           onClick={handleAddToCart}
           className={`flex w-full cursor-pointer items-center justify-center gap-2 ${isAddingToCart ? 'opacity-75 cursor-not-allowed' : ''
             }`}
-          disabled={isAddingToCart}
+          disabled={isAddingToCart || (currentCombination?.stock <= 0)}
         >
           {isAddingToCart ? (
             <>
@@ -314,7 +372,6 @@ const ProductInfo = ({ product, onToggleReviews, isReviewsVisible = false, userA
           )}
         </Button>
       </div>
-      {/* See Reviews Link */}
       <div className="">
         <button
           type="button"

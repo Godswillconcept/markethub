@@ -10,7 +10,6 @@ export default function EditAddressPage() {
     const navigate = useNavigate();
     const { address } = useAddress(id);
     const { updateAddress, isUpdating } = useUpdateAddress();
-    console.log("From EditAddressPage", address);
 
     const {
         register,
@@ -34,7 +33,6 @@ export default function EditAddressPage() {
 
 
     const onSubmit = (data) => {
-        console.log("submit data", data);
         updateAddress(
             { 
                 id, 

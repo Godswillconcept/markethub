@@ -35,7 +35,7 @@ const ROUTE_PATTERNS = [
   { pattern: /^\/wishlist\/summary$/, template: '/wishlist/summary' },
   { pattern: /^\/wishlist\/move-to-cart$/, template: '/wishlist/move-to-cart' },
   { pattern: /^\/wishlist$/, template: '/wishlist' },
-  { pattern: /^\/orders\/verify-payment\/([\w-]+)$/, template: '/orders/verify-payment/:reference' },
+  { pattern: /^\/orders\/verify\/([\w-]+)$/, template: '/orders/verify/:reference' },
   { pattern: /^\/orders\/items\/([\w-]+)\/status$/, template: '/orders/items/:id/status' },
   { pattern: /^\/auth\/verify-phone-change\/([\w-]+)$/, template: '/auth/verify-phone-change/:token' },
   { pattern: /^\/auth\/approve-phone-change\/([\w-]+)$/, template: '/auth/approve-phone-change/:userId' },

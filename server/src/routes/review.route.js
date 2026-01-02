@@ -17,6 +17,14 @@ const {
  */
 router.get('/', listReviewsValidation, reviewController.getReviews);
 
+
+/**
+ * @desc    Get pending reviews for authenticated user
+ * @route   GET /api/v1/reviews/pending
+ * @access  Private (Authenticated users)
+ */
+router.get('/pending', protect, reviewController.getPendingReviews);
+
 /**
  * @desc    Get a specific review by ID
  * @route   GET /api/v1/reviews/:id

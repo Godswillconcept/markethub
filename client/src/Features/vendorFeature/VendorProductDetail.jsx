@@ -7,7 +7,7 @@ import { formatCurrency } from "../../utils/formatCurrency.js";
 import { useForm, Controller } from "react-hook-form";
 import InputField from "../../ui/InputField.jsx";
 import PhoneInput from "../../ui/PhoneInput.jsx";
-import { useVendorProductAnalysis } from "./useVendorProductAnalysis.js";
+import useVendorProductAnalysis from "./useVendorProductAnalysis.js";
 import { getImageUrl } from "../../utils/imageUtil.js";
 
 function VendorProductDetail() {

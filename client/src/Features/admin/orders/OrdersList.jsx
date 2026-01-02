@@ -6,6 +6,7 @@ import { useState, useMemo, useEffect } from "react";
 import AdminFilterBar from "../AdminFilterBar.jsx";
 import { useAdminOrders } from "./useAdminOrders.js";
 import { LoadingSpinner } from "../../../ui/Loading/LoadingSpinner.jsx";
+import { formatDateUS } from "../../../utils/helper.js";
 
 const headers = [
   { key: "id", label: "ID", className: "w-16" },
@@ -162,11 +163,7 @@ const OrdersList = () => {
       {order?.details?.address?.address_line}
     </td>,
     <td key="date" className="px-6 py-4 text-sm text-gray-500">
-      {new Date(order.order_date).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })}
+      {formatDateUS(order.order_date)}
     </td>,
     <td key="product" className="px-6 py-4 text-sm font-medium text-gray-900">
       {order.items

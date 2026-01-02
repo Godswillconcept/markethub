@@ -220,6 +220,9 @@ router.get(
 // Original logout (maintained for backward compatibility)
 router.get("/logout-original", authController.logout);
 
+// Add GET route for logout to handle the current issue
+router.get("/logout", authController.logout);
+
 // Admin routes (require admin role)
 router.use(restrictTo("admin"));
 

@@ -1,20 +1,24 @@
 // hooks/useLogin.js
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { login as loginApi } from "../../services/apiAuth.js";
 import { toast } from "react-hot-toast";
+import { useAuth } from "./AuthContext.jsx";
 
 export default function useLogin() {
-  const queryClient = useQueryClient();
+  const { setAuth } = useAuth();
 
   const mutation = useMutation({
     mutationFn: ({ email, password }) => loginApi({ email, password }),
     onSuccess: (response) => {
-      console.log(response);
-      localStorage.setItem("token", response.token);
-      // Removed storing user data in localStorage - React Query will fetch it
+      console.log("✅ Login response:", response);
 
-      // Update query cache for user data
-      queryClient.setQueryData(["user"], response.data);
+      // Use setAuth from AuthContext for reactive state updates
+      setAuth({
+        token: response.token,
+        session_id: response.session?.id,
+        refreshToken: response.refreshToken,
+        user: response.data
+      });
 
       // 🔄 CRITICAL FIX: Remove immediate cart clearing - integrate cart sync instead
       // localStorage.removeItem("cart"); // REMOVED: This was destroying cart data
@@ -70,7 +74,25 @@ export default function useLogin() {
     },
     onError: (error) => {
       console.error('❌ Login error:', error);
-      const errorMessage = error?.response?.data?.message || error?.message || 'Login failed';
+      
+      // Handle different error types
+      let errorMessage = 'Login failed';
+      
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Check for specific authentication errors
+      if (error?.response?.status === 401) {
+        errorMessage = "Invalid email or password";
+      } else if (error?.response?.status === 403) {
+        errorMessage = "Account is not active. Please verify your email.";
+      } else if (error?.response?.status >= 500) {
+        errorMessage = "Server error. Please try again later.";
+      }
+      
       toast.error(errorMessage);
     },
   });

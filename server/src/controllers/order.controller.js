@@ -647,12 +647,16 @@ async function createOrder(req, res) {
 
     // Initialize payment with Paystack
     const reference = `STYLAY-${Date.now()}-${order.id}`;
+    
+    // Support dynamic callback URLs from the frontend to handle ngrok/different origins
+    const clientCallbackUrl = req.body.callbackUrl || process.env.PAYSTACK_CALLBACK_URL;
+    const finalCallbackUrl = clientCallbackUrl ? `${clientCallbackUrl}/${reference}` : undefined;
 
     const paymentData = await paymentService.initializePayment({
       email: user.email,
       amount: totalAmount * 100, // Convert to kobo
       reference,
-      callbackUrl: `${process.env.PAYSTACK_CALLBACK_URL}/${reference}`, // Use frontend URL for callback
+      callbackUrl: finalCallbackUrl,
       metadata: {
         orderId: order.id,
         userId: user.id,
@@ -1562,7 +1566,9 @@ async function verifyPayment(req, res) {
         {
           model: Order,
           as: "order",
-          where: userId ? { user_id: userId } : undefined,
+          // Only filter by user if userId is present (protected route)
+          // For public verify callbacks, we trust the reference
+          where: userId ? { user_id: userId } : {},
           required: true,
         },
       ],
@@ -1576,16 +1582,12 @@ async function verifyPayment(req, res) {
     const { order } = transactionRecord;
 
     // Skip if already verified
-    if (transactionRecord.status === "success") {
+    if (transactionRecord.status === "completed" || transactionRecord.status === "success") {
+      console.log(`[VerifyPayment] Transaction ${reference} already verified.`);
       return res.status(200).json({
         status: "success",
         message: "Payment already verified",
-        data: {
-          orderId: order.id,
-          status: order.order_status,
-          paymentStatus: order.payment_status,
-          reference: transactionRecord.transaction_id,
-        },
+        orderId: order.id,
       });
     }
 
@@ -1616,7 +1618,7 @@ async function verifyPayment(req, res) {
     // Update transaction status
     await transactionRecord.update(
       {
-        status: "success",
+        status: "completed", // Match model enum: 'pending', 'completed', 'failed', 'refunded'
         metadata: {
           ...(transactionRecord.metadata || {}),
           verification: verification.data,
@@ -1637,6 +1639,7 @@ async function verifyPayment(req, res) {
 
     // Commit the transaction before sending emails
     await transaction.commit();
+    console.log(`[VerifyPayment] ✅ Payment verified and order updated: ${order.id}`);
 
     // Send notifications after successful commit
     try {
@@ -1675,12 +1678,7 @@ async function verifyPayment(req, res) {
     res.status(200).json({
       status: "success",
       message: "Payment verified successfully",
-      data: {
-        orderId: order.id,
-        status: "processing",
-        paymentStatus: "paid",
-        reference: transactionRecord.transaction_id,
-      },
+      orderId: order.id,
     });
   } catch (error) {
     // Only rollback if transaction hasn't been committed yet
@@ -1706,9 +1704,9 @@ async function verifyPayment(req, res) {
     }
 
     res.status(400).json({
-      status: "error",
+      status: "failed",
       message: error.message || "Payment verification failed",
-      error: process.env.NODE_ENV === "development" ? error.stack : undefined,
+      orderId: transactionRecord ? transactionRecord.order_id : null,
     });
   }
 }

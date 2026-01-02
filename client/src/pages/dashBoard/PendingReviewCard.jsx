@@ -12,7 +12,7 @@ function PendingReviewCard({ item }) {
       className="flex items-start gap-4 rounded-md border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md focus:ring-2 focus:ring-orange-200 focus:outline-none"
     >
       {/* Thumbnail */}
-      <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-gray-100 md:h-20 md:w-20">
+      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gray-100 md:h-20 md:w-20">
         <img
           src={getImageUrl(item.image)}
           alt=""
@@ -47,13 +47,14 @@ function PendingReviewCard({ item }) {
           <button
             onClick={(e) => {
               e.preventDefault();
-              navigate(`${item.id}`, {
+              navigate(`${item.product_id}`, {
                 state: {
                   product: {
-                    id: item.id,
+                    id: item.product_id, // Ensure we pass product ID
                     title: item.title,
                     image: item.image,
                   },
+                  orderId: item.id, // Pass order ID if needed for context
                 },
               });
               setRated(true);

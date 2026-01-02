@@ -9,15 +9,19 @@ import { getImageUrl } from "../utils/imageUtil.js";
 const ProductCard = memo(function ProductCard({ product }) {
   const navigate = useNavigate();
   const { addToCart } = useUnifiedCart();
+  console.log("ProductCard props:", product);
   // const inStock = true;
   const {
     id,
     name,
     thumbnail,
     price,
-    Category: { name: categoryName },
+    Category,
+    category, // Add lowercase category for compatibility
     inStock = true,
   } = product;
+  
+  const categoryName = (Category?.name || category?.name) || "Uncategorized";
   console.log('[ProductCard] Product thumbnail from API:', thumbnail);
   console.log('[ProductCard] Product ID:', id);
   const { addToWishList, isAddingToWishList } = useAddWishList();

@@ -16,7 +16,8 @@ const SwatchGroup = ({
   options = [], 
   type, 
   selectedValue, 
-  onChange 
+  onChange,
+  getOptionStatus // New prop to check specific option status
 }) => {
   if (!options || options.length === 0) {
     return null;
@@ -30,14 +31,21 @@ const SwatchGroup = ({
       <div className="flex flex-wrap gap-2">
         {options.map((option) => {
           const isActive = selectedValue === option.value;
+          
+          // Check availability/status if callback provided
+          const status = getOptionStatus ? getOptionStatus(option.value) : {};
+          const isDisabled = status.disabled || false;
+
           return (
             <Swatch
               key={option.value}
               type={type}
               value={option.value}
               label={option.label || option.value}
+              color={option.hex_code} // Pass hex code if available
               isActive={isActive}
-              onClick={() => onChange(option.value)}
+              isDisabled={isDisabled}
+              onClick={() => !isDisabled && onChange(option.value)}
             />
           );
         })}
@@ -52,11 +60,13 @@ SwatchGroup.propTypes = {
     PropTypes.shape({
       value: PropTypes.string.isRequired,
       label: PropTypes.string,
+      hex_code: PropTypes.string, // Add to prop types
     })
   ).isRequired,
-  type: PropTypes.oneOf(['color', 'size']).isRequired,
+  type: PropTypes.string.isRequired,
   selectedValue: PropTypes.string,
   onChange: PropTypes.func.isRequired,
+  getOptionStatus: PropTypes.func, // Add new prop type
 };
 
 export default SwatchGroup;

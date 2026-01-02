@@ -114,7 +114,7 @@ const permissionMap = {
   'GET /orders/my-orders': 'orders_read',
   'GET /orders/:id': 'orders_read',
   'PATCH /orders/:id/cancel': 'orders_cancel',
-  'GET /orders/verify-payment/:reference': null, // Public
+  'GET /orders/verify/:reference': null, // Public
   'POST /orders/webhook/payment': null, // Public (webhook)
   'GET /orders/vendor/orders': null, // Vendor access controlled by isVendor middleware
   'PATCH /orders/items/:id/status': 'orders_update',
@@ -401,7 +401,7 @@ const publicRoutes = [
 
   // Order routes (webhooks)
   'POST /orders/webhook/payment',
-  'GET /orders/verify-payment/:reference',
+  'GET /orders/verify/:reference',
 
   // Product routes
   'GET /products/:productId/reviews',

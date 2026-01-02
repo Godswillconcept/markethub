@@ -108,14 +108,27 @@ function CartDetails({ item, formatCurrency }) {
         className="h-[163px] w-[130px] rounded-lg object-cover"
       />
 
-      <div className="flex-grow text-center sm:text-left">
+      <div className="grow text-center sm:text-left">
         <div className="flex flex-col gap-7">
           <div className="flex justify-between">
             <div className="flex flex-col items-start">
               <h3 className="text-lg font-bold">{item.name}</h3>
               <p className="text-sm text-gray-500">
-                {item.color && <span>{item.color}</span>}
-                {item.size && <span> / {item.size}</span>}
+                {item.selected_variants && item.selected_variants.length > 0 ? (
+                  <span className="capitalize">
+                    {item.selected_variants.map((variant, index) => (
+                      <span key={variant.id || index}>
+                        {index > 0 && " / "}
+                        {variant.name}: {variant.value}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <>
+                    {item.color && <span>Color: {item.color}</span>}
+                    {item.size && <span>{item.color ? " / " : ""}Size: {item.size}</span>}
+                  </>
+                )}
               </p>
               {isItemOptimistic && (
                 <div className="mt-1 flex items-center text-xs text-blue-600">

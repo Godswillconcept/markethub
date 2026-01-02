@@ -1,6 +1,7 @@
 import { ChevronLeft, Calendar, Eye, Tag } from "lucide-react";
 import { useBlogDetail } from "./useBlogDetail.js";
 import { useNavigate } from "react-router";
+import { formatDate } from "../../utils/helper.js";
 
 function JournalDetail() {
   const { blog, isLoading, error } = useBlogDetail();
@@ -53,13 +54,11 @@ function JournalDetail() {
     : [];
 
   // Format date
-  const formattedDate = blog.created_at
-    ? new Date(blog.created_at).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "";
+  const formattedDate = formatDate(
+    blog.created_at,
+    { month: "long" },
+    "en-US"
+  );
 
   // Split content into paragraphs
   const paragraphs = blog.content
@@ -213,11 +212,11 @@ function JournalDetail() {
             <p className="text-sm text-gray-500">
               Last updated:{" "}
               {blog.updated_at
-                ? new Date(blog.updated_at).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })
+                ? formatDate(
+                    blog.updated_at,
+                    { month: "long" },
+                    "en-US"
+                  )
                 : "N/A"}
             </p>
             <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800">

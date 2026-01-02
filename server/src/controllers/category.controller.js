@@ -538,6 +538,7 @@ const getCategoryProducts = async (req, res) => {
         },
         {
           model: Category,
+          as: 'category',
           attributes: ['id', 'name', 'slug', 'parent_id']
         },
         {
@@ -556,7 +557,7 @@ const getCategoryProducts = async (req, res) => {
       limit: limitNum,
       offset,
       subQuery: false,
-      group: ['Product.id', 'Vendor.id', 'Vendor.store.id', 'Category.id', 'images.id']
+      group: ['Product.id', 'vendor.id', 'vendor->store.id', 'category.id', 'images.id']
     });
 
     // Get review stats for all products in one query
@@ -592,12 +593,12 @@ const getCategoryProducts = async (req, res) => {
         ...productData,
         average_rating: stats.average_rating,
         review_count: stats.review_count,
-        category: {
-          id: product.Category.id,
-          name: product.Category.name,
-          slug: product.Category.slug,
-          is_parent: product.Category.parent_id === null
-        }
+        Category: productData.category ? {
+          id: productData.category.id,
+          name: productData.category.name,
+          slug: productData.category.slug,
+          is_parent: productData.category.parent_id === null
+        } : null
       };
     });
 

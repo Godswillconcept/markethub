@@ -146,7 +146,7 @@ const protect = async (req, res, next) => {
     const sessionId = req.headers['x-session-id'] || req.body.session_id;
     if (sessionId) {
       try {
-        const { UserSession } = require("../models/user-session.model");
+        const UserSession = require("../models/user-session.model");
         const session = await UserSession.getSessionById(sessionId);
         
         if (session && session.isValid() && session.user_id === currentUser.id) {
@@ -719,7 +719,7 @@ const enhancedAuth = async (req, res, next) => {
       const sessionId = req.headers['x-session-id'] || req.body.session_id;
       if (sessionId && req.user) {
         try {
-          const { UserSession } = require("../models/user-session.model");
+          const UserSession = require("../models/user-session.model");
           const session = await UserSession.getSessionById(sessionId);
           
           if (session) {
@@ -813,7 +813,7 @@ const validateSession = async (req, res, next) => {
       return next(new AppError("User authentication required", 401));
     }
 
-    const { UserSession } = require("../models/user-session.model");
+    const UserSession = require("../models/user-session.model");
     const session = await UserSession.getSessionById(sessionId);
 
     if (!session) {

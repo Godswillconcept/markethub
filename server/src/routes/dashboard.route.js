@@ -57,63 +57,24 @@ vendorRouter.use(protect, isVendor);
 // Vendor dashboard metrics
 vendorRouter.get(
   "/metrics",
-  cache({
-    ttl: 300,
-    type: "vendor",
-    keyGenerator: (req) => `vendor:metrics:${req.user.id}`,
-    invalidateOn: ["order:created", "order:updated", "vendor:profile_updated"],
-  }),
   getVendorDashboard
 );
 
 // Vendor products
 vendorRouter.get(
   "/products",
-  cache({
-    ttl: 600,
-    type: "vendor",
-    keyGenerator: (req) => `vendor:products:${req.user.id}`,
-    invalidateOn: [
-      "product:created",
-      "product:updated",
-      "product:deleted",
-      "vendor:product_updated",
-    ],
-  }),
   getVendorProducts
 );
 
 // Vendor earnings
 vendorRouter.get(
   "/earnings",
-  cache({
-    ttl: 300,
-    type: "vendor",
-    keyGenerator: (req) => `vendor:earnings:${req.user.id}`,
-    invalidateOn: [
-      "order:created",
-      "order:updated",
-      "payout:created",
-      "vendor:earnings_updated",
-    ],
-  }),
   getVendorEarnings
 );
 
 // Vendor earnings breakdown
 vendorRouter.get(
   "/earnings/breakdown",
-  cache({
-    ttl: 180,
-    type: "vendor",
-    keyGenerator: (req) => `vendor:earnings:breakdown:${req.user.id}`,
-    invalidateOn: [
-      "order:created",
-      "order:updated",
-      "payout:created",
-      "vendor:earnings_updated",
-    ],
-  }),
   getVendorEarningsBreakdown
 ); 
 

@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { formatDateUS } from "../../../utils/helper.js";
 function OrderSummarySection({ order }) {
   // Or directly in the main component
   if (!order?.data?.order) {
@@ -38,13 +39,7 @@ function OrderSummarySection({ order }) {
             Order Date
           </div>
           <div className="text-sm text-gray-900">
-            {actualOrder.order_date
-              ? new Date(actualOrder.order_date).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })
-              : "N/A"}
+            {actualOrder.order_date ? formatDateUS(actualOrder.order_date) : "N/A"}
           </div>
         </div>
         <div className="p-4">

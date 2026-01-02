@@ -35,7 +35,7 @@ export default defineConfig({
 
   // Preview configuration for production deployment
   preview: {
-    port: 8080,
+    port: 4173, // Changed from 8080 to avoid conflict
     host: '0.0.0.0'
   },
 

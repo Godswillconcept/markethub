@@ -160,6 +160,7 @@ const getNewArrivals = catchAsync(async (req, res, next) => {
       },
       {
         model: db.Category,
+        as: "category",
         attributes: ["id", "name", "slug"],
       },
       {
@@ -269,6 +270,7 @@ const getTrendingNow = catchAsync(async (req, res, next) => {
     include: [
       {
         model: db.Category,
+        as: "category",
         attributes: ["id", "name", "slug"],
       },
       {
@@ -578,6 +580,7 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
     include: [
       {
         model: db.Category,
+        as: "category",
         attributes: ["id", "name", "slug"],
       },
     ],
@@ -2150,6 +2153,7 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
       include: [
         {
           model: db.Category,
+        as: "category",
           attributes: ["id", "name", "slug"],
         },
         {
@@ -3254,6 +3258,7 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
       include: [
         {
           model: db.Category,
+        as: "category",
           attributes: ["name", "slug"],
         },
       ],

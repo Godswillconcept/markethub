@@ -108,6 +108,7 @@ const corsOptions = {
     'Access-Control-Allow-Origin',
     'Access-Control-Allow-Credentials',
     'ngrok-skip-browser-warning', // Special header for ngrok
+    'x-session-id', // Session ID header for authentication
   ],
 
   // Exposed headers (headers that the client can access)

@@ -1,4 +1,4 @@
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 
 import InputField from "../../ui/InputField.jsx";
 import Checkbox from "../../ui/Checkbox.jsx";
@@ -29,13 +29,20 @@ function SignUpForm() {
 
   const { signup, isPending } = useSignup();
 
+  // Get the terms checkbox value to control button state (reactive)
+  const termsValue = useWatch({
+    control,
+    name: "terms",
+    defaultValue: false,
+  });
+
   function onSubmitSignUp(data) {
     const { confirmPassword, terms, ...payload } = data;
 
     signup(payload, {
       onSuccess: () => {
         reset();
-        navigate("/phoneVerification", { state: { email: payload.email } });
+        navigate("/verify-email", { state: { email: payload.email } });
       },
       // Error is now handled globally by useSignup hook with toast
     });
@@ -193,7 +200,7 @@ function SignUpForm() {
         <SubmitButton
           variant="black"
           label={isPending ? "Signing up..." : "Next"}
-          disabled={!isValid || isPending}
+          disabled={!termsValue || isPending}
         />
         <p className="mt-4 text-center text-sm text-gray-600">
           Already have an account?{" "}

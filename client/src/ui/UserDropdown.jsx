@@ -25,11 +25,22 @@ export const DropdownItem = ({ to, onClick, children, className = "", icon: Icon
       );
 
       return to ? (
-        <NavLink to={to} className={baseClasses}>
+        <NavLink
+          to={to}
+          className={baseClasses}
+          onClick={() => console.log('[UserDropdown] Navigation clicked:', { to, children })}
+        >
           {content}
         </NavLink>
       ) : (
-        <button onClick={onClick} className={baseClasses} disabled={!onClick}>
+        <button
+          onClick={() => {
+            console.log('[UserDropdown] Button clicked:', { children });
+            if (onClick) onClick();
+          }}
+          className={baseClasses}
+          disabled={!onClick}
+        >
           {content}
         </button>
       );
@@ -41,7 +52,16 @@ const UserDropdown = ({ children }) => {
   const { user } = useUser();
   const { logout, isPending } = useLogout();
 
-  if (!user) return null;
+  console.log('[UserDropdown] Render:', {
+    hasUser: !!user,
+    userRoles: user?.user?.roles || user?.roles || [],
+    userName: user?.user?.first_name || user?.first_name
+  });
+
+  if (!user) {
+    console.log('[UserDropdown] No user data, returning null');
+    return null;
+  }
 
   return (
     <div className="relative">

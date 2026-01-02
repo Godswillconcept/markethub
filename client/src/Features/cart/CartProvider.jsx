@@ -1,21 +1,16 @@
-import React, { createContext, useContext } from 'react';
-import { useSelector } from 'react-redux';
+import { createContext, useContext } from 'react';
 
 export const CartContext = createContext();
 
-export function CartProvider({ children }) {
-  const cartItems = useSelector((state) => state.cart.items);
-  
-  const cartCount = cartItems.length;
-  const cartTotal = cartItems.reduce(
-    (total, item) => total + (parseFloat(item.price) || 0) * (item.quantity || 1),
-    0
-  );
+import { useUnifiedCart } from './useUnifiedCart.js';
 
+export function CartProvider({ children }) {
+  const cartData = useUnifiedCart();
+  
+  // Expose all data and methods from useUnifiedCart
+  // This ensures sync logic runs globally and unified data is available
   const value = {
-    cartItems,
-    cartCount,
-    cartTotal,
+    ...cartData
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

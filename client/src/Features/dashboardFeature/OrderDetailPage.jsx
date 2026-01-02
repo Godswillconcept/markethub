@@ -6,6 +6,7 @@ import { useOrderDetail } from "./useDetailOrder.js";
 import ProductUpdateModal from "./ProductUpdateModal.jsx";
 import toast from "react-hot-toast";
 import { getImageUrl } from "../../utils/imageUtil.js";
+import { formatDateGB } from "../../utils/helper.js";
 
 function OrderDetailPage() {
     const { orderId } = useParams();
@@ -19,17 +20,23 @@ function OrderDetailPage() {
 
     // Monitor order data changes
     useEffect(() => {
-        // Removed console logging for production
-    }, [order, isLoading, error, orderId]);
+        // Handle payment status from query parameters
+        const queryParams = new URLSearchParams(location.search);
+        const paymentStatus = queryParams.get("payment");
+        const message = queryParams.get("message");
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-        });
-    };
+        if (paymentStatus === "success") {
+            toast.success("Payment verified successfully!");
+            // Clean up the URL by removing the query params
+            navigate(location.pathname, { replace: true });
+        } else if (paymentStatus === "failed") {
+            toast.error(message || "Payment verification failed.");
+            // Clean up the URL
+            navigate(location.pathname, { replace: true });
+        }
+    }, [location.search, location.pathname, navigate]);
+
+    // Use the centralized formatDateGB function from utils
 
     const handleBack = () => {
         const from = location.state?.from || "/settings/orders";
@@ -116,13 +123,7 @@ function OrderDetailPage() {
         : "No address available";
 
     // Format date
-    const orderDate = order.order_date
-        ? new Date(order.order_date).toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-        })
-        : "N/A";
+    const orderDate = order.order_date ? formatDateGB(order.order_date) : "N/A";
 
     // Get current step index
     const statusSteps = {

@@ -177,6 +177,7 @@ const addToCart = async (req, res, next) => {
     let basePrice = product.price;
     let totalAdditionalPrice = 0;
     let finalVariantId = null;
+    let resolvedCombinationId = null;
 
     if (finalSelectedVariants.length > 0) {
       // Validate and calculate additional price
@@ -210,6 +211,45 @@ const addToCart = async (req, res, next) => {
         totalAdditionalPrice += sel.additional_price || 0;
       }
       finalVariantId = null;
+
+      // Resolve combination_id from selected variants
+      // Find the combination that matches all selected variant IDs
+      if (product.combinations && product.combinations.length > 0) {
+        const selectedVariantIds = finalSelectedVariants.map(v => Number(v.id)).sort();
+        
+        for (const combo of product.combinations) {
+          // Get variant IDs for this combination
+          const comboVariantIds = await sequelize.models.VariantCombinationVariant.findAll({
+            where: { combination_id: combo.id },
+            attributes: ['variant_id'],
+            raw: true
+          });
+          
+          const comboIds = comboVariantIds.map(cv => Number(cv.variant_id)).sort();
+          
+          // Check if arrays match
+          if (JSON.stringify(selectedVariantIds) === JSON.stringify(comboIds)) {
+            resolvedCombinationId = combo.id;
+            
+            // Check stock for this specific combination
+            if (combo.stock < quantity) {
+              return next(
+                new AppError(
+                  `Insufficient stock for selected variant. Available: ${combo.stock}`,
+                  400
+                )
+              );
+            }
+            break;
+          }
+        }
+
+        if (!resolvedCombinationId) {
+          return next(
+            new AppError("Invalid variant combination selected", 400)
+          );
+        }
+      }
     } else if (variant_id) {
       // Backward compatibility: single variant (no additional_price/stock on ProductVariant anymore)
       const variant = product.variants.find((v) => v.id === variant_id);
@@ -235,6 +275,7 @@ const addToCart = async (req, res, next) => {
         // Use the first active combination as default
         const defaultCombo = product.combinations[0];
         defaultStock = defaultCombo.stock;
+        resolvedCombinationId = defaultCombo.id;
       } else {
         // Fallback to legacy inventory if no combinations found (should not happen with new fix)
         const inventory = await product.getInventory();
@@ -327,6 +368,7 @@ const addToCart = async (req, res, next) => {
         cart_id: cart.id,
         product_id: product_id,
         selected_variants: sortedSelectedVariants,
+        combination_id: resolvedCombinationId,
         quantity: quantity,
         price: basePrice,
         total_price: quantity * price,
@@ -757,7 +799,9 @@ const getCartSummary = async (req, res, next) => {
                   "name",
                   "price",
                   "discounted_price",
+                  "thumbnail",
                 ],
+                include: [{ model: sequelize.models.Category, as: "category", attributes: ["name"] }],
               },
             ],
           },
@@ -790,7 +834,9 @@ const getCartSummary = async (req, res, next) => {
                   "name",
                   "price",
                   "discounted_price",
+                  "thumbnail",
                 ],
+                include: [{ model: sequelize.models.Category, as: "category", attributes: ["name"] }],
               },
             ],
           },
@@ -830,8 +876,11 @@ const getCartSummary = async (req, res, next) => {
           id: item.product.id,
           name: item.product.name,
           price: parseFloat(item.product.discounted_price || item.product.price),
+          thumbnail: item.product.thumbnail,
+          category: item.product.category,
         },
-        variants: item.selected_variants || [],
+        selected_variants: item.selected_variants || [],
+        combination_id: item.combination_id || null,
         quantity: item.quantity,
         subtotal: parseFloat(item.total_price),
       })),

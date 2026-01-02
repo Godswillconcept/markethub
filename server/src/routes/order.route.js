@@ -5,7 +5,7 @@ const { protect, isVendor } = require("../middlewares/auth");
 
 // Apply authentication middleware to all routes except webhook
 router.use((req, res, next) => {
-  if (req.path === "/webhook/payment") {
+  if (req.path === "/webhook/payment" || req.path.startsWith("/verify/")) {
     return next();
   }
   protect(req, res, next);
@@ -19,7 +19,7 @@ router.get("/:id", orderController.getOrder);
 router.patch("/:id/cancel", orderController.cancelOrder);
 
 // Payment routes
-router.get("/verify-payment/:reference", orderController.verifyPayment);
+router.get("/verify/:reference", orderController.verifyPayment);
 
 // Webhook for payment gateway callbacks (public)
 router.post(

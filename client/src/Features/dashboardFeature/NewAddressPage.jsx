@@ -34,7 +34,6 @@ function NewAddressPage() {
         ...data,
       };
 
-      console.log("Form data:", formData);
       createAddress(formData);
     } catch (error) {
       console.error("Error submitting form:", error);
@@ -221,7 +220,7 @@ function NewAddressPage() {
             {...register("zip", {
               required: "ZIP/Postal code is required",
               pattern: {
-                value: /^\d{5}(-\d{4})?$/,
+                value: /^\d{5,6}(-\d{4})?$/,
                 message: "Please enter a valid ZIP/Postal code",
               },
             })}

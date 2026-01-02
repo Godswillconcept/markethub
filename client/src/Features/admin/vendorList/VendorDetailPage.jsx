@@ -14,6 +14,7 @@ import { useAdminVendorDetail } from "./useAdminVendorDetail.js";
 import OverallMetrics from "./OverallMetrics.jsx";
 import { LoadingSpinner } from "../../../ui/Loading/LoadingSpinner.jsx";
 import { getImageUrl } from "../../../utils/imageUtil.js";
+import { formatDateUS } from "../../../utils/helper.js";
 // import { getStockStatusClasses } from "../../utils/helper";
 // import { getStatusClasses } from "../../utils/helper";
 
@@ -91,13 +92,7 @@ const VendorDetailPage = () => {
                 <CalendarDaysIcon className="mr-2 h-4 w-4 text-gray-500" />
                 <span>
                   Date Joined:
-                  {new Date(
-                    vendor?.vendor_info?.date_joined,
-                  ).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
+                  {formatDateUS(vendor?.vendor_info?.date_joined)}
                 </span>
               </div>
               <div className="flex items-center">
@@ -201,10 +196,7 @@ const VendorDetailPage = () => {
                       {product.total_sales}
                     </td>
                     <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                      {new Date(product.last_updated).toLocaleDateString(
-                        "en-US",
-                        { year: "numeric", month: "short", day: "numeric" },
-                      )}
+                      {formatDateUS(product.last_updated)}
                     </td>
                   </tr>
                 ))}

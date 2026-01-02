@@ -973,7 +973,7 @@ const getVendorProducts = async (req, res, next) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       include: [
-        { model: Category, attributes: ["id", "name", "slug"] },
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
         { model: ProductImage, limit: 1, as: "images" }, // Only get first image for listing
       ],
       order: [["created_at", "DESC"]],

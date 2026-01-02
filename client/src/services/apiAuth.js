@@ -190,13 +190,26 @@ export async function login(credentials) {
 export async function currentUser() {
     try {
         const token = localStorage.getItem("token");
-        console.log("🔑 currentUser: Token exists:", !!token);
+        const sessionId = localStorage.getItem("session_id");
+        console.log("🔑 currentUser: Token exists:", !!token, "Session ID exists:", !!sessionId);
 
-        if (!token) throw new Error("No token found");
+        if (!token) {
+            const error = new Error("No token found");
+            error.isAuthError = true;
+            throw error;
+        }
+
+        if (!sessionId) {
+            console.warn("⚠️ currentUser: No session_id found, token refresh may fail");
+        }
 
         console.log("🔄 currentUser: Making API request...");
         const { data } = await axiosInstance.get("/auth/me", {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: {
+                Authorization: `Bearer ${token}`,
+                // Add session_id header if available
+                ...(sessionId && { "X-Session-Id": sessionId })
+            }
         });
 
         console.log("📥 currentUser: Raw API response:", data);
@@ -215,6 +228,12 @@ export async function currentUser() {
         return userData;
     } catch (error) {
         console.error("❌ currentUser: API error:", error.response?.data || error.message);
+        
+        // Mark authentication errors for special handling
+        if (error.response?.status === 401) {
+            error.isAuthError = true;
+        }
+        
         throw new Error(error.response?.data?.message || "Failed to get user profile");
     }
 }

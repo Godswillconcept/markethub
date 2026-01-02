@@ -1,14 +1,34 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BsArrowLeft } from "react-icons/bs";
 import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import { useOrders } from "./useOrders.js";
+import { formatDateGB } from "../../utils/helper.js";
 
 function Order() {
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedFilter, setSelectedFilter] = useState("all");
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Handle payment status from query parameters
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const paymentStatus = queryParams.get("payment");
+        const message = queryParams.get("message");
+
+        if (paymentStatus === "success") {
+            toast.success("Payment verified successfully!");
+            // Clean up the URL by removing the query params
+            navigate(location.pathname, { replace: true });
+        } else if (paymentStatus === "failed") {
+            toast.error(message || "Payment verification failed.");
+            // Clean up the URL
+            navigate(location.pathname, { replace: true });
+        }
+    }, [location.search, location.pathname, navigate]);
 
 
     const itemsPerPage = 5;
@@ -33,14 +53,7 @@ function Order() {
         };
     }, [orders, pagination]);
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-        });
-    };
+    // Use centralized formatDateGB function from utils
 
     const formatPrice = (price) => `$${price.toFixed(2)}`;
 
@@ -270,7 +283,7 @@ function Order() {
                                         className="grid w-full grid-cols-4 gap-6 py-4 text-left transition-colors hover:bg-gray-50"
                                     >
                                         <div className="text-gray-600">
-                                            {formatDate(order.order_date)}
+                                            {formatDateGB(order.order_date)}
                                         </div>
                                         <div className="break-words whitespace-normal text-gray-900">
                                             {displayName}

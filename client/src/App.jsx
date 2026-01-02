@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "react-hot-toast";
 import { CartProvider } from "./Features/cart";
+import { AuthProvider } from "./Features/authentication/AuthContext.jsx";
 import { Suspense, lazy } from "react";
 import Spinner from "./ui/Spinner.jsx";
 
@@ -17,7 +18,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
 import SetUpPasswordPage from "./pages/SetUpPasswordPage.jsx";
 import CheckEmailPage from "./pages/CheckEmailPage.jsx";
-import PhoneVerificationPage from "./pages/PhoneVerificationPage.jsx";
+import EmailVerification from "./Features/authentication/EmailVerification.jsx";
 
 // Main Pages
 import LandingPage from "./pages/LandingPage.jsx";
@@ -34,6 +35,7 @@ import CartPage from "./pages/CartPage.jsx";
 import Cart from "./Features/cart/Cart.jsx";
 import CartSummary from "./Features/cart/CartSummary.jsx";
 import PaymentSummary from "./Features/cart/PaymentSummary.jsx";
+import PaymentVerificationPage from "./Features/cart/PaymentVerificationPage.jsx";
 
 // Dashboard
 import ProfilePage from "./pages/dashBoard/ProfilePage.jsx";
@@ -100,7 +102,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ReactQueryDevtools initialIsOpen={false} />
       <BrowserRouter>
-        <CartProvider>
+        <AuthProvider>
+          <CartProvider>
           <Suspense fallback={<Spinner />}>
             <Routes>
               {/* index/landing page */}
@@ -119,8 +122,8 @@ function App() {
                   element={<SetUpPasswordPage />}
                 />
                 <Route
-                  path="phone-verification"
-                  element={<PhoneVerificationPage />}
+                  path="verify-email"
+                  element={<EmailVerification />}
                 />
               </Route>
               {/* authentication pages End */}
@@ -211,7 +214,11 @@ function App() {
                 <Route index element={<Cart />} />
                 <Route path="summary" element={<CartSummary />} />
                 <Route path="payment" element={<PaymentSummary />} />
+                <Route path="verify" element={<PaymentVerificationPage />} />
+                <Route path="verify/:reference" element={<PaymentVerificationPage />} />
               </Route>
+              <Route path="/payment/verify" element={<PaymentVerificationPage />} />
+              <Route path="/payment/verify/:reference" element={<PaymentVerificationPage />} />
               <Route path="/feedback" element={<Feedback />} />
               {/* Other public pages End*/}
               {/* Vendor Dashboard - Protected with vendor role Start */}
@@ -257,7 +264,7 @@ function App() {
 
                 <Route path="pending-reviews">
                   <Route index element={<PendingReviewsPage />} />
-                  <Route path=":orderId" element={<PendingRateReviewsPage />} />
+                  <Route path=":productId" element={<PendingRateReviewsPage />} />
                 </Route>
 
                 <Route path="recent" element={<RecentPage />} />
@@ -277,7 +284,8 @@ function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
-        </CartProvider>
+          </CartProvider>
+        </AuthProvider>
       </BrowserRouter>
 
       <Toaster

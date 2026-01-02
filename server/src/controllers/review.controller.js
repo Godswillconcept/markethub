@@ -466,6 +466,84 @@ const getReviewsByProduct = async (req, res, next) => {
   }
 };
 
+const getPendingReviews = async (req, res, next) => {
+  try {
+    const user_id = req.user.id;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+
+    // 1. Find all delivered orders for this user
+    // We need to fetch OrderItems because reviews are per product
+    const deliveredOrderItems = await OrderItem.findAll({
+      include: [
+        {
+          model: Order,
+          as: "order",
+          where: {
+            user_id,
+            order_status: "delivered",
+          },
+          attributes: ["id", "order_date", "order_status"],
+          required: true,
+        },
+        {
+          model: Product,
+          as: "product",
+          attributes: ["id", "name", "slug", "thumbnail"],
+          required: true,
+        },
+      ],
+      attributes: ["id", "product_id"],
+      order: [[{ model: Order, as: "order" }, "order_date", "DESC"]],
+    });
+
+    // 2. Find all reviews by this user to exclude them
+    const userReviews = await Review.findAll({
+      where: { user_id },
+      attributes: ["product_id"],
+    });
+
+    const reviewedProductIds = new Set(userReviews.map((r) => r.product_id));
+
+    // 3. Filter items that haven't been reviewed
+    // Use a Map to ensure unique products (in case user bought same item multiple times)
+    const uniquePendingMap = new Map();
+
+    deliveredOrderItems.forEach((item) => {
+      // If product hasn't been reviewed AND we haven't already added it to our list
+      if (
+        !reviewedProductIds.has(item.product_id) &&
+        !uniquePendingMap.has(item.product_id)
+      ) {
+        uniquePendingMap.set(item.product_id, {
+          id: item.order.id, // Using order ID as ID for compatibility with frontend pending card
+          product_id: item.product.id,
+          title: item.product.name,
+          slug: item.product.slug,
+          image: item.product.thumbnail,
+          delivered: item.order.order_date,
+          rated: false,
+        });
+      }
+    });
+
+    const allPendingReviews = Array.from(uniquePendingMap.values());
+
+    // 4. Pagination (in memory since we filtered in memory)
+    const total = allPendingReviews.length;
+    const paginatedReviews = allPendingReviews.slice(offset, offset + parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      count: paginatedReviews.length,
+      total,
+      data: paginatedReviews,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createReview,
   getReviews,
@@ -473,4 +551,5 @@ module.exports = {
   updateReview,
   deleteReview,
   getReviewsByProduct,
+  getPendingReviews,
 };

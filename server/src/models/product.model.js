@@ -11,7 +11,8 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true // Explicitly allow null since the schema allows it
       });
       Product.belongsTo(models.Category, {
-        foreignKey: 'category_id'
+        foreignKey: 'category_id',
+        as: 'category'
       });
       Product.hasMany(models.CollectionProduct, {
         foreignKey: 'product_id'

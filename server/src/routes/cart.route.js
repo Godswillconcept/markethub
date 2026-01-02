@@ -13,7 +13,12 @@ const {
   syncCartValidation
 } = require('../validators/cart.validator');
 
-// All cart routes require authentication (users must be logged in or provide session ID)
+const { isLoggedIn } = require('../middlewares/auth');
+
+// Public routes (with optional auth)
+router.get('/summary', isLoggedIn, getCartSummaryValidation, validate, cartController.getCartSummary);
+
+// Protected routes (require valid token)
 router.use(protect);
 
 // Get cart
@@ -33,8 +38,5 @@ router.delete('/clear', clearCartValidation, validate, cartController.clearCart)
 
 // Sync cart (merge local cart into server cart)
 router.post('/sync', syncCartValidation, validate, cartController.syncCart);
-
-// Get cart summary (for checkout)
-router.get('/summary', getCartSummaryValidation, validate, cartController.getCartSummary);
 
 module.exports = router;
