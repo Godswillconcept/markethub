@@ -25,7 +25,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http: http://localhost:* https://localhost:* https://*.ngrok.io https://*.ngrok.app https://*.ngrok-free.app https://*.ngrok-free.dev https://*.cleverapps.io https://*.netlify.app https://*.vercel.app https://images.unsplash.com https://picsum.photos https://fastly.picsum.photos https://ui-avatars.com; connect-src 'self' blob: https://stylay.cleverapps.io https://*.ngrok-free.app https://*.ngrok-free.dev https://*.cleverapps.io;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.google-analytics.com https://www.googletagmanager.com; script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.google-analytics.com https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http: http://localhost:* https://localhost:* https://*.ngrok.io https://*.ngrok.app https://*.ngrok-free.app https://*.ngrok-free.dev https://*.cleverapps.io https://*.netlify.app https://*.vercel.app https://images.unsplash.com https://picsum.photos https://fastly.picsum.photos https://ui-avatars.com https://www.google-analytics.com; connect-src 'self' blob: https://stylay.cleverapps.io https://*.ngrok-free.app https://*.ngrok-free.dev https://*.cleverapps.io https://www.google-analytics.com;"
         }
       ]
     }
