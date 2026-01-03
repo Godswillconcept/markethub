@@ -17,6 +17,7 @@ const headers = [
 ];
 
 const VendorList = () => {
+  const navigate = useNavigate();
   const { vendors, isLoading, error } = useVendorList();
   console.log(vendors);
 
@@ -224,6 +225,9 @@ const VendorList = () => {
             headers={headers}
             data={currentItems}
             renderRow={renderVendorRow}
+            onRowClick={(vendor) =>
+              navigate(`/admin-vendors/${vendor.vendor_id}`)
+            }
             className="rounded-lg bg-white"
             theadClassName="bg-gray-50"
           />

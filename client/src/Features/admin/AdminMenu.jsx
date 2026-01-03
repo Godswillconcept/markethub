@@ -16,6 +16,7 @@ export const Menu = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/applications", label: "Application", icon: Users },
   { to: "/admin/vendors", label: "Vendors", icon: Store },
+   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/vendor-products", label: "Products", icon: Package },
   { to: "/admin/collections", label: "Collections", icon: Layers },
   { to: "/admin/orders", label: "Orders", icon: ShoppingCart },

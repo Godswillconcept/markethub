@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import Pagination from "../Pagination.jsx";
 import Table from "../Table.jsx";
 import AdminFilterBar from "../AdminFilterBar.jsx";
@@ -17,9 +17,16 @@ const headers = [
 ];
 
 const VendorsApplication = () => {
-  const { applications = [], total, isLoading, error } = useVendorApplications();
+  const {
+    applications = [],
+    total,
+    isLoading,
+    error,
+  } = useVendorApplications();
   // const { User: user, store } = applications[0] || {};
   // console.log(user?.first_name);
+
+  const navigate = useNavigate();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState({
@@ -83,9 +90,11 @@ const VendorsApplication = () => {
   };
 
   // Sync currentPage with URL params
-  const currentPage = !searchParams.get("page") ? 1 : Number(searchParams.get("page"));
+  const currentPage = !searchParams.get("page")
+    ? 1
+    : Number(searchParams.get("page"));
   const itemsPerPage = 12; // Match PAGE_SIZE from constants
-  
+
   const setCurrentPage = (page) => {
     searchParams.set("page", page.toString());
     setSearchParams(searchParams);
@@ -144,6 +153,10 @@ const VendorsApplication = () => {
     );
   };
 
+  const handleRowClick = (applicant) => {
+    navigate(`/admin-applicantDetail/${applicant?.id}`);
+  };
+
   return (
     <div className="min-h-screen p-4 sm:p-6 md:p-8 lg:p-2">
       <div className="mx-auto max-w-full">
@@ -171,6 +184,7 @@ const VendorsApplication = () => {
           headers={headers}
           data={currentItems}
           renderRow={renderApplicationRow}
+          onRowClick={handleRowClick}
           className="rounded-lg bg-white"
           theadClassName="bg-gray-50"
         />

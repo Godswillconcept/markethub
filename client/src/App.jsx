@@ -58,6 +58,7 @@ import EditAddressPage from "./Features/dashboardFeature/EditAddressPage.jsx";
 // import SearchMain from "./Features/productFeatures/SearchMain";
 // import SearchLayout from "./layouts/SearchLayout";
 
+
 // Admin Imports (These are still imported directly to be used inside AdminLayout route children,
 // to fully lazy load admin children they should also be lazy loaded, but starting with the Layout)
 import AdminDashboard from "./Features/admin/dashboard/AdminDashboard.jsx";
@@ -66,6 +67,7 @@ import ApplicantDetail from "./Features/admin/vendorApplication/ApplicantDetail.
 import VendorList from "./Features/admin/vendorList/VendorList.jsx";
 import VendorDetailPage from "./Features/admin/vendorList/VendorDetailPage.jsx";
 import VendorProducts from "./Features/admin/vendorProduct/VendorProducts.jsx";
+import UsersList from "./Features/admin/adminUsers/UsersList";
 import AdminVendorProductDetail from "./Features/admin/vendorProduct/AdminVendorProductDetail.jsx";
 import AdminProductCollection from "./Features/admin/collections/AdminProductCollection.jsx";
 import CollectionDetail from "./Features/admin/collections/CollectionDetail.jsx";
@@ -76,7 +78,7 @@ import Feedback from "./Features/admin/FeedBack.jsx";
 import FeedbackDetail from "./Features/admin/FeedbackDetail.jsx";
 import AdminNotification from "./Features/admin/AdminNotification.jsx";
 import SubAdmin from "./Features/admin/SubAdmin.jsx";
-import SubAdminDetails from "./Features/admin/SubAdminDetails.jsx";
+import SubAdminDetails from "./Features/admin/subAdmin/SubAdminDetails.jsx";
 import AdminJournal from "./Features/admin/AdminJournal.jsx";
 import JournalDetailPage from "./pages/JournalDetailPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
@@ -145,6 +147,7 @@ function App() {
                   element={<ApplicantDetail />}
                 />
                 <Route path="/admin/vendors" element={<VendorList />} />
+                 <Route path="/admin/users" element={<UsersList />} />
                 <Route
                   path="/admin/vendors/:id"
                   element={<VendorDetailPage />}
