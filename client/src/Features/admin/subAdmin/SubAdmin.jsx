@@ -23,7 +23,7 @@ function SubAdmin() {
   const [subAdminToEdit, setSubAdminToEdit] = useState(null);
   const { isLoading, subAdmins, count } = useSubAdmin();
   const { deactivateSubAdminApi, isDeactivating } = useDeactivateSubAdmin();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const currentPage = !searchParams.get("page")
     ? 1
     : Number(searchParams.get("page"));
