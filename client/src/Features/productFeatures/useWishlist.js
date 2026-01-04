@@ -5,6 +5,10 @@ export function useWishlist() {
     const { data, isLoading, isError, error, refetch } = useQuery({
         queryKey: ["wishlist"],
         queryFn: getWishList,
+        staleTime: 3 * 60 * 1000, // 3 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     // Transform backend items => UI-friendly structure

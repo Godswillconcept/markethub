@@ -46,7 +46,7 @@ const VendorProducts = () => {
     total = 0,
     isLoading,
     error,
-  } = useAdminProduct(currentPage, itemsPerPage, searchTerm);
+  } = useAdminProduct(currentPage, itemsPerPage, filters);
   const { deleteProduct, isDeleting } = useDeleteProduct(); // Removed unused deleteProductAsync
 
   // Extract unique categories from products

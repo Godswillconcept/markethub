@@ -6,6 +6,10 @@ export function useRecentOrders() {
         queryKey: ["recent-orders"],
         queryFn: recentOrders,
         retry: false,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     return { recentOrders: data || [], isLoading, error };

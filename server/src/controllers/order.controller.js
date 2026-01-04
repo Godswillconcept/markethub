@@ -404,7 +404,7 @@ async function createOrder(req, res) {
           { model: Vendor, as: "vendor" },
           {
             model: VariantCombination,
-            as: "combinations",
+            as: "combination", // Fixed: changed from 'combinations' to match OrderItem model
             where: { is_active: true },
             required: false,
           },
@@ -477,7 +477,7 @@ async function createOrder(req, res) {
       } else {
         // Simple product (no variant selected) logic
         // Find default combination (there should be exactly one for simple products)
-        const combinations = product.combinations || [];
+        const combinations = product.combination ? [product.combination] : [];
 
         if (combinations.length === 0) {
           throw new Error(`Insufficient stock for product: ${product.name}`);

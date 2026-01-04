@@ -35,13 +35,13 @@ function VendorProductDetail() {
   const analytics = productAnalysis?.analytics;
   const reviewsData = analytics?.reviews;
 
-  // Format date
-  const formattedDate = product?.date_uploaded
+  // Format date - check both date_uploaded and created_at
+  const formattedDate = product?.date_uploaded || product?.created_at
     ? new Intl.DateTimeFormat("en-GB", {
         day: "2-digit",
         month: "short",
         year: "numeric",
-      }).format(new Date(product.date_uploaded))
+      }).format(new Date(product.date_uploaded || product.created_at))
     : "";
 
   // Show loading state
@@ -114,6 +114,8 @@ function VendorProductDetail() {
     setIsModalOpen(false);
     document.body.style.overflow = "unset";
   };
+
+  console.log("product", product);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -200,7 +202,7 @@ function VendorProductDetail() {
                     Category
                   </label>
                   <p className="text-sm font-semibold text-gray-900">
-                    {product.category}
+                    {(product?.Category?.name || product?.category?.name) || "Uncategorized"}
                   </p>
                 </div>
 

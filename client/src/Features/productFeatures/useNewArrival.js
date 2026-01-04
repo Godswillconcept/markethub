@@ -5,6 +5,10 @@ export function useNewArrival() {
     const { data, isLoading, error } = useQuery({
         queryKey: ["new-arrival"],
         queryFn: () => getNewArrival(),
+        staleTime: 10 * 60 * 1000, // 10 minutes - new arrivals are relatively stable
+        cacheTime: 30 * 60 * 1000, // 30 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     // Extract the data and pagination information

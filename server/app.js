@@ -327,15 +327,20 @@ const limiter = rateLimit({
 app.use("/api", limiter);
 
 // Dashboard-specific rate limiting
+// Increased from 100/min to 500/5min to accommodate multiple concurrent API calls
+// Admin dashboard makes 6 calls, vendor makes 2, cart makes 2 per page load
 const dashboardLimiter = rateLimit({
-  max: 100,
-  windowMs: 60 * 1000,
-  message: "Too many dashboard requests, please try again in 1 minute!",
+  max: 500, // Increased from 100 to allow ~100 dashboard page loads per window
+  windowMs: 5 * 60 * 1000, // 5 minutes instead of 1 minute
+  message: "Too many dashboard requests, please try again in 5 minutes!",
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: (req) => {
     return req.user ? `user:${req.user.id}` : req.ip;
   },
 });
 app.use("/api/v1/admin/dashboard", dashboardLimiter);
+app.use("/api/v1/dashboard", dashboardLimiter); // Also apply to vendor/client dashboard routes
 
 // ============================================
 // CACHE MIDDLEWARE

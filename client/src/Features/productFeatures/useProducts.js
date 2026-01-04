@@ -52,7 +52,11 @@ export function useProducts() {
     } = useQuery({
         queryKey: ["products", page],
         queryFn: () => getProducts({ page }),
-        keepPreviousData: true, // keeps old data visible while fetching new
+        keepPreviousData: true,
+        staleTime: 3 * 60 * 1000, // 3 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     // PREFETCH NEXT + PREV PAGES

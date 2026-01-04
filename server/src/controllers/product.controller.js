@@ -542,7 +542,14 @@ const getProducts = async (req, res, next) => {
         {
           model: ProductVariant,
           as: "variants",
-          attributes: ["id", "name", "value"],
+          attributes: ["id", "variant_type_id", "name", "value", "hex_code"],
+          include: [
+            {
+              model: VariantType,
+              as: "variantType",
+              attributes: ["id", "name", "display_name"],
+            },
+          ],
         },
         { model: ProductImage, limit: 1, as: "images" }, // Only get first image for listing
       ],
@@ -876,80 +883,8 @@ const getVendorAnalytics = async (req, res, next) => {
 // Admin methods
 const getAllProducts = async (req, res, next) => {
   try {
-    const { page = 1, limit = 12, search, category, vendor } = req.query;
-    const offset = (page - 1) * limit;
-
-    const whereClause = {};
-
-    // Apply filters if provided
-    if (search) {
-      whereClause[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { sku: { [Op.like]: `%${search}%` } },
-      ];
-    }
-
-    if (category) whereClause.category_id = category;
-    if (vendor) whereClause.vendor_id = vendor;
-
-    const { count, rows: products } = await Product.findAndCountAll({
-      attributes: [
-        "id",
-        "vendor_id",
-        "category_id",
-        "name",
-        "slug",
-        "description",
-        "thumbnail",
-        "price",
-        "discounted_price",
-        "sku",
-        "status",
-        "impressions",
-        "sold_units",
-        "created_at",
-        "updated_at",
-        [
-          sequelize.literal(
-            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
-          ),
-          "thumbnailUrl",
-        ],
-      ],
-      where: whereClause,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      include: [
-        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
-        {
-          model: Vendor,
-          attributes: ["id"],
-          as: "vendor",
-          include: [
-            {
-              model: Store,
-              attributes: ["id", "business_name", "status"],
-              as: "store",
-            },
-          ],
-        },
-        { model: ProductImage, limit: 1, as: "images" },
-        {
-          model: ProductVariant,
-          as: "variants",
-          attributes: ["variant_type_id", "name", "value"],
-        },
-      ],
-      order: [["created_at", "DESC"]],
-    });
-
-    res.status(200).json({
-      success: true,
-      count: products.length,
-      total: count,
-      data: products,
-    });
+    const result = await ProductService.getAllProducts(req.query);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

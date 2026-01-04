@@ -11,8 +11,10 @@ export function useProduct() {
     queryFn: () => getProductById(slug),
     enabled: !!slug,
     retry: false,
-    refetchOnWindowFocus: false, // 👈 This stops the refetch
-    staleTime: 5 * 60 * 1000, // 👈 Data stays fresh for 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - product details are stable
+    cacheTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   return {

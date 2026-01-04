@@ -6,6 +6,10 @@ export function useStats() {
         queryKey: ["metrics"],
         queryFn: getStats,
         retry: false,
+        staleTime: 5 * 60 * 1000, // 5 minutes - data considered fresh
+        cacheTime: 10 * 60 * 1000, // 10 minutes - cache persists
+        refetchOnWindowFocus: false, // Don't refetch on window focus
+        refetchOnMount: false, // Don't refetch on component remount if data is fresh
     });
 
     return { stats: data || {}, isLoading, error };

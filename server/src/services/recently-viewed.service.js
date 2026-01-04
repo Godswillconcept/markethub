@@ -211,6 +211,7 @@ class RecentlyViewedService {
         include: [
           {
             model: Category,
+            as: 'category',
             attributes: ["id", "name", "slug"],
           },
           {

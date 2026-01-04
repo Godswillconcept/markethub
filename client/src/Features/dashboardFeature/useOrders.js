@@ -31,7 +31,11 @@ export function useOrders(page = 1, limit = 5, status = undefined) {
         queryKey: ["orders", page, limit, status],
         queryFn: () => getOrders(page, limit, status),
         retry: false,
-        keepPreviousData: true, // Keep previous data while fetching new page
+        keepPreviousData: true,
+        staleTime: 3 * 60 * 1000, // 3 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     console.log("Orders hook data", data?.data?.orders);

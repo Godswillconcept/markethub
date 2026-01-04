@@ -17,6 +17,9 @@ export function useVendorDashboardProduct(page = 1, limit = 10, search = "", sta
         queryFn: () => getVendorDashBoardProducts({ page, limit, search, status }),
         keepPreviousData: true,
         staleTime: 1000 * 60 * 5, // 5 minutes
+        cacheTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     // Prefetch next page if there are more pages

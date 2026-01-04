@@ -583,13 +583,13 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
     if (status === "out_of_stock") {
       // Filter products with zero or negative total stock
       whereClause[Op.or] = [
-        { variantCombinations: { [Op.or]: [{ stock: 0 }, { stock: null }] } },
-        { variantCombinations: null } // Products without variants are considered out of stock
+        { combinations: { [Op.or]: [{ stock: 0 }, { stock: null }] } },
+        { combinations: null } // Products without variants are considered out of stock
       ];
     } else if (status === "active") {
       // Filter products with positive stock
       whereClause[Op.and] = [
-        { variantCombinations: { [Op.gt]: { stock: 0 } }}
+        { combinations: { [Op.gt]: { stock: 0 } }}
       ];
     }
   }
@@ -604,7 +604,7 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
       },
       {
         model: db.VariantCombination,
-        as: "variantCombinations",
+        as: "combinations",
         attributes: ["stock"],
         required: false, // LEFT JOIN to include products even without variants
       },
@@ -625,7 +625,7 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
       "sold_units",
       "created_at",
       "updated_at",
-      "variantCombinations.stock", // Add stock field to attributes
+      "combinations.stock", // Add stock field to attributes
     ],
     order: [["created_at", "DESC"]],
     limit: limitNum,
@@ -1954,6 +1954,21 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
             model: db.Product,
             as: "product",
             attributes: ["id", "name", "slug", "thumbnail", "price"],
+          },
+          {
+            model: db.VariantCombination,
+            as: "combination", // Fixed: changed from 'combinations' to match OrderItem model association
+            attributes: ["id", "stock", "price_modifier", "combination_name"],
+            include: [
+              {
+                model: db.ProductVariant,
+                as: "variants",
+                attributes: ["id", "name", "value"],
+                through: {
+                  attributes: [],
+                },
+              },
+            ],
           },
         ],
       },
@@ -3597,271 +3612,7 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
  *   }
  * }
  */
-const getAdminProducts = catchAsync(async (req, res, next) => {
-  const { page = 1, limit = 20, category, vendor, status } = req.query;
-  const { limit: limitNum, offset } = paginate(page, limit);
 
-  // Build optimized where clause for product filters
-  const whereClause = {};
-
-  // Enhanced Category filter
-  let categoryFilter = null;
-  if (category) {
-    if (/^\d+$/.test(category)) {
-      whereClause.category_id = parseInt(category);
-    } else {
-      const searchTerm = category.toLowerCase();
-      categoryFilter = {
-        [Op.or]: [
-          { name: { [Op.like]: `%${searchTerm}%` } },
-          { slug: { [Op.like]: `%${searchTerm}%` } },
-        ],
-      };
-    }
-  }
-
-  // Enhanced Vendor filter
-  let vendorFilter = null;
-  if (vendor) {
-    if (/^\d+$/.test(vendor)) {
-      whereClause.vendor_id = parseInt(vendor);
-    } else {
-      const vendorSearchTerm = vendor.toLowerCase();
-      vendorFilter = {
-        [Op.like]: `%${vendorSearchTerm}%`,
-      };
-    }
-  }
-
-  // Stock Status Logic (Database Level)
-  // Use a subquery to calculate total stock from VariantCombinations
-  const stockSubquery = `(
-    SELECT COALESCE(SUM(vc.stock), 0)
-    FROM variant_combinations vc
-    WHERE vc.product_id = Product.id
-  )`;
-
-  // More efficient stock status handling - use JOIN-based approach for better performance
-  if (status) {
-    if (status === 'discontinued') {
-      whereClause.status = 'discontinued';
-    } else if (status === 'active') {
-       whereClause.status = 'active';
-    } else if (['in_stock', 'low_stock', 'out_of_stock'].includes(status)) {
-       // We'll handle stock filtering in post-processing
-       if (!whereClause.status) whereClause.status = { [Op.ne]: 'discontinued' };
-    }
-  }
-
-  // Build optimized include array
-  const includeArray = [
-    {
-      model: db.Category,
-      as: "category",
-      attributes: ["id", "name", "slug"],
-      where: categoryFilter,
-      required: !!categoryFilter,
-    },
-    {
-      model: db.Vendor,
-      as: "vendor",
-      attributes: ["id", "status"],
-      include: [
-        {
-          model: db.User,
-          attributes: ["id", "first_name", "last_name"],
-        },
-        {
-          model: db.Store,
-          as: "store",
-          attributes: ["id", "business_name"],
-          where: vendorFilter,
-          required: !!vendorFilter,
-        },
-      ],
-      required: !!vendor,
-    },
-    {
-      model: db.ProductImage,
-      as: "images",
-      attributes: ["id", "image_url", "is_featured"],
-      required: false,
-      limit: 1,
-      separate: true,
-    },
-    // Add Review model inclusion
-    {
-      model: db.Review,
-      as: "reviews",
-      attributes: ["id", "rating", "comment"],
-      required: false,
-      separate: true,
-      limit: 5 // Limit to recent reviews for performance
-    },
-    // Add Supply model inclusion
-    {
-      model: db.Supply,
-      as: "supplies",
-      attributes: ["id", "quantity", "created_at", "notes"],
-      required: false,
-      separate: true,
-      order: [["created_at", "DESC"]],
-      limit: 5 // Limit to recent supplies for performance
-    },
-    // Add Inventory model inclusion
-    {
-      model: db.Inventory,
-      as: "inventory",
-      attributes: ["id", "quantity", "reserved_quantity", "location", "last_updated"],
-      required: false,
-      separate: true
-    }
-  ];
-
-  // Execute optimized main query
-  const { count, rows: products } = await db.Product.findAndCountAll({
-    attributes: [
-      "id",
-      "vendor_id",
-      "category_id",
-      "name",
-      "slug",
-      "description",
-      "thumbnail",
-      "price",
-      "discounted_price",
-      "sku",
-      "status",
-      "impressions",
-      "sold_units",
-      "created_at",
-      "updated_at",
-      // Add total_stock as a computed column for use in response
-      [literal(stockSubquery), 'total_stock']
-    ],
-    include: includeArray,
-    where: whereClause,
-    order: [["created_at", "DESC"]],
-    limit: limitNum,
-    offset,
-    distinct: true, 
-    subQuery: false, 
-  });
-
-  // Fetch all variant combinations in a separate optimized query
-  const variantCombinations = await db.VariantCombination.findAll({
-    where: {
-      product_id: { [Op.in]: products.map(p => p.id) }
-    },
-    include: [
-      {
-        model: db.ProductVariant,
-        as: 'productVariant',
-        attributes: ['id', 'name'],
-        include: [
-          {
-            model: db.VariantType,
-            as: 'variantType',
-            attributes: ['id', 'name']
-          }
-        ]
-      }
-    ],
-    attributes: ['id', 'product_id', 'stock', 'price_modifier', 'combination_name'],
-    order: [['product_id', 'ASC'], ['id', 'ASC']]
-  });
-
-  // Group variants by product_id for efficient lookup
-  const variantsByProduct = {};
-  variantCombinations.forEach(vc => {
-    if (!variantsByProduct[vc.product_id]) {
-      variantsByProduct[vc.product_id] = [];
-    }
-    
-    const variantTypeName = vc.productVariant?.variantType?.name || 'Unknown';
-    const existingType = variantsByProduct[vc.product_id].find(v => v.name === variantTypeName);
-    
-    if (existingType) {
-      existingType.values.push({
-        value: vc.combination_name || 'Default',
-        price_modifier: parseFloat(vc.price_modifier) || 0
-      });
-    } else {
-      variantsByProduct[vc.product_id].push({
-        name: variantTypeName,
-        values: [{
-          value: vc.combination_name || 'Default',
-          price_modifier: parseFloat(vc.price_modifier) || 0
-        }]
-      });
-    }
-  });
-
-  const processedProducts = products.map((product) => {
-    // Use the computed total_stock or fall back if not available
-    const stockQuantity = parseInt(product.getDataValue('total_stock') || 0);
-    
-    let stockStatus = "out_of_stock";
-    if (stockQuantity > 0) {
-      stockStatus = stockQuantity > 10 ? "in_stock" : "low_stock";
-    }
-
-    // Use pre-processed variants from optimized query
-    const variants = variantsByProduct[product.id] || [];
-
-    const vendor = product.vendor;
-    const vendorInfo = vendor
-      ? {
-          id: vendor.id,
-          name: vendor.User
-            ? `${vendor.User.first_name || ""} ${
-                vendor.User.last_name || ""
-              }`.trim() || "Unknown Vendor"
-            : "Unknown Vendor",
-          business_name: vendor.store?.business_name || "Unknown Business",
-        }
-      : null;
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      price: parseFloat(product.price),
-      discounted_price: product.discounted_price
-        ? parseFloat(product.discounted_price)
-        : null,
-      sku: product.sku,
-      thumbnail: product.thumbnail,
-      status: product.status,
-      category: product.category,
-      vendor: vendorInfo,
-      images: product.images || [],
-      stock_quantity: stockQuantity,
-      stock_status: stockStatus,
-       variants: Array.from(variantsMap.values()),
-      created_at: product.created_at,
-      updated_at: product.updated_at,
-    };
-  });
-
-  // Recalculate count after stock status filtering if needed
-  let filteredCount = count;
-  if (status && ['in_stock', 'low_stock', 'out_of_stock'].includes(status)) {
-    filteredCount = processedProducts.length;
-  }
-
-  const response = createPaginationResponse(
-    processedProducts,
-    page,
-    limit,
-    filteredCount
-  );
-  
-  res.status(200).json({
-    status: "success",
-    ...response,
-  });
-});
 
 module.exports = {
   // customers 
@@ -3883,5 +3634,4 @@ module.exports = {
   getTopSellingItems,
   getVendorOnboardingStats,
   getVendorOverview,
-  getAdminProducts,
 };

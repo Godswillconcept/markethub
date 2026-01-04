@@ -8,7 +8,6 @@ const {
   getTopSellingItems,
   getVendorOnboardingStats,
   getVendorOverview,
-  getAdminProducts,
 } = require('../../controllers/dashboard.controller');
 
 const { cache, invalidate } = require('../../utils/cache');
@@ -42,7 +41,9 @@ router.get('/vendor-onboarding-stats', getVendorOnboardingStats);
 // Vendor overview with specific vendor ID in key for targeted caching
 router.get('/vendor-overview/:vendorId', getVendorOverview);
 
+const { getAllProducts } = require('../../controllers/product.controller');
+
 // Admin products with products-specific caching
-router.get('/products', getAdminProducts);
+router.get('/products', getAllProducts);
 
 module.exports = router;

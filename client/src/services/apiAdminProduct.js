@@ -1,12 +1,16 @@
 import axiosInstance from "./axios.js";
 
 // getting all the product to be displayed
-export async function getAdminProduct(page = 1, limit = 9, search) {
+export async function getAdminProduct(page = 1, limit = 9, search, category, vendor, status) {
     try {
         const params = { page, limit };
         if (search && search.length >= 3) {
             params.search = search;
         }
+        if (category && category !== "All") params.category = category;
+        if (vendor && vendor !== "All") params.vendor = vendor;
+        if (status && status !== "All") params.status = status;
+
         const { data } = await axiosInstance.get('/admin/products/all', {
             params
         });

@@ -27,7 +27,10 @@ export function useReviewById(reviewId, enabled = true) {
             }
         },
         enabled: enabled && !!reviewId,
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        cacheTime: 15 * 60 * 1000, // 15 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
         retry: 1,
         onError: (error) => {
             console.error("❌ useReviewById Query Error:", error);
@@ -106,7 +109,11 @@ export default function useReviews(productId) {
     const { data, isLoading, error } = useQuery({
         queryKey: ["reviews", productId],
         queryFn: () => getReviews(productId),
-        enabled: !!productId, // only run if productId exists
+        enabled: !!productId,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        cacheTime: 15 * 60 * 1000, // 15 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     // normalize data

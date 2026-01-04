@@ -928,6 +928,141 @@ class ProductService {
       },
     };
   }
+  /**
+   * Get all products with advanced filtering and pagination (Admin/Consolidated)
+   * @param {Object} queryParams - Query parameters (page, limit, search, category, vendor, status)
+   * @returns {Promise<Object>} Formatted response with products and pagination
+   */
+  static async getAllProducts(queryParams) {
+    const { page = 1, limit = 12, search, category, vendor, status } = queryParams;
+    const offset = (page - 1) * limit;
+
+    const whereClause = {};
+
+    // Apply filters if provided
+    if (search) {
+      whereClause[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } },
+        { sku: { [Op.like]: `%${search}%` } },
+      ];
+    }
+
+    // Filter by category (supports both ID and name/slug)
+    if (category && category !== "All") {
+      const isNumericId = !isNaN(category) && !isNaN(parseFloat(category));
+
+      if (isNumericId) {
+        whereClause.category_id = parseInt(category);
+      } else {
+        // Find category by name or slug
+        const categoryRecord = await Category.findOne({
+          where: {
+            [Op.or]: [
+              { name: { [Op.like]: `%${category}%` } },
+              { slug: category },
+            ],
+          },
+        });
+
+        if (categoryRecord) {
+          whereClause.category_id = categoryRecord.id;
+        } else {
+          whereClause.category_id = -1; 
+        }
+      }
+    }
+
+    if (vendor && vendor !== "All") whereClause.vendor_id = vendor;
+    if (status && status !== "All") whereClause.status = status;
+
+    // Stock Subquery for total_stock
+    const stockSubquery = `(
+      SELECT COALESCE(SUM(vc.stock), 0)
+      FROM variant_combinations vc
+      WHERE vc.product_id = Product.id
+    )`;
+
+    const { count, rows: products } = await Product.findAndCountAll({
+      attributes: [
+        "id",
+        "vendor_id",
+        "category_id",
+        "name",
+        "slug",
+        "description",
+        "thumbnail",
+        "price",
+        "discounted_price",
+        "sku",
+        "status",
+        "impressions",
+        "sold_units",
+        "created_at",
+        "updated_at",
+        [
+          sequelize.literal(
+            "(CASE WHEN thumbnail IS NOT NULL THEN thumbnail ELSE (SELECT image_url FROM product_images WHERE product_id = Product.id ORDER BY id LIMIT 1) END)"
+          ),
+          "thumbnailUrl",
+        ],
+        [sequelize.literal(stockSubquery), 'total_stock']
+      ],
+      where: whereClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      include: [
+        { model: Category, as: "category", attributes: ["id", "name", "slug"] },
+        {
+          model: Vendor,
+          attributes: ["id"],
+          as: "vendor",
+          include: [
+            {
+              model: Store,
+              attributes: ["id", "business_name", "status"],
+              as: "store",
+            },
+          ],
+        },
+        { model: ProductImage, limit: 1, as: "images" },
+        {
+          model: ProductVariant,
+          as: "variants",
+          attributes: ["id", "variant_type_id", "name", "value", "hex_code"],
+          include: [
+            {
+              model: VariantType,
+              as: "variantType",
+              attributes: ["id", "name", "display_name"],
+            },
+          ],
+        },
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    // Process products to add computed fields like stock_status
+    const processedProducts = products.map(product => {
+      const p = product.toJSON();
+      const totalStock = parseInt(p.total_stock || 0);
+      
+      let stockStatus = "out_of_stock";
+      if (totalStock > 0) {
+        stockStatus = totalStock > 10 ? "in_stock" : "low_stock";
+      }
+      p.stock_quantity = totalStock;
+      p.stock_status = stockStatus;
+      return p;
+    });
+
+    return {
+      success: true,
+      count: products.length,
+      total: count,
+      data: processedProducts,
+    };
+  }
 }
 
 module.exports = ProductService;

@@ -23,10 +23,14 @@ export function useProductSearch(query, page = 1) {
         queryKey: ["searchProducts", query, page],
         queryFn: () => searchProducts(query, page),
         enabled: query.length >= 3,
+        staleTime: 2 * 60 * 1000, // 2 minutes - search results change frequently
+        cacheTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
     });
 
     return {
-        products: data?.products || [], // ✅ corrected
+        products: data?.products || [],
         pagination: data?.pagination,
         isLoading,
         error,
