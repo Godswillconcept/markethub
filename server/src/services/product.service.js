@@ -771,7 +771,7 @@ class ProductService {
     } else {
       console.log(`AUTHORIZATION: Admin access granted`);
     }
-    // Admins can view any product analytics (no additional check needed)
+    // Admins can view any product analytics - no vendor check needed
 
     // Calculate total stock from combinations
     let totalStock = 0;

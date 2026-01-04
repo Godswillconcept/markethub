@@ -9,7 +9,6 @@ function VendorCard({ vendor }) {
   const {
     id,
     vendorId = id, // Use vendorId if it exists, otherwise fall back to id
-    slug,
     User,
     store,
   } = safeVendor;

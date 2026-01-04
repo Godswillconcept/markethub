@@ -9,13 +9,53 @@ import { LoadingSpinner } from "../../../ui/Loading/LoadingSpinner.jsx";
 import { formatDateUS } from "../../../utils/helper.js";
 
 const headers = [
-  { key: "id", label: "ID", className: "w-16" },
+  { key: "ord", label: "ORD NO", className: "w-16" },
   { key: "name", label: "BUYER Name", className: "w-42" },
   { key: "address", label: "ADDRESS", className: "w-60" },
   { key: "order_date", label: "DATE", className: "w-42" },
   { key: "product", label: "PRODUCT", className: "w-32" },
   { key: "status", label: "STATUS", className: "w-28" },
 ];
+
+// Helper function to get status badge styling
+const getStatusBadgeClass = (status) => {
+  switch (status?.toLowerCase()) {
+    case "pending":
+      return "bg-yellow-100 text-yellow-800";
+    case "processing":
+      return "bg-blue-100 text-blue-800";
+    case "shipped":
+      return "bg-purple-100 text-purple-800";
+    case "delivered":
+      return "bg-green-100 text-green-800";
+    case "cancelled":
+      return "bg-red-100 text-red-800";
+    case "returned":
+      return "bg-gray-100 text-gray-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+};
+
+// Helper function to get status dot styling
+const getStatusDotClass = (status) => {
+  switch (status?.toLowerCase()) {
+    case "pending":
+      return "bg-yellow-400";
+    case "processing":
+      return "bg-blue-400";
+    case "shipped":
+      return "bg-purple-400";
+    case "delivered":
+      return "bg-green-400";
+    case "cancelled":
+      return "bg-red-400";
+    case "returned":
+      return "bg-gray-400";
+    default:
+      return "bg-gray-400";
+  }
+};
 
 const OrdersList = () => {
   const { orders: ordersData, isLoading, error } = useAdminOrders();
@@ -25,7 +65,6 @@ const OrdersList = () => {
     return ordersData?.orders || [];
   }, [ordersData]);
 
-  // const total = ordersData?.total || 0;
   console.log(orders);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -148,8 +187,8 @@ const OrdersList = () => {
 
   // Render each row in the table
   const renderOrderRow = (order) => [
-    <td key="id" className="px-6 py-4 text-sm font-medium text-gray-900">
-      {order.id}
+    <td key="number" className="px-6 py-4 text-sm font-medium text-gray-900">
+      {order.order_number}
     </td>,
     <td key="name" className="px-6 py-4 text-sm">
       <Link
@@ -175,10 +214,11 @@ const OrdersList = () => {
     </td>,
     <td key="status" className="px-6 py-4">
       <span
-      // className={`inline-flex rounded px-2 py-1 text-xs leading-5 font-semibold ${StatusBadge(
-      //   order.status,
-      // )}`}
+        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClass(
+          order.order_status,
+        )}`}
       >
+        <span className={`mr-1.5 h-2 w-2 rounded-full ${getStatusDotClass(order.order_status)}`} aria-hidden="true"></span>
         {order.order_status}
       </span>
     </td>,

@@ -101,6 +101,9 @@ class RefreshTokenService {
    */
   async createRefreshToken(userId, req) {
     try {
+      if (!userId) {
+        throw new Error('User ID is required to create a refresh token');
+      }
       const refreshToken = this.generateRefreshToken();
       const tokenHash = RefreshToken.generateTokenHash(refreshToken);
       const deviceInfo = this.generateDeviceFingerprint(req);
@@ -152,7 +155,9 @@ class RefreshTokenService {
       if (activeSessions.length >= this.maxSessionsPerUser) {
         // Revoke the oldest session
         const oldestSession = activeSessions[activeSessions.length - 1];
-        await this.revokeSession(oldestSession.id);
+        await UserSession.revokeSession(oldestSession.id);
+        // Also revoke tokens for the old session
+        await this.revokeSessionTokens(oldestSession.id);
         logger.info(`Revoked oldest session ${oldestSession.id} for user ${userId}`);
       }
 

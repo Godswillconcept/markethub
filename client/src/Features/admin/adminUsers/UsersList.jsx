@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import Table from "../Table";
 import Pagination from "../Pagination";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { formatDate } from "../../../utils/helper";
 import AdminFilterBar from "../AdminFilterBar";
 import { useUsersList } from "./useUsersList";
@@ -18,10 +18,8 @@ const headers = [
 
 function UsersList() {
   const navigate = useNavigate();
-  const { users, isLoading, error } = useUsersList();
-  const totalItems = users?.length || 0;
-  console.log(users);
-
+  const { users, total, isLoading, error } = useUsersList();
+  
   const [filters, setFilters] = useState({
     status: "All",
     sortby: "All",
@@ -63,16 +61,8 @@ function UsersList() {
     setSearchTerm("");
   };
 
+  // Get current page from URL or default to 1
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
-  // Total items from the API
-
-  // Get current items for pagination
-  const currentItems = useMemo(() => {
-    if (!users) return [];
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return users.slice(startIndex, startIndex + itemsPerPage);
-  }, [currentPage, itemsPerPage, users]);
 
   if (isLoading)
     return (
@@ -90,7 +80,7 @@ function UsersList() {
   // Render each row in the table
   const renderUserRow = (user, index) => [
     <td key="sn" className="px-6 py-4 text-sm font-medium text-gray-900">
-      {(currentPage - 1) * itemsPerPage + index + 1}
+      {(currentPage - 1) * 12 + index + 1}
     </td>,
     <td key="vendor_name" className="px-6 py-4 text-sm text-gray-900">
       {user.first_name} {user.last_name}
@@ -140,9 +130,9 @@ function UsersList() {
         <div className="mt-2">
           <Table
             headers={headers}
-            data={currentItems}
+            data={users || []}
             renderRow={renderUserRow}
-            onRowClick={(user) => navigate(`/admin-users/${user.id}`)}
+            onRowClick={(user) => navigate(`/admin/users/${user.id}`)}
             className="rounded-lg bg-white"
             theadClassName="bg-gray-50"
           />
@@ -150,8 +140,8 @@ function UsersList() {
 
         {/* Pagination */}
         <Pagination
-          totalItems={totalItems}
-          itemsPerPage={itemsPerPage}
+          totalItems={total || 0}
+          itemsPerPage={12}
           currentPage={currentPage}
           onPageChange={setCurrentPage}
           className="mt-2"

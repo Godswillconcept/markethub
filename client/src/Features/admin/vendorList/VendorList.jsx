@@ -1,11 +1,12 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import Table from "../Table.jsx";
 import Pagination from "../Pagination.jsx";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 // import { getStatusClasses } from "../../utils/helper";
 import AdminFilterBar from "../AdminFilterBar.jsx";
 import { useVendorList } from "./useVendorList.js";
 import { LoadingSpinner } from "../../../ui/Loading/LoadingSpinner.jsx";
+import { PAGE_SIZE } from "../../../utils/constants.js";
 
 const headers = [
   { key: "sn", label: "SN", className: "w-16" },
@@ -18,8 +19,8 @@ const headers = [
 
 const VendorList = () => {
   const navigate = useNavigate();
-  const { vendors, isLoading, error } = useVendorList();
-  console.log(vendors);
+  const { vendors, total, isLoading, error } = useVendorList();
+  console.log(vendors, total);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [filters, setFilters] = useState({
@@ -111,32 +112,18 @@ const VendorList = () => {
 
   // Sync currentPage with URL params
   const currentPage = !searchParams.get("page") ? 1 : Number(searchParams.get("page"));
-  const itemsPerPage = 12; // Match the API limit
+  const itemsPerPage = PAGE_SIZE; // Use PAGE_SIZE constant
   
   const setCurrentPage = (page) => {
     searchParams.set("page", page.toString());
     setSearchParams(searchParams);
   };
 
-  // Apply client-side status filtering as fallback since backend filtering is broken
-  const filteredVendors = useMemo(() => {
-    if (!vendors) return [];
-    
-    // If a specific status is selected, filter client-side as backend isn't filtering properly
-    if (filters.status !== "all") {
-      return vendors.filter(
-        (vendor) => vendor.status?.toLowerCase() === filters.status.toLowerCase()
-      );
-    }
-    
-    return vendors;
-  }, [vendors, filters.status]);
-
   // Use server-side data directly for display (already paginated by server)
-  const currentItems = filteredVendors || [];
+  const currentItems = vendors || [];
   
-  // Calculate total items based on filtered results
-  const totalItems = filteredVendors?.length || 0;
+  // Use total from API response for pagination
+  const totalItems = total || 0;
 
   if (isLoading)
     return (

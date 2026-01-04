@@ -1,253 +1,3 @@
-// // export default VendorProducts;
-// import { useMemo, useState, useEffect } from "react";
-// import { Link } from "react-router-dom";
-// import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
-// import Pagination from "../Pagination";
-// import AdminCreateProduct from "./AdminCreateProduct";
-// import AdminFilterBar from "../AdminFilterBar";
-// import Table from "../Table";
-// import { useAdminProduct } from "./useAdminProduct";
-// import { useDeleteProduct } from "./useDeleteProduct";
-
-// const headers = [
-//   { key: "image", label: "Image", className: "w-32" },
-//   { key: "name", label: "Product Name", className: "w-62" },
-//   { key: "category", label: "Category", className: "w-32" },
-//   { key: "price", label: "Price", className: "w-32" },
-//   { key: "piece", label: "Piece", className: "w-32" },
-//   { key: "colors", label: "Available Color", className: "w-32" },
-//   { key: "action", label: "Action", className: "w-28" },
-// ];
-
-// const VendorProducts = () => {
-//   const [isModalOpen, setIsModalOpen] = useState(false);
-//   const [mode, setMode] = useState("create"); // "create" | "edit"
-//   const [editingProductId, setEditingProductId] = useState(null);
-//   const [currentPage, setCurrentPage] = useState(1);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [filters, setFilters] = useState({
-//     category: "All",
-//     vendor: "All",
-//     active: "All",
-//   });
-
-//   const itemsPerPage = 9;
-
-//   const { adminProduct = [], total = 0, isLoading, error } = useAdminProduct(currentPage, itemsPerPage);
-//   const { deleteProduct, deleteProductAsync, isDeleting } = useDeleteProduct()
-
-//   console.log("admin Product", adminProduct);
-
-//   // Extract unique categories from products
-//   const categoryOptions = useMemo(() => {
-//     const categories = adminProduct
-//       .map(product => product.Category?.name)
-//       .filter(Boolean);
-//     return ["All", ...new Set(categories)];
-//   }, [adminProduct]);
-
-//   const filterConfig = [
-//     {
-//       key: "category",
-//       label: "Category",
-//       options: categoryOptions,
-//     },
-
-//   ];
-
-//   // Handle filter changes from AdminFilterSection
-//   const handleFilterChange = (key, value) => {
-//     setFilters((prev) => ({
-//       ...prev,
-//       [key]: value,
-//     }));
-//     // Reset to page 1 when filters change
-//     setCurrentPage(1);
-//   };
-
-//   const handleResetFilters = () => {
-//     setFilters({
-//       category: "All",
-//       vendor: "All",
-//       active: "All",
-//     });
-//     setSearchTerm("");
-//     setCurrentPage(1);
-//   };
-
-//   // Reset to page 1 when search term changes
-//   useEffect(() => {
-//     setCurrentPage(1);
-//   }, [searchTerm]);
-
-//   const handleCreateProduct = () => {
-//     setMode("create");
-//     setEditingProductId(null);
-//     setIsModalOpen(true);
-//   };
-
-//   const handleEditProduct = (id) => {
-//     setMode("edit");
-//     setEditingProductId(id);
-//     setIsModalOpen(true);
-//   };
-
-//   function handleDeleteProduct(productId) {
-//     if (window.confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-//       deleteProduct(productId);
-//     }
-//   }
-
-//   // Filter products based on search term and filters
-//   const filteredProducts = useMemo(() => {
-//     return adminProduct.filter((product) => {
-//       const matchesSearch = product.name
-//         .toLowerCase()
-//         .includes(searchTerm.toLowerCase());
-//       const matchesCategory =
-//         filters.category === "All" || product.Category?.name === filters.category;
-//       const matchesActive =
-//         filters.active === "All" ||
-//         (filters.active === "Active" && product.status === "active") ||
-//         (filters.active === "Inactive" && product.status !== "active");
-
-//       return matchesSearch && matchesCategory && matchesActive;
-//     });
-//   }, [adminProduct, searchTerm, filters]);
-
-//   const renderProductRow = (product) => {
-//     return [
-//       <td key="image" className="px-6 py-4 text-center text-sm">
-//         <img
-//           src={product.thumbnail}
-//           alt={product.name}
-//           className="h-16 w-16 rounded object-cover"
-//         />
-//       </td>,
-//       <td key="name" className="px-6 py-4 text-sm font-medium text-gray-900">
-//         <Link to={`/vendor-products/${product.id}`}>{product.name}</Link>
-//       </td>,
-//       <td key="category" className="px-6 py-4 text-center text-sm">
-//         {product.Category?.name || "N/A"}
-//       </td>,
-//       <td key="price" className="px-6 py-4 text-center text-sm">
-//         ${product.discounted_price || product.price}
-//         {product.discounted_price && (
-//           <span className="ml-2 text-xs text-gray-400 line-through">
-//             ${product.price}
-//           </span>
-//         )}
-//       </td>,
-//       <td key="piece" className="px-6 py-4 text-sm text-gray-500 text-center">
-//         {product.sold_units || 0}
-//       </td>,
-//       <td key="colors" className="px-6 py-4">
-//         <div className="flex justify-center space-x-2">
-//           {product.variants && Array.isArray(product.variants) && product.variants.length > 0 ? (
-//             product.variants.slice(0, 5).map((variant, index) => (
-//               variant.color && (
-//                 <div
-//                   key={index}
-//                   className="h-6 w-6 rounded-full border border-gray-200"
-//                   style={{ backgroundColor: variant.color }}
-//                   title={variant.color}
-//                 />
-//               )
-//             ))
-//           ) : (
-//             <span className="text-sm text-gray-500">No colors</span>
-//           )}
-//         </div>
-//       </td>,
-//       <td key="action" className="px-6 py-4">
-//         <div className="flex items-center space-x-3">
-//           <button className="text-gray-500 hover:text-gray-700"
-//             onClick={() => handleEditProduct(product.id)}>
-//             <PencilSquareIcon className="h-5 w-5" />
-//           </button>
-//           <button className="text-red-500 hover:text-red-700" onClick={() => handleDeleteProduct(product.id)}>
-//             <TrashIcon className="h-5 w-5" />
-//           </button>
-//         </div>
-//       </td>,
-//     ];
-//   };
-
-//   if (error) {
-//     return (
-//       <div className="text-center text-red-500 py-8">
-//         Error loading products: {error.message}
-//       </div>
-//     );
-//   }
-
-//   return (
-//     <>
-//       <div className="mb-6 flex items-center justify-between">
-//         <h1 className="text-3xl font-bold text-gray-900">Products</h1>
-//         <button
-//           className="rounded-md bg-black px-4 py-2 font-medium text-white shadow"
-//           onClick={handleCreateProduct}
-//         >
-//           Create New Product
-//         </button>
-//       </div>
-
-//       {/* Filter Section */}
-//       <AdminFilterBar
-//         filters={filters}
-//         filterConfig={filterConfig}
-//         onFilterChange={handleFilterChange}
-//         onSearch={searchTerm}
-//         onSearchChange={setSearchTerm}
-//         onResetFilters={handleResetFilters}
-//         searchPlaceholder="Search products..."
-//       />
-
-//       {/* Products Table */}
-//       {isLoading ? (
-//         <div className="text-center py-8 text-gray-500">
-//           Loading products...
-//         </div>
-//       ) : (
-//         <Table
-//           headers={headers}
-//           data={filteredProducts}
-//           renderRow={renderProductRow}
-//         />
-//       )}
-
-//       {/* Pagination */}
-//       {!isLoading && filteredProducts.length > 0 ? (
-//         <Pagination
-//           totalItems={total}
-//           itemsPerPage={itemsPerPage}
-//           currentPage={currentPage}
-//           onPageChange={setCurrentPage}
-//           className="mt-6"
-//         />
-//       ) : !isLoading ? (
-//         <div className="mt-6 text-center text-gray-500">
-//           No products found matching your criteria
-//         </div>
-//       ) : null}
-
-//       {/* <AdminCreateProduct
-//         isOpen={isModalOpen}
-//         onClose={() => setIsModalOpen(false)}
-//       /> */}
-//       <AdminCreateProduct
-//         isOpen={isModalOpen}
-//         onClose={() => setIsModalOpen(false)}
-//         mode={mode}
-//         productId={Number(editingProductId)}
-//       />
-
-//     </>
-//   );
-// };
-
-// export default VendorProducts;
 import { useMemo, useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
@@ -289,20 +39,20 @@ const VendorProducts = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
 
-  const itemsPerPage = 9;
+  const itemsPerPage = 12; // Updated to match PAGE_SIZE
 
   const {
     adminProduct = [],
     total = 0,
     isLoading,
     error,
-  } = useAdminProduct(currentPage, itemsPerPage);
+  } = useAdminProduct(currentPage, itemsPerPage, searchTerm);
   const { deleteProduct, isDeleting } = useDeleteProduct(); // Removed unused deleteProductAsync
 
   // Extract unique categories from products
   const categoryOptions = useMemo(() => {
     const categories = adminProduct
-      .map((product) => product.Category?.name)
+      .map((product) => product.Category?.name || product.category?.name)
       .filter(Boolean);
     return ["All", ...new Set(categories)];
   }, [adminProduct]);
@@ -354,11 +104,6 @@ const VendorProducts = () => {
     return () => clearTimeout(handler);
   }, [searchTerm, setSearchParams]);
 
-  // Reset to page 1 when search term changes (handled by effect above mostly, but kept for safety if needed, though effect does it)
-  // useEffect(() => {
-  //   setCurrentPage(1);
-  // }, [searchTerm]);
-
   const handleCreateProduct = () => {
     setMode("create");
     setEditingProductId(null);
@@ -401,24 +146,6 @@ const VendorProducts = () => {
     setProductToDelete(null);
   }
 
-  // Filter products based on search term and filters
-  const filteredProducts = useMemo(() => {
-    return adminProduct.filter((product) => {
-      const matchesSearch = product.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      const matchesCategory =
-        filters.category === "All" ||
-        product.Category?.name === filters.category;
-      const matchesActive =
-        filters.active === "All" ||
-        (filters.active === "Active" && product.status === "active") ||
-        (filters.active === "Inactive" && product.status !== "active");
-
-      return matchesSearch && matchesCategory && matchesActive;
-    });
-  }, [adminProduct, searchTerm, filters]);
-
   const renderProductRow = (product) => {
     // 1. Filter for only 'Color' variants
     const colorVariants = product.variants
@@ -448,7 +175,7 @@ const VendorProducts = () => {
         <Link to={`/admin/vendor-products/${product.id}`}>{product.name}</Link>
       </td>,
       <td key="category" className="px-6 py-4 text-center text-sm">
-        {product.Category?.name || "N/A"}
+        {product.Category?.name || product.category?.name || "N/A"}
       </td>,
       <td key="price" className="px-6 py-4 text-center text-sm">
         ${product.discounted_price || product.price}
@@ -546,13 +273,13 @@ const VendorProducts = () => {
       ) : (
         <Table
           headers={headers}
-          data={filteredProducts}
+          data={adminProduct || []}
           renderRow={renderProductRow}
         />
       )}
 
       {/* Pagination */}
-      {!isLoading && filteredProducts.length > 0 ? (
+      {!isLoading && adminProduct.length > 0 ? (
         <Pagination
           totalItems={total}
           itemsPerPage={itemsPerPage}

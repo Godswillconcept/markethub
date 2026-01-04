@@ -5,12 +5,14 @@ import {
   CubeTransparentIcon,
   ArrowTrendingUpIcon,
   CalendarDaysIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 import { Link, useParams } from "react-router";
 import { useAdminProductView } from "./useAdminProductDetail.js";
 import AdminProductStatsCard from "./AdminProductStatsCard.jsx";
 import { useProductAnalysis } from "./useProductAnalysis.js";
 import { formatCurrency } from "../../../utils/formatCurrency.js";
+import { formatDate } from "../../../utils/helper.js";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import AdminCreateProduct from "./AdminCreateProduct.jsx";
@@ -30,19 +32,32 @@ const AdminVendorProductDetail = () => {
   const {
     name,
     vendor,
-    Category,
+    category,
     sku,
     created_at,
+    updated_at,
     price,
     variants,
-    stock_quantity,
     status,
     description,
     images,
     thumbnail,
+    date_uploaded,
   } = product || {};
+
+  // Log for debugging
+  console.log('Product object keys:', Object.keys(product));
+  console.log('Product data:', JSON.stringify(product, null, 2));
+  console.log('Category:', category);
+  console.log('Created at:', created_at);
   const { productAnalysis = {}, isLoading: isLoadingAnalysis } = useProductAnalysis(productId);
   const { analytics, product: productStats } = productAnalysis || {};
+  
+  // Get stock from analytics or default to 0
+  const stockQuantity = productStats?.stock || 0;
+  
+  // Get status from product or analytics
+  const productStatus = productStats?.status || status || 'unknown';
 
   const colorValues = variants
     ?.filter((variant) => variant.name === "color")
@@ -100,7 +115,7 @@ const AdminVendorProductDetail = () => {
                 </Link>
                 <span className="mx-2">/</span>
                 <Link to={`#`} className="hover:underline">
-                  {Category?.name}
+                  {category?.name}
                 </Link>
               </nav>
             </div>
@@ -121,10 +136,10 @@ const AdminVendorProductDetail = () => {
                 <TrashIcon className="h-5 w-5" />
                 <span>Remove Product</span>
               </button>
-              {/* <button className="flex items-center space-x-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
+              <button disabled className="flex items-center space-x-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
               <TagIcon className="h-5 w-5" />
               <span>Tag/Change Vendor</span>
-            </button> */}
+            </button>
             </div>
           </div>
         </div>
@@ -173,27 +188,29 @@ const AdminVendorProductDetail = () => {
                     <span className="font-semibold text-gray-700">
                       Vendor:{" "}
                     </span>
-                    <span className="text-black">{vendor?.name}</span>
+                    <span className="text-black">{vendor?.store?.business_name || 'N/A'}</span>
                   </div>
                   <span className="inline-flex items-center rounded-lg bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
-                    {status}
+                    {productStatus}
                   </span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">
                     Category:{" "}
                   </span>
-                  <span className="text-black">{Category?.name}</span>
+                  <span className="text-black">{category?.name || category || 'Uncategorized'}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">
                     Date Added:{" "}
                   </span>
-                  <span className="text-gray-900">{created_at}</span>
+                  <span className="text-gray-900">
+                    {date_uploaded ? formatDate(date_uploaded) : created_at ? formatDate(created_at) : updated_at ? formatDate(updated_at) : 'N/A'}
+                  </span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Price: </span>
-                  <span className="font-bold text-gray-900">{price}</span>
+                  <span className="font-bold text-gray-900">{price ? formatCurrency(price) : 'N/A'}</span>
                 </div>
               </div>
 
@@ -203,18 +220,19 @@ const AdminVendorProductDetail = () => {
                   <span className="font-semibold text-gray-700">
                     SKU / Product ID:{" "}
                   </span>
-                  <span className="text-gray-900">{sku}</span>
+                  <span className="text-gray-900">{sku || 'N/A'}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">
                     Stock Quantity:{" "}
                   </span>
                   <span className="text-gray-900">
-                    {stock_quantity}
-                    {stock_quantity === 0 && (
-                      <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                        Out of Stock
+                    {stockQuantity === 0 ? (
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                        Out of Stock (0)
                       </span>
+                    ) : (
+                      stockQuantity
                     )}
                   </span>
                 </div>
@@ -245,9 +263,9 @@ const AdminVendorProductDetail = () => {
           {/* Total Views Card */}
           <AdminProductStatsCard
             title="Total Views"
-            value={productStats?.impressions}
-            change={productStats?.impressions?.change}
-            type={productStats?.impressions?.type}
+            value={productStats?.impressions || 0}
+            change={0}
+            type="up"
             icon={
               <div className="rounded-full bg-purple-100 p-2 text-purple-600">
                 <UsersIcon className="h-6 w-6" />
@@ -255,12 +273,12 @@ const AdminVendorProductDetail = () => {
             }
           />
 
-          {/* Units Sold Card */}
+          {/* Total Revenue Card */}
           <AdminProductStatsCard
-            title="Units Sold"
-            value={formatCurrency(analytics?.total_revenue)}
-            change={analytics?.units_sold?.change}
-            type={analytics?.units_sold?.type}
+            title="Total Revenue"
+            value={formatCurrency(analytics?.total_revenue || 0)}
+            change={0}
+            type="up"
             icon={
               <div className="rounded-full bg-yellow-100 p-3 text-yellow-600">
                 <CubeTransparentIcon className="h-6 w-6" />
@@ -268,12 +286,12 @@ const AdminVendorProductDetail = () => {
             }
           />
 
-          {/* Conversion Rate Card */}
+          {/* Units Sold Card */}
           <AdminProductStatsCard
-            title="Conversion Rate"
-            value={analytics?.conversion_rate}
-            change={analytics?.conversion_rate?.change}
-            type={analytics?.conversion_rate?.type}
+            title="Units Sold"
+            value={analytics?.total_units_sold || 0}
+            change={0}
+            type="up"
             icon={
               <div className="rounded-full bg-green-100 p-3 text-green-600">
                 <ArrowTrendingUpIcon className="h-6 w-6" />
@@ -281,27 +299,71 @@ const AdminVendorProductDetail = () => {
             }
           />
 
+          {/* Conversion Rate Card */}
+          <AdminProductStatsCard
+            title="Conversion Rate"
+            value={`${analytics?.conversion_rate || 0}%`}
+            change={0}
+            type="up"
+            icon={
+              <div className="rounded-full bg-blue-100 p-3 text-blue-600">
+                <ArrowTrendingUpIcon className="h-6 w-6" />
+              </div>
+            }
+          />
+        </div>
+
+        {/* Additional Information Section */}
+        <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Last Purchase Date Card */}
-          <div className="rounded-lg border border-gray-200 bg-white p-2 shadow">
-            <div className="mb-4 flex items-start justify-between">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+            <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500">
                   Last Purchase Date
                 </p>
                 <p className="text-lg font-bold text-gray-900">
-                  {analytics?.last_sale_date}
+                  {analytics?.last_sale_date ? formatDate(analytics.last_sale_date) : 'No sales yet'}
                 </p>
               </div>
               <div className="rounded-full bg-blue-100 p-3 text-blue-600">
-                <CalendarDaysIcon className="h-6 w-6" />{" "}
-                {/* Or a more relevant icon */}
+                <CalendarDaysIcon className="h-6 w-6" />
               </div>
             </div>
-            {/* No percentage change for last purchase date */}
-            <p className="pt-1 text-sm text-gray-500">
-              <span className="invisible">_</span>{" "}
-              {/* Keep spacing consistent with other cards */}
-            </p>
+          </div>
+
+          {/* Total Orders Card */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">
+                  Total Orders
+                </p>
+                <p className="text-lg font-bold text-gray-900">
+                  {analytics?.total_orders || 0}
+                </p>
+              </div>
+              <div className="rounded-full bg-emerald-100 p-3 text-emerald-600">
+                <CubeTransparentIcon className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Average Order Value Card */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">
+                  Average Order Value
+                </p>
+                <p className="text-lg font-bold text-gray-900">
+                  {formatCurrency(analytics?.average_order_value || 0)}
+                </p>
+              </div>
+              <div className="rounded-full bg-orange-100 p-3 text-orange-600">
+                <ArrowTrendingUpIcon className="h-6 w-6" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

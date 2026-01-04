@@ -362,6 +362,10 @@ const publicRoutes = [
   'GET /auth/verify-reset-token/:token',
   'POST /auth/reset-password/:token',
   'GET /auth/verify-phone-change/:token',
+  'GET /auth/verify-phone-change/:token',
+  'POST /auth/refresh',
+  'POST /auth/refresh-token',
+  'POST /auth/revoke-refresh-token',
   'GET /auth/logout',
 
   // Category routes

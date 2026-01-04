@@ -16,6 +16,15 @@ import { getImageUrl } from "../../utils/imageUtil.js";
 
 // ProductCard Component - Moved outside for performance
 const ProductCard = ({ product }) => {
+  // Calculate total stock from variant combinations
+  const totalStock = product.variantCombinations?.reduce((sum, variant) => {
+    return sum + (variant?.stock || 0);
+  }, 0) || 0;
+  
+  // Determine if product is in stock based on total stock
+  const isInStock = totalStock > 0;
+  const statusText = isInStock ? "Active" : "Out of Stock";
+  
   return (
     <div className="group overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm transition-all duration-200 hover:shadow-md">
       {/* Product Image */}
@@ -30,12 +39,12 @@ const ProductCard = ({ product }) => {
         <div className="absolute top-3 left-3">
           <span
             className={`rounded-full px-2 py-1 text-xs font-medium ${
-              product.status === "active"
+              isInStock
                 ? "bg-green-100 text-green-600"
                 : "bg-red-100 text-red-600"
             }`}
           >
-            {product.status === "active" ? "Active" : "Out of stock"}
+            {statusText}
           </span>
         </div>
 
@@ -344,12 +353,12 @@ function VendorDashboard() {
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                              product.status === "active"
+                              product.variantCombinations?.some(v => v.stock > 0)
                                 ? "bg-green-100 text-green-800"
                                 : "bg-red-100 text-red-800"
                             }`}
                           >
-                            {product.status}
+                            {product.variantCombinations?.some(v => v.stock > 0) ? "Active" : "Out of Stock"}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">

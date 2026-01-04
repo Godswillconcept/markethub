@@ -68,6 +68,7 @@ import VendorList from "./Features/admin/vendorList/VendorList.jsx";
 import VendorDetailPage from "./Features/admin/vendorList/VendorDetailPage.jsx";
 import VendorProducts from "./Features/admin/vendorProduct/VendorProducts.jsx";
 import UsersList from "./Features/admin/adminUsers/UsersList";
+import AdminUsersDetailPage from "./Features/admin/adminUsers/AdminUsersDetailPage";
 import AdminVendorProductDetail from "./Features/admin/vendorProduct/AdminVendorProductDetail.jsx";
 import AdminProductCollection from "./Features/admin/collections/AdminProductCollection.jsx";
 import CollectionDetail from "./Features/admin/collections/CollectionDetail.jsx";
@@ -148,6 +149,7 @@ function App() {
                 />
                 <Route path="/admin/vendors" element={<VendorList />} />
                  <Route path="/admin/users" element={<UsersList />} />
+                 <Route path="/admin/users/:id" element={<AdminUsersDetailPage />} />
                 <Route
                   path="/admin/vendors/:id"
                   element={<VendorDetailPage />}

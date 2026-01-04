@@ -11,13 +11,16 @@ export async function getAdminProduct(page = 1, limit = 9, search) {
             params
         });
 
-        console.log("Admin product api", data);
-
-        return {
+        // Transform backend response structure
+        const transformedData = {
             data: data.data,
             total: data.total,
             count: data.count
         };
+
+        console.log("Admin product api transformed", transformedData);
+
+        return transformedData;
     } catch (error) {
         throw new Error(error.response?.data?.message || "Failed to get admin product");
     }
@@ -75,29 +78,6 @@ export async function getAllVendorsInput(search = "") {
     }
 }
 
-// export async function createProduct() {
-//     try {
-//         const { data } = await axiosInstance.post('/admin/products');
-
-//         console.log("Admin product detail api", data);
-
-//         return data.data;
-//     } catch (error) {
-//         throw new Error(error.response?.data?.message || "Failed to create product");
-//     }
-// }
-
-// export async function updateProduct(productId) {
-//     try {
-//         const { data } = await axiosInstance.put(`/admin/products/${productId}`);
-
-//         console.log("Admin product detail api", data);
-
-//         return data.data;
-//     } catch (error) {
-//         throw new Error(error.response?.data?.message || "Failed to update product");
-//     }
-// }
 export async function createProduct(formData) {
     const { data } = await axiosInstance.post('/admin/products', formData, {
         headers: {

@@ -266,14 +266,9 @@ exports.register = async (req, res, next) => {
     }
 
     // Create session and refresh token
-    try {
-      const refreshTokenData = await refreshTokenService.createRefreshToken(newUser.id, req);
-      createSendToken(newUser, 201, res, refreshTokenData);
-    } catch (tokenError) {
-      logger.error(`Error creating refresh token during registration: ${tokenError.message}`);
-      // Fallback to basic token if refresh token creation fails
-      createSendToken(newUser, 201, res);
-    }
+    // CRITICAL FIX: Do not fallback to basic token. Session is required for frontend.
+    const refreshTokenData = await refreshTokenService.createRefreshToken(newUser.id, req);
+    createSendToken(newUser, 201, res, refreshTokenData);
   } catch (err) {
     logger.error(`Error in register: ${err.message}`, { error: err });
     next(new AppError("An error occurred during registration. Please try again.", 500));
@@ -502,13 +497,13 @@ exports.login = async (req, res, next) => {
           }
 
           // 4) Generate refresh token and session
+          // CRITICAL FIX: Do not fallback. Fail hard if session cannot be created.
           try {
             const refreshTokenData = await refreshTokenService.createRefreshToken(user.id, req);
             createSendToken(user, 200, res, refreshTokenData);
           } catch (tokenError) {
-            logger.error(`Error creating refresh token during login: ${tokenError.message}`);
-            // Fallback to basic token if refresh token creation fails
-            createSendToken(user, 200, res);
+            logger.error(`Error creating refresh token during login: ${tokenError.message}`, { error: tokenError });
+            return next(new AppError("Login failed: Could not create user session. Please try again.", 500));
           }
         } catch (err) {
           logger.error(`Error in login passport authenticate callback: ${err.message}`, { error: err });

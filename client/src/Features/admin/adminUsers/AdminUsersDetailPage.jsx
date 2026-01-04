@@ -42,7 +42,7 @@ function AdminUsersDetailPage() {
         {/* Top Header & Actions */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center space-x-2 text-sm text-gray-500">
-            <Link to="/admin-users" className="hover:text-gray-700">
+            <Link to="/admin/users" className="hover:text-gray-700">
               All Users
             </Link>
             <span>/</span>

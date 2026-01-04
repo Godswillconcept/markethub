@@ -1,9 +1,7 @@
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 
-function AdminProductStatsCard({ title, value, change, type, icon }) {
-    return (<>
-
-        {/* Units Sold Card */}
+function AdminProductStatsCard({ title, value, change = 0, type = "up", icon }) {
+    return (
         <div className="rounded-lg border border-gray-200 bg-white p-3 shadow" >
             <div className="mb-4 flex items-start justify-between">
                 <div>
@@ -28,7 +26,7 @@ function AdminProductStatsCard({ title, value, change, type, icon }) {
                 )}
             </p>
         </div>
-    </>)
+    )
 }
 
 export default AdminProductStatsCard

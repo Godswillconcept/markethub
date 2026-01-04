@@ -108,6 +108,14 @@ export function AuthProvider({ children }) {
     }
   }, [error, queryClient]);
 
+  // Handle explicitly failed login attempts (error 500s from our new strict controller)
+  useEffect(() => {
+    if (error && error.response?.status === 500 && error.message.includes('Could not create user session')) {
+      console.error('[AuthContext] Critical Login Failure: Server failed to create session.');
+      // Optionally show a toast or alert here via a UI library if available
+    }
+  }, [error]);
+
   // Centralized login/auth update function
   const setAuth = (authData) => {
     if (authData.token) {
@@ -119,6 +127,8 @@ export function AuthProvider({ children }) {
       const sId = authData.session_id || authData.session?.id;
       localStorage.setItem("session_id", sId);
       setSessionId(sId);
+    } else {
+      console.warn('[AuthContext] UpdateAuth called but NO session_id provided. This may cause redirect loops.', authData);
     }
     
     if (authData.refreshToken || authData.refresh_token) {

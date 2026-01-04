@@ -120,6 +120,30 @@ router.post(
 // Phone change verification (public route)
 router.get("/verify-phone-change/:token", authController.verifyPhoneChange);
 
+// Refresh token endpoint
+router.post(
+  "/refresh",
+  refreshTokenValidation,
+  validate,
+  authController.refreshToken
+);
+
+// Alias for refresh token (to match client calls)
+router.post(
+  "/refresh-token",
+  refreshTokenValidation,
+  validate,
+  authController.refreshToken
+);
+
+// Revoke specific refresh token
+router.post(
+  "/revoke-refresh-token",
+  revokeRefreshTokenValidation,
+  validate,
+  authController.revokeRefreshToken
+);
+
 // Protected routes (require authentication)
 router.use(protect);
 
@@ -153,13 +177,7 @@ router.post(
   authController.cancelPhoneChange
 );
 
-// Refresh token endpoint
-router.post(
-  "/refresh",
-  refreshTokenValidation,
-  validate,
-  authController.refreshToken
-);
+
 
 // Enhanced logout with session management
 router.post(
@@ -203,13 +221,7 @@ router.get(
   authController.getTokenStats
 );
 
-// Revoke specific refresh token
-router.post(
-  "/revoke-refresh-token",
-  revokeRefreshTokenValidation,
-  validate,
-  authController.revokeRefreshToken
-);
+
 
 // Get user blacklist entries
 router.get(

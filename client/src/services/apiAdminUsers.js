@@ -6,8 +6,16 @@ export async function getUsersList({ page, limit = PAGE_SIZE }) {
     const { data } = await axiosInstance.get("/users", {
       params: { page, limit },
     });
-    console.log("raw data from Api", data);
-    return data;
+    
+    // Transform backend response structure
+    const transformedData = {
+      data: data.data,
+      total: data.total,
+      count: data.count
+    };
+    
+    console.log("transformed data from Api", transformedData);
+    return transformedData;
   } catch (error) {
     throw new Error(
       error.response?.data?.message || "Failed to get vendor applications",

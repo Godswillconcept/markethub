@@ -16,13 +16,17 @@ export async function getVendorsList({ page, limit = PAGE_SIZE, search, status, 
     if (sortOrder) {
       params.sortOrder = sortOrder;
     }
-    const { data } = await axiosInstance.get(
+    const response = await axiosInstance.get(
       "/admin/dashboard/vendor-onboarding-stats",
       {
         params,
       },
     );
-    return data;
+    // Return data and total from the response structure
+    return {
+      data: response.data.data,
+      total: response.data.pagination?.totalItems || 0,
+    };
   } catch (error) {
     throw new Error(
       error.response?.data?.message || "Failed to get vendor applications",

@@ -17,16 +17,17 @@ export function useVendorList() {
   // QUERY
   const {
     isLoading,
-    data: { data: vendors, total } = {},
+    data: responseData,
     error,
   } = useQuery({
     queryKey: ["vendor-list", page, search, status, sortBy, sortOrder],
     queryFn: () => getVendorsList({ page, search, status, sortBy, sortOrder }),
     keepPreviousData: true,
-    onSuccess: (data) => {
-      queryClient.setQueryData(["vendor-list", page, search, status, sortBy, sortOrder], data);
-    },
   });
+
+  // Extract data from the response structure
+  const vendors = responseData?.data || [];
+  const total = responseData?.total || 0;
 
   // PREFETCH NEXT + PREV PAGES
   const pageCount = Math.ceil(total / PAGE_SIZE);
