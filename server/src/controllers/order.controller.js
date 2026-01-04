@@ -47,9 +47,21 @@ const { v4: uuidv4 } = require("uuid");
  */
 async function convertCartToOrder(cartSummary, options = {}) {
   try {
-    // Validate cart summary
-    if (!cartSummary || !cartSummary.items || cartSummary.items.length === 0) {
-      throw new Error("Cart is empty or invalid");
+    // Enhanced validation with detailed error messages
+    if (!cartSummary) {
+      throw new Error("Cart summary is null or undefined");
+    }
+
+    // Check for cartId - this might be missing
+    if (!cartSummary.cartId && !cartSummary.id) {
+      throw new Error("Cart ID is missing from cart summary");
+    }
+
+    // Normalize cartId - handle both cartId and id
+    const cartId = cartSummary.cartId || cartSummary.id;
+    
+    if (!cartSummary.items || !Array.isArray(cartSummary.items) || cartSummary.items.length === 0) {
+      throw new Error("Cart is empty or has no items");
     }
 
     if (!cartSummary.userId) {
@@ -61,7 +73,7 @@ async function convertCartToOrder(cartSummary, options = {}) {
     }
 
     // Fetch cart with full details to ensure data integrity
-    const cart = await Cart.findByPk(cartSummary.cartId, {
+    const cart = await Cart.findByPk(cartId, {
       include: [
         {
           model: CartItem,
@@ -78,7 +90,7 @@ async function convertCartToOrder(cartSummary, options = {}) {
     });
 
     if (!cart) {
-      throw new Error("Cart not found");
+      throw new Error(`Cart with ID ${cartId} not found`);
     }
 
     if (cart.user_id !== cartSummary.userId) {
@@ -90,7 +102,11 @@ async function convertCartToOrder(cartSummary, options = {}) {
     for (const cartItem of cart.items) {
       const product = cartItem.product;
 
-      if (!product || product.status !== "active") {
+      if (!product) {
+        throw new Error(`Product not found for cart item ${cartItem.id}`);
+      }
+
+      if (product.status !== "active") {
         throw new Error(
           `Product ${product?.name || "Unknown"} is no longer available`
         );
@@ -100,32 +116,70 @@ async function convertCartToOrder(cartSummary, options = {}) {
       const combinations = await VariantCombination.findAll({
         where: { product_id: product.id },
       });
-      const totalStock = combinations.reduce(
-        (sum, combo) => sum + (combo.stock || 0),
-        0
-      );
-
-      if (totalStock < cartItem.quantity) {
-        throw new Error(
-          `Insufficient stock for ${product.name}. Available: ${totalStock}`
+      
+      // If product has combinations, ensure at least one is active
+      if (combinations.length > 0) {
+        const activeCombinations = combinations.filter(c => c.is_active);
+        if (activeCombinations.length === 0) {
+          throw new Error(`No active variant combinations found for product ${product.name}`);
+        }
+        
+        const totalStock = activeCombinations.reduce(
+          (sum, combo) => sum + (combo.stock || 0),
+          0
         );
+
+        if (totalStock < cartItem.quantity) {
+          throw new Error(
+            `Insufficient stock for ${product.name}. Available: ${totalStock}`
+          );
+        }
+      } else {
+        // Product without combinations - check legacy inventory
+        const inventory = await Inventory.findOne({
+          where: { product_id: product.id }
+        });
+        
+        if (!inventory || inventory.stock < cartItem.quantity) {
+          const availableStock = inventory?.stock || 0;
+          throw new Error(
+            `Insufficient stock for ${product.name}. Available: ${availableStock}`
+          );
+        }
       }
 
       // Map cart item to order item
+      // Ensure selected_variants is always an array or null
+      let selectedVariants = cartItem.selected_variants || null;
+      if (selectedVariants !== null) {
+        // Handle case where selected_variants might be a string (JSON stored in DB)
+        if (typeof selectedVariants === 'string') {
+          try {
+            selectedVariants = JSON.parse(selectedVariants);
+          } catch (e) {
+            selectedVariants = null;
+          }
+        }
+        // Ensure it's an array
+        if (!Array.isArray(selectedVariants)) {
+          selectedVariants = null;
+        }
+      }
+      
       orderItems.push({
         productId: cartItem.product_id,
         quantity: cartItem.quantity,
         price: parseFloat(product.discounted_price || product.price),
-        selected_variants: cartItem.selected_variants || null,
+        selected_variants: selectedVariants,
         combinationId: cartItem.combination_id || null,
       });
     }
 
     // Calculate order totals
-    const subtotal = parseFloat(cartSummary.subtotal);
+    const subtotal = parseFloat(cartSummary.subtotal || 0);
     const discount = parseFloat(cartSummary.discount || 0);
-    const shipping = 0.0; // TODO: Calculate shipping based on address/location
-    const tax = 0.0; // TODO: Calculate tax based on address/location
+    const shipping = 0.0;
+    const tax = 0.0;
     const total = subtotal - discount + shipping + tax;
 
     // Return order payload structure
@@ -142,6 +196,11 @@ async function convertCartToOrder(cartSummary, options = {}) {
       paymentMethod: options.paymentMethod || "paystack",
     };
   } catch (error) {
+    logger.error("Cart to order conversion failed:", {
+      error: error.message,
+      cartSummary: cartSummary,
+      options: options
+    });
     throw new Error(`Cart to order conversion failed: ${error.message}`);
   }
 }
@@ -176,7 +235,7 @@ async function convertCartToOrder(cartSummary, options = {}) {
 async function createOrderFromCart(req, res) {
   const transaction = await sequelize.transaction();
   try {
-    const { addressId, paymentMethod = "paystack", notes } = req.body;
+    const { addressId, paymentMethod = "paystack", notes, callbackUrl } = req.body;
     const userId = req.user.id;
 
     // Validate required fields
@@ -206,7 +265,13 @@ async function createOrderFromCart(req, res) {
       throw new Error("Failed to retrieve cart summary");
     }
 
-    const cartSummary = cartSummaryResponse.data;
+    // Extract the actual cart summary from the nested response structure
+    const cartSummary = cartSummaryResponse.data?.data || cartSummaryResponse.data;
+
+    // Ensure cartSummary has the required fields
+    if (!cartSummary || (!cartSummary.cartId && !cartSummary.id)) {
+      throw new Error("Invalid cart summary structure - missing cart ID");
+    }
 
     // Convert cart to order payload
     const orderPayload = await convertCartToOrder(cartSummary, {
@@ -216,7 +281,6 @@ async function createOrderFromCart(req, res) {
     });
 
     // Create the order using the existing createOrder logic
-    // We'll simulate the request to reuse the createOrder function
     const mockOrderReq = {
       body: {
         addressId: orderPayload.addressId,
@@ -225,6 +289,7 @@ async function createOrderFromCart(req, res) {
         taxAmount: orderPayload.tax,
         notes: orderPayload.notes,
         paymentMethod: orderPayload.paymentMethod,
+        callbackUrl: callbackUrl, // Pass callbackUrl to createOrder for Paystack
       },
       user: { id: userId },
     };
@@ -253,10 +318,19 @@ async function createOrderFromCart(req, res) {
 
     await transaction.commit();
 
+    // Extract payment data from the order response
+    const orderData = orderResponse.data?.data || orderResponse.data;
+    const paymentData = orderData?.order?.paymentData || null;
+
     res.status(201).json({
       status: "success",
       message: "Order created successfully from cart",
-      data: orderResponse.data,
+      data: {
+        order: {
+          ...orderData.order,
+          paymentData: paymentData,
+        },
+      },
     });
   } catch (error) {
     // Only rollback if transaction hasn't been committed yet
@@ -369,6 +443,7 @@ async function createOrder(req, res) {
       taxAmount = 0,
       notes,
       paymentMethod = "paystack", // Only support Paystack payments
+      callbackUrl,
     } = req.body;
     const userId = req.user.id;
     const orderDate = new Date();
@@ -404,7 +479,7 @@ async function createOrder(req, res) {
           { model: Vendor, as: "vendor" },
           {
             model: VariantCombination,
-            as: "combination", // Fixed: changed from 'combinations' to match OrderItem model
+            as: "combinations", // Product uses hasMany, so plural 'combinations' is correct
             where: { is_active: true },
             required: false,
           },
@@ -417,31 +492,41 @@ async function createOrder(req, res) {
         throw new Error(`Vendor not found for product ${product.id}`);
 
       let itemPrice = product.discounted_price || product.price;
-      let selectedVariants = [];
-
-      if (item.selected_variants && item.selected_variants.length > 0) {
+      
+      // Defensive: Ensure selected_variants is an array before checking length
+      let selectedVariants = item.selected_variants;
+      if (typeof selectedVariants === 'string') {
+        try {
+          selectedVariants = JSON.parse(selectedVariants);
+        } catch (e) {
+          selectedVariants = [];
+        }
+      }
+      if (!Array.isArray(selectedVariants)) {
+        selectedVariants = [];
+      }
+      
+      if (selectedVariants && selectedVariants.length > 0) {
         // Handle multiple variants
-        const variantIds = item.selected_variants.map((v) => v.id);
+        const variantIds = selectedVariants.map((v) => v.id);
         const variants = await ProductVariant.findAll({
           where: { id: variantIds, product_id: item.productId },
           transaction,
         });
 
-        if (variants.length !== item.selected_variants.length) {
+        if (variants.length !== selectedVariants.length) {
           throw new Error(
             `Some variants not found for product ${item.productId}`
           );
         }
 
         // Calculate total additional price from all selected variants
-        const totalVariantPrice = item.selected_variants.reduce(
+        const totalVariantPrice = selectedVariants.reduce(
           (sum, selectedVariant) =>
             sum + (parseFloat(selectedVariant.additional_price) || 0),
           0
         );
         itemPrice += totalVariantPrice;
-
-        selectedVariants = item.selected_variants;
       } else if (item.variantId) {
         // Backward compatibility: single variant
         const variant = await ProductVariant.findByPk(item.variantId, {
@@ -477,7 +562,7 @@ async function createOrder(req, res) {
       } else {
         // Simple product (no variant selected) logic
         // Find default combination (there should be exactly one for simple products)
-        const combinations = product.combination ? [product.combination] : [];
+        const combinations = product.combinations || [];
 
         if (combinations.length === 0) {
           throw new Error(`Insufficient stock for product: ${product.name}`);
@@ -511,11 +596,9 @@ async function createOrder(req, res) {
 
       totalAmount += item.quantity * itemPrice;
     }
-    console.log(itemsWithDetails);
 
     // Add shipping and tax to total
     totalAmount += parseFloat(shippingCost || 0) + parseFloat(taxAmount || 0);
-    console.log(totalAmount);
 
     // Create the order with its associations
     // Create the order with its associations
@@ -654,7 +737,7 @@ async function createOrder(req, res) {
 
     const paymentData = await paymentService.initializePayment({
       email: user.email,
-      amount: totalAmount * 100, // Convert to kobo
+      amount: totalAmount, // Amount in Naira, payment service converts to kobo
       reference,
       callbackUrl: finalCallbackUrl,
       metadata: {
@@ -793,7 +876,7 @@ async function createOrder(req, res) {
         order: {
           ...orderWithItems.toJSON(),
           paymentData:
-            paymentMethod !== "cash_on_delivery" ? paymentData?.data : null,
+            paymentMethod !== "cash_on_delivery" ? paymentData.data : null,
         },
       },
     });
@@ -1583,7 +1666,6 @@ async function verifyPayment(req, res) {
 
     // Skip if already verified
     if (transactionRecord.status === "completed" || transactionRecord.status === "success") {
-      console.log(`[VerifyPayment] Transaction ${reference} already verified.`);
       return res.status(200).json({
         status: "success",
         message: "Payment already verified",
@@ -1639,7 +1721,6 @@ async function verifyPayment(req, res) {
 
     // Commit the transaction before sending emails
     await transaction.commit();
-    console.log(`[VerifyPayment] ✅ Payment verified and order updated: ${order.id}`);
 
     // Send notifications after successful commit
     try {

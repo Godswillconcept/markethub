@@ -117,3 +117,17 @@ export const createOrder = async (orderData) => {
     throw error;
   }
 };
+
+// Create order from cart
+export const createOrderFromCart = async (orderData) => {
+  try {
+    const response = await axiosInstance.post(`/orders/from-cart`, orderData, {
+      withCredentials: true,
+    });
+    console.log("Order created from cart:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Error creating order from cart:", error);
+    throw error;
+  }
+};

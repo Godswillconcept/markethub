@@ -7,7 +7,7 @@ class PaymentService {
     this.secretKey = process.env.PAYSTACK_SECRET_KEY;
     
     if (!this.secretKey || !this.secretKey.startsWith('sk_')) {
-      console.warn('⚠️ WARNING: PAYSTACK_SECRET_KEY appears to be missing or invalid. It should start with "sk_test_" or "sk_live_".');
+      // Secret key validation warning suppressed
     }
 
     this.paystack = axios.create({
@@ -53,12 +53,9 @@ class PaymentService {
           items: paymentData.items,
         },
       });
-
+  
       return response.data;
     } catch (error) {
-      console.error('PayStack initialization error:', error);
-      // console.error('PayStack initialization error - data:', error.response?.data);
-      console.error('PayStack initialization error - message:', error.message);
       throw new AppError('Payment initialization failed', 400);
     }
   }

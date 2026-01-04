@@ -36,13 +36,14 @@ const formatCurrency = (amount) =>
 function PaymentSummary() {
   const [selected, setSelected] = useState("paystack");
   const navigate = useNavigate();
-  const { createDirectOrder, isCreatingOrder } = useCreateOrder();
+  const { createCartOrder, isCreatingCartOrder } = useCreateOrder();
   
   // Fetch real data
   const { addresses, isLoading: isLoadingAddress } = useAddresses();
   const { data: cartData, isLoading: isLoadingCart } = useCartSummary();
 
   const isLoading = isLoadingAddress || isLoadingCart;
+  const isProcessing = isCreatingCartOrder;
 
   // Derive data
   const cartValues = cartData?.data || {};
@@ -69,25 +70,13 @@ function PaymentSummary() {
 
     const payload = {
       addressId: defaultAddress.id,
-      items: cartValues.items?.map(item => ({
-        productId: item.product?.id,
-        quantity: item.quantity,
-        selected_variants: item.selected_variants || [],
-        combinationId: item.combination_id || null,
-      })),
-      shippingCost: 1500, // Matching CartSummary default or from API
-      taxAmount: 750,    // Matching CartSummary default or from API
-      notes: "Payment from Payment Summary",
       paymentMethod: selected,
-      callbackUrl: `${window.location.origin}/payment/verify`,
+      notes: "Payment from Payment Summary",
     };
 
-    createDirectOrder(payload, {
-      onSuccess: (data) => {
-        // useCreateOrder.js handles redirection if it finds authorization_url
-        console.log("Order created successfully:", data);
-      }
-    });
+    // Use createCartOrder which calls /api/orders/from-cart
+    // This endpoint handles converting cart items to order and CLEARING the cart
+    createCartOrder(payload);
   };
 
   if (isLoading) {
@@ -170,21 +159,21 @@ function PaymentSummary() {
 
               {/* Proceed Button */}
               <button
-                disabled={!selected || isCreatingOrder}
+                disabled={!selected || isProcessing}
                 onClick={handleProceedToPayment}
                 className={`mt-6 w-full rounded-2xl py-4 text-base font-semibold transition sm:text-lg flex items-center justify-center gap-2 ${
-                  selected && !isCreatingOrder
+                  selected && !isProcessing
                     ? "bg-black text-white hover:bg-gray-900"
                     : "cursor-not-allowed bg-gray-300 text-gray-500"
                 }`}
               >
-                {isCreatingOrder ? (
+                {isProcessing ? (
                   <>
                     <FiLoader className="animate-spin text-xl" />
                     Processing Order...
                   </>
                 ) : (
-                  `Proceed to Payment (${formatCurrency(orderSummary.estimatedTotal)})`
+                  `Proceed to Payment (${formatCurrency(orderSummary.estimatedTotal + 1500 + 750)})`
                 )}
               </button>
             </section>

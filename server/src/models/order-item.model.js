@@ -24,7 +24,7 @@ module.exports = (sequelize, DataTypes) => {
       });
       OrderItem.belongsTo(models.VariantCombination, {
         foreignKey: 'combination_id',
-        as: 'combination'
+        as: 'combinations'
       });
     }
 

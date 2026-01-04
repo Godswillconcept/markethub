@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { createOrder } from "../../services/apiCart.js";
+import { createOrder, createOrderFromCart } from "../../services/apiCart.js";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -29,5 +29,29 @@ export function useCreateOrder() {
         },
     });
 
-    return { createDirectOrder, isCreatingOrder };
+
+
+    const { mutate: createCartOrder, isPending: isCreatingCartOrder } = useMutation({
+        mutationFn: createOrderFromCart,
+        onSuccess: (data) => {
+            console.log("Cart order success:", data);
+            
+            // Check for Paystack authorization URL
+            const authUrl = data?.data?.order?.paymentData?.authorization_url;
+            
+            if (authUrl) {
+                toast.success("Redirecting to payment...");
+                window.location.href = authUrl;
+            } else {
+                toast.success("Order processed successfully");
+                navigate("/settings/orders");
+            }
+        },
+        onError: (err) => {
+            console.error("Cart order creation failed", err);
+            toast.error("Failed to process order");
+        },
+    });
+
+    return { createDirectOrder, isCreatingOrder, createCartOrder, isCreatingCartOrder };
 }

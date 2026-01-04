@@ -1957,7 +1957,7 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
           },
           {
             model: db.VariantCombination,
-            as: "combination", // Fixed: changed from 'combinations' to match OrderItem model association
+            as: "combinations", // Fixed: changed from 'combination' to match OrderItem model association
             attributes: ["id", "stock", "price_modifier", "combination_name"],
             include: [
               {

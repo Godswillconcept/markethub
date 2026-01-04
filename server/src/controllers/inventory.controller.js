@@ -349,7 +349,7 @@ const getProductInventoryHistory = async (req, res, next) => {
         },
         {
           model: VariantCombination,
-          as: "combination",
+          as: "combinations",
           attributes: ["combination_name", "sku_suffix"],
           required: false, // Not all history might be tied to a combination (e.g., initial product-level if it existed)
         },
@@ -684,7 +684,7 @@ const getInventoryHistoryAdmin = async (req, res, next) => {
         },
         {
           model: VariantCombination,
-          as: "combination", // Assuming this association exists in InventoryHistory model
+          as: "combinations", // Assuming this association exists in InventoryHistory model
           attributes: ["id", "combination_name", "sku_suffix"],
           required: false, // Not all history might be tied to a combination (e.g., old product-level history)
         },

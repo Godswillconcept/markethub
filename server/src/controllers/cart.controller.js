@@ -865,25 +865,46 @@ const getCartSummary = async (req, res, next) => {
     const discount = 0.0; // TODO: Calculate discounts based on promotions/coupons
     const total = subtotal - discount;
 
+    // Ensure items array is properly structured with all required fields
     const summary = {
-      cartId: cart.id,
+      cartId: cart.id, // Explicitly include cartId
       userId: userId || null,
       subtotal,
       discount,
       total,
-      items: items.map((item) => ({
-        product: {
-          id: item.product.id,
-          name: item.product.name,
-          price: parseFloat(item.product.discounted_price || item.product.price),
-          thumbnail: item.product.thumbnail,
-          category: item.product.category,
-        },
-        selected_variants: item.selected_variants || [],
-        combination_id: item.combination_id || null,
-        quantity: item.quantity,
-        subtotal: parseFloat(item.total_price),
-      })),
+      items: items.map((item) => {
+        // Ensure selected_variants is properly formatted
+        let selectedVariants = item.selected_variants || [];
+        
+        // Handle case where selected_variants might be a string
+        if (typeof selectedVariants === 'string') {
+          try {
+            selectedVariants = JSON.parse(selectedVariants);
+          } catch (e) {
+            console.warn(`Failed to parse selected_variants for item ${item.id}: ${e.message}`);
+            selectedVariants = [];
+          }
+        }
+        
+        // Ensure it's an array
+        if (!Array.isArray(selectedVariants)) {
+          selectedVariants = [];
+        }
+        
+        return {
+          product: {
+            id: item.product.id,
+            name: item.product.name,
+            price: parseFloat(item.product.discounted_price || item.product.price),
+            thumbnail: item.product.thumbnail,
+            category: item.product.category,
+          },
+          selected_variants: selectedVariants,
+          combination_id: item.combination_id || null,
+          quantity: item.quantity,
+          subtotal: parseFloat(item.total_price),
+        };
+      }),
     };
 
     res.status(200).json({
