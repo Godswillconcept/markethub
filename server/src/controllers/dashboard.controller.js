@@ -231,13 +231,14 @@ const getNewArrivals = catchAsync(async (req, res, next) => {
  */
 const getTrendingNow = catchAsync(async (req, res, next) => {
   const { limit = 10, page = 1 } = req.query;
-  const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 50));
+  const { limit: limitNum, offset } = paginate(page, limit); // FIX: Use paginate helper
   
   // Get products sorted by recent sales momentum (last 7 days)
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   
-  const products = await db.Product.findAll({
+  // FIX: Use findAndCountAll for proper pagination metadata
+  const { count, rows: products } = await db.Product.findAndCountAll({
     attributes: [
       "id",
       "vendor_id",
@@ -293,11 +294,16 @@ const getTrendingNow = catchAsync(async (req, res, next) => {
       ["impressions", "DESC"], // Tiebreaker
     ],
     limit: limitNum,
+    offset, // FIX: Add offset for pagination
+    distinct: true, // FIX: Prevents duplicate rows
   });
 
+  // FIX: Return paginated response with metadata
+  const response = createPaginationResponse(products, page, limit, count);
+  
   res.status(200).json({
     status: "success",
-    data: products,
+    ...response,
   });
 });
 
@@ -575,22 +581,29 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
   const { page = 1, limit = 20, status = "" } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit);
 
-  // Build where clause with status filtering
+  // Build base where clause
   const whereClause = { vendor_id: vendorId };
   
-  // Handle status filtering based on stock levels
+  // Handle status filtering based on stock levels using subquery approach
   if (status && status !== "All") {
     if (status === "out_of_stock") {
-      // Filter products with zero or negative total stock
-      whereClause[Op.or] = [
-        { combinations: { [Op.or]: [{ stock: 0 }, { stock: null }] } },
-        { combinations: null } // Products without variants are considered out of stock
-      ];
+      // Filter products with zero or negative total stock using subquery
+      whereClause[Op.and] = literal(`
+        (
+          SELECT COALESCE(SUM(vc.stock), 0)
+          FROM variant_combinations vc
+          WHERE vc.product_id = Product.id
+        ) <= 0
+      `);
     } else if (status === "active") {
-      // Filter products with positive stock
-      whereClause[Op.and] = [
-        { combinations: { [Op.gt]: { stock: 0 } }}
-      ];
+      // Filter products with positive stock using subquery
+      whereClause[Op.and] = literal(`
+        (
+          SELECT COALESCE(SUM(vc.stock), 0)
+          FROM variant_combinations vc
+          WHERE vc.product_id = Product.id
+        ) > 0
+      `);
     }
   }
   
@@ -625,12 +638,11 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
       "sold_units",
       "created_at",
       "updated_at",
-      "combinations.stock", // Add stock field to attributes
     ],
     order: [["created_at", "DESC"]],
     limit: limitNum,
     offset,
-    subQuery: false, // Explicitly disable subQuery to ensure INNER JOIN behavior
+    distinct: true, // IMPORTANT: Prevents duplicate rows from LEFT JOIN
   });
   const response = createPaginationResponse(products, page, limit, count);
   res.status(200).json({
@@ -877,12 +889,11 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
     order: [["created_at", "DESC"]],
     limit: limitNum,
     offset,
+    distinct: true, // FIX: Prevents duplicate rows and ensures count matches data
   });
 
-  // Filter out any records that somehow got through without valid Order or Product
-  const validEarnings = earnings.filter(earning => {
-    return earning.order && earning.product && earning.order.id && earning.product.id;
-  });
+  // FIX: No longer need post-query filtering since required: true ensures data integrity
+  const validEarnings = earnings;
 
   // Get payout dates for all earnings, sorted by payout_date ascending
   const payoutRecords = await db.Payout.findAll({
@@ -1431,27 +1442,32 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
     const currentDate = new Date();
     const isDefault = !year && !month;
 
-    const response = {
-      status: "success",
-      data: result,
-      metadata: {
-        period: formatMonthName(targetYear, targetMonth),
-        dateRange: {
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-        },
-        isFuture,
-        isDefault,
-        leapYear: isLeapYear,
-        filters: {
-          year: parseInt(year) || null,
-          month: parseInt(month) || null,
-        },
+    // FIX: Add pagination metadata for consistency with other endpoints
+    const response = createPaginationResponse(
+      result,
+      1, // Always page 1 for top selling vendors (sorted by performance)
+      limitNum,
+      result.length
+    );
+    
+    // Add metadata separately
+    response.metadata = {
+      period: formatMonthName(targetYear, targetMonth),
+      dateRange: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
       },
-      summary: {
-        total_vendors_returned: result.length,
-        top_performer: result[0]?.business_name || null,
+      isFuture,
+      isDefault,
+      leapYear: isLeapYear,
+      filters: {
+        year: parseInt(year) || null,
+        month: parseInt(month) || null,
       },
+    };
+    response.summary = {
+      total_vendors_returned: result.length,
+      top_performer: result[0]?.business_name || null,
     };
 
     // Log successful processing
@@ -1980,20 +1996,12 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
     distinct: true,
   });
 
-  // Format the response to include order items with product names
+  // Format the response to flatten order items for client compatibility
   const formattedOrders = orders.map((order) => {
-    // Format order items to include product names
-    const formattedItems = order.items.map((item) => ({
-      id: item.id,
-      product_id: item.product_id,
-      product_name: item.product ? item.product.name : "Unknown Product",
-      product_slug: item.product ? item.product.slug : "",
-      product_thumbnail: item.product ? item.product.thumbnail : "",
-      quantity: item.quantity,
-      price: parseFloat(item.price),
-      sub_total: parseFloat(item.sub_total),
-    }));
-
+    // Flatten order items to match client expectations (image, title, qty)
+    // Each order now includes the first item's details as flat properties
+    const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
+    
     return {
       id: order.id,
       user_id: order.user_id,
@@ -2005,7 +2013,21 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
       created_at: order.created_at,
       updated_at: order.updated_at,
       user: order.user,
-      items: formattedItems,
+      // Flat properties for client compatibility
+      image: firstItem?.product?.thumbnail || "",
+      title: firstItem?.product?.name || "Unknown Product",
+      qty: firstItem?.quantity || 0,
+      // Keep items array for detailed view
+      items: order.items ? order.items.map((item) => ({
+        id: item.id,
+        product_id: item.product_id,
+        product_name: item.product ? item.product.name : "Unknown Product",
+        product_slug: item.product ? item.product.slug : "",
+        product_thumbnail: item.product ? item.product.thumbnail : "",
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        sub_total: parseFloat(item.sub_total),
+      })) : [],
     };
   });
 
@@ -2231,26 +2253,29 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
     const currentDate = new Date();
     const isDefault = !year && !month;
 
-    const response = {
-      status: "success",
-      data: topSellingItems,
-      metadata: {
-        period: formatMonthName(targetYear, targetMonth),
-        dateRange: {
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-        },
-        isFuture,
-        isDefault,
-        leapYear: isLeapYear,
-        filters: {
-          year: parseInt(year) || null,
-          month: parseInt(month) || null,
-        },
-        totalItems: topSellingItems.length,
-        requestedLimit: limitNum,
-        actualCount: topSellingItems.length,
+    // FIX: Add pagination metadata for consistency with other endpoints
+    const response = createPaginationResponse(
+      topSellingItems,
+      1, // Always page 1 for top selling items (sorted by performance)
+      limitNum,
+      topSellingItems.length
+    );
+    
+    // Add metadata separately
+    response.metadata = {
+      period: formatMonthName(targetYear, targetMonth),
+      dateRange: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
       },
+      isFuture,
+      isDefault,
+      leapYear: isLeapYear,
+      filters: {
+        year: parseInt(year) || null,
+        month: parseInt(month) || null,
+      },
+      requestedLimit: limitNum,
     };
 
     // Log successful processing
@@ -2497,9 +2522,14 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
     total_reviews: parseInt(rating.total_reviews),
   }));
 
+  // FIX: Separate count query for accurate pagination with GROUP BY
+  const productsBreakdownCount = await db.Product.count({
+    where: { vendor_id: vendorID },
+  });
+
   // Get products breakdown with pagination
-  const { count: totalPaginatedProducts, rows: vendorProducts } =
-    await db.Product.findAndCountAll({
+  const vendorProducts =
+    await db.Product.findAll({
       where: { vendor_id: vendorID },
       attributes: [
         "id",
@@ -2635,10 +2665,10 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
     products_breakdown: productsBreakdown,
     products_pagination: {
       currentPage: parseInt(page),
-      totalPages: Math.ceil(totalProducts / limitNum),
-      totalItems: totalProducts,
+      totalPages: Math.ceil(productsBreakdownCount / limitNum), // FIX: Use separate count for accurate pagination
+      totalItems: productsBreakdownCount, // FIX: Use separate count for accurate pagination
       itemsPerPage: parseInt(limit),
-      hasNextPage: page < Math.ceil(totalProducts / limitNum),
+      hasNextPage: page < Math.ceil(productsBreakdownCount / limitNum), // FIX: Use separate count for accurate pagination
       hasPrevPage: page > 1,
     },
   };

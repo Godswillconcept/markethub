@@ -1,13 +1,34 @@
-import { ChevronDownIcon, CalendarDaysIcon, XMarkIcon } from "@heroicons/react/24/outline";
+
 import { useTopItem } from "./useTopItem.js";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import Modal from "../../../ui/Modal.jsx";
 import { getImageUrl } from "../../../utils/imageUtil.js";
+import DateRangeFilter from "../../../ui/DateRangeFilter.jsx";
 // import Modal from "./Modal";
 
 function TopSellingItems() {
-  const { topItem = [], isLoading, error } = useTopItem();
+  // Date range state with default to current month
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      startDate: firstDay.toISOString().split("T")[0],
+      endDate: lastDay.toISOString().split("T")[0],
+    };
+  });
+
+  // Extract year and month from date range
+  const year = parseInt(dateRange.startDate.split("-")[0]);
+  const month = parseInt(dateRange.startDate.split("-")[1]);
+
+  // Handle date changes
+  const handleDateChange = (newDateRange) => {
+    setDateRange(newDateRange);
+  };
+
+  const { topItem = [], isLoading, error } = useTopItem({ year, month });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -19,11 +40,11 @@ function TopSellingItems() {
       <section className="shadow-card rounded-sm bg-white p-4 shadow">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-bold text-gray-800">Top-Selling Items</h2>
-          <button className="flex items-center rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700 hover:bg-gray-50">
-            <CalendarDaysIcon className="mr-2 h-3 w-3 text-gray-500" />
-            This Month
-            <ChevronDownIcon className="ml-2 h-2 w-2 text-gray-500" />
-          </button>
+          <DateRangeFilter
+            startDate={dateRange.startDate}
+            endDate={dateRange.endDate}
+            onDateChange={handleDateChange}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

@@ -6,7 +6,7 @@ export function useVendorDashboardProduct(page = 1, limit = 10, search = "", sta
 
     // Fetch the current page with search and status filters
     const {
-        data: { data: products, pagination } = { data: [], pagination: {} },
+        data: responseData,
         isLoading,
         error,
         isError,
@@ -21,6 +21,9 @@ export function useVendorDashboardProduct(page = 1, limit = 10, search = "", sta
         refetchOnWindowFocus: false,
         refetchOnMount: false,
     });
+
+    const products = responseData?.data || [];
+    const pagination = responseData?.pagination || {};
 
     // Prefetch next page if there are more pages
     if (pagination?.hasNextPage) {
@@ -37,7 +40,7 @@ export function useVendorDashboardProduct(page = 1, limit = 10, search = "", sta
             totalPages: pagination?.totalPages || 1,
             totalItems: pagination?.totalItems || 0,
             hasNextPage: pagination?.hasNextPage || false,
-            hasPreviousPage: pagination?.hasPreviousPage || false,
+            hasPreviousPage: pagination?.hasPrevPage || false,
         },
         isLoading,
         isError,

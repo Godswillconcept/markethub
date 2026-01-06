@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { getStats } from "../../../services/apiAdmin.js";
 
-export function useStats() {
+export function useStats({ year, month } = {}) {
     const { data, isLoading, error } = useQuery({
-        queryKey: ["metrics"],
-        queryFn: getStats,
+        queryKey: ["metrics", year, month],
+        queryFn: () => getStats({ year, month }),
         retry: false,
         staleTime: 5 * 60 * 1000, // 5 minutes - data considered fresh
         cacheTime: 10 * 60 * 1000, // 10 minutes - cache persists

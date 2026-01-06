@@ -6,7 +6,9 @@ module.exports = {
       script: './app.js',
       instances: 1, // Single instance recommended for database connection stability
       exec_mode: 'fork',
-      cwd: './server',
+      // Docker: Working directory is set to '.' because Dockerfile sets WORKDIR to /app/server
+      // PM2 runs from /app/server, so we use current directory instead of './server'
+      cwd: '.',
       env: {
         NODE_ENV: 'development',
         PORT: 5000
@@ -30,8 +32,9 @@ module.exports = {
       kill_timeout: 5000,
       // Instance variable
       instance_var: 'INSTANCE_ID',
-      // Watch in development only
+      // Watch in development only - disabled in Docker production
       watch: process.env.NODE_ENV === 'development',
+      // Docker: Ignore watch paths are relative to /app/server working directory
       ignore_watch: ['node_modules', 'logs', '.git', '../client', 'public', 'uploads'],
       // Log rotation
       max_files: 5,

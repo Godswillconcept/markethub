@@ -14,10 +14,14 @@ import { formatCurrency } from "../../utils/formatCurrency.js";
 import { DataState } from "../../ui/DataState.jsx";
 import { getImageUrl } from "../../utils/imageUtil.js";
 
+// Configuration constants
+const ITEMS_PER_PAGE = 20;
+
 // ProductCard Component - Moved outside for performance
 const ProductCard = ({ product }) => {
+  console.log(product?.category?.name);
   // Calculate total stock from variant combinations
-  const totalStock = product.variantCombinations?.reduce((sum, variant) => {
+  const totalStock = product?.combinations?.reduce((sum, variant) => {
     return sum + (variant?.stock || 0);
   }, 0) || 0;
   
@@ -72,7 +76,7 @@ const ProductCard = ({ product }) => {
           {product.name}
         </h3>
         <p className="mb-3 text-xs text-gray-500">
-          {product.Category?.name || "Uncategorized"}
+          {product?.category?.name || "Uncategorized"}
         </p>
 
         {/* Stats Row */}
@@ -119,7 +123,7 @@ function VendorDashboard() {
     isLoading,
     isError,
     error,
-  } = useVendorDashboardProduct(currentPage, 10, searchQuery, filterStatus);
+  } = useVendorDashboardProduct(currentPage, ITEMS_PER_PAGE, searchQuery, filterStatus);
 
   const { stats: vendorStats = {}, isLoading: statsLoading } =
     useVendorDashBoardStats();
@@ -348,17 +352,17 @@ function VendorDashboard() {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
-                          {product.Category?.name || "Uncategorized"}
+                          {(product.Category?.name || product.category?.name) || "Uncategorized"}
                         </td>
                         <td className="px-6 py-4">
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                              product.variantCombinations?.some(v => v.stock > 0)
+                              product.combinations?.some(v => v.stock > 0)
                                 ? "bg-green-100 text-green-800"
                                 : "bg-red-100 text-red-800"
                             }`}
                           >
-                            {product.variantCombinations?.some(v => v.stock > 0) ? "Active" : "Out of Stock"}
+                            {product.combinations?.some(v => v.stock > 0) ? "Active" : "Out of Stock"}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">

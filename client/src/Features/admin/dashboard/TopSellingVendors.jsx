@@ -1,11 +1,32 @@
-import { CalendarDaysIcon, ChevronDownIcon, XMarkIcon } from "@heroicons/react/20/solid";
+
 import { useTopVendor } from "./useTopVendor.js";
 import { useState } from "react";
 import Modal from "../../../ui/Modal.jsx";
+import DateRangeFilter from "../../../ui/DateRangeFilter.jsx";
 
 
 const TopSellingVendor = () => {
-  const { topVendor = [], isLoading, error } = useTopVendor();
+  // Date range state with default to current month
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      startDate: firstDay.toISOString().split("T")[0],
+      endDate: lastDay.toISOString().split("T")[0],
+    };
+  });
+
+  // Extract year and month from date range
+  const year = parseInt(dateRange.startDate.split("-")[0]);
+  const month = parseInt(dateRange.startDate.split("-")[1]);
+
+  // Handle date changes
+  const handleDateChange = (newDateRange) => {
+    setDateRange(newDateRange);
+  };
+
+  const { topVendor = [], isLoading, error } = useTopVendor({ year, month });
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Sort vendors and select top 3
@@ -22,11 +43,11 @@ const TopSellingVendor = () => {
           {/* Header */}
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-bold text-gray-800">Top Selling Vendor</h2>
-            <button className="flex items-center rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-700 hover:bg-gray-50">
-              <CalendarDaysIcon className="mr-2 h-3 w-3 text-gray-500" />
-              This Month
-              <ChevronDownIcon className="ml-2 h-2 w-2 text-gray-500" />
-            </button>
+            <DateRangeFilter
+              startDate={dateRange.startDate}
+              endDate={dateRange.endDate}
+              onDateChange={handleDateChange}
+            />
           </div>
 
           {/* Loading/Error States */}

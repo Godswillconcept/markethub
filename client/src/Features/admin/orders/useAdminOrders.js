@@ -14,18 +14,18 @@ export function useAdminOrders() {
 
   const {
     isLoading,
-    data: { data: orders, total } = {},
+    data: { data: orders = [], total = 0 } = {},
     error,
   } = useQuery({
     queryKey: ["admin-orders", page, search, status, sortBy],
-    queryFn: () => getAdminOrders({ page, search, status, sortBy }),
+    queryFn: () => getAdminOrders({ page, search, status, sortBy, limit: 999999 }),
     keepPreviousData: true,
     onSuccess: (data) => {
       queryClient.setQueryData(["admin-orders", page, search, status, sortBy], data);
     },
   });
 
-  const pageCount = Math.ceil(total / PAGE_SIZE);
+  const pageCount = total ? Math.ceil(total / PAGE_SIZE) : 0;
 
   if (page < pageCount) {
     queryClient.prefetchQuery({

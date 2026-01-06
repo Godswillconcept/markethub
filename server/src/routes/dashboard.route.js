@@ -18,33 +18,33 @@ const router = express.Router();
 // Public routes (no authentication required) with caching
 router.get(
   "/new-arrivals",
-  cache({
-    ttl: 900,
-    type: "public",
-    invalidateOn: ["product:created", "supply:created", "product:updated"],
-  }),
+  // cache({
+  //   ttl: 900,
+  //   type: "public",
+  //   invalidateOn: ["product:created", "supply:created", "product:updated"],
+  // }),
   getNewArrivals
 );
 
 // Trending products with longer cache due to calculation complexity
 router.get(
   "/trending-now",
-  cache({
-    ttl: 1800,
-    type: "public",
-    invalidateOn: ["product:updated", "order:created", "impression:updated"],
-  }),
+  // cache({
+  //   ttl: 1800,
+  //   type: "public",
+  //   invalidateOn: ["product:updated", "order:created", "impression:updated"],
+  // }),
   getTrendingNow
 );
 
 // Latest journal with medium cache
 router.get(
   "/latest-journal",
-  cache({
-    ttl: 900,
-    type: "public",
-    invalidateOn: ["journal:created", "journal:updated"],
-  }),
+  // cache({
+  //   ttl: 900,
+  //   type: "public",
+  //   invalidateOn: ["journal:created", "journal:updated"],
+  // }),
   getLatestJournal
 );
 

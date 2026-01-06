@@ -13,14 +13,36 @@ import { useTopItem } from "./useTopItem.js";
 import { useTopVendor } from "./useTopVendor.js";
 import { useTopCategories } from "./useTopCategories.js";
 import Spinner from "../../../ui/Spinner.jsx";
+import DateRangeFilter from "../../../ui/DateRangeFilter.jsx";
+import { useState } from "react";
 
 export default function AdminDashboard() {
-  const { stats = {}, isLoading, error } = useStats();
+  // Date range state with default to current month
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      startDate: firstDay.toISOString().split("T")[0],
+      endDate: lastDay.toISOString().split("T")[0],
+    };
+  });
+
+  // Extract year and month from date range
+  const year = parseInt(dateRange.startDate.split("-")[0]);
+  const month = parseInt(dateRange.startDate.split("-")[1]);
+
+  // Handle date changes
+  const handleDateChange = (newDateRange) => {
+    setDateRange(newDateRange);
+  };
+
+  const { stats = {}, isLoading, error } = useStats({ year, month });
   const { isLoading: isLoadingOrders } = useRecentOrders();
   const { isLoading: isLoadingSales } = useSalesStats();
-  const { isLoading: isLoadingTopItems } = useTopItem();
-  const { isLoading: isLoadingTopVendor } = useTopVendor();
-  const { isLoading: isLoadingCategories } = useTopCategories();
+  const { isLoading: isLoadingTopItems } = useTopItem({ year, month });
+  const { isLoading: isLoadingTopVendor } = useTopVendor({ year, month });
+  const { isLoading: isLoadingCategories } = useTopCategories({ year, month });
 
   const isGlobalLoading =
     isLoading ||
@@ -37,8 +59,10 @@ export default function AdminDashboard() {
     orderStatuses,
     monthlySales,
   } = stats;
-  const { user = {} } = useUser();
-  const { first_name, last_name, profile_image } = user;
+  const { user } = useUser();
+  const userData = user.user;
+  const { first_name, last_name, profile_image } = userData;
+  console.log(first_name, last_name, profile_image);
 
   if (isGlobalLoading) {
     return (
@@ -58,9 +82,11 @@ export default function AdminDashboard() {
             Welcome, {first_name} {last_name}!
           </h1>
           {/* controls (filter etc) could be here */}
-          <button className="border-muted-border rounded-md border bg-white px-4 py-2 text-sm shadow-sm">
-            This Month ▾
-          </button>
+          <DateRangeFilter
+            startDate={dateRange.startDate}
+            endDate={dateRange.endDate}
+            onDateChange={handleDateChange}
+          />
         </div>
 
         {/* Stat cards row */}
