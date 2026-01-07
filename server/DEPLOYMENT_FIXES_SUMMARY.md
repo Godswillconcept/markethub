@@ -2,12 +2,23 @@
 
 ## Issues Identified from Deployment Log
 
-### 1. Node.js Version Warning
+### 1. Node.js Version and mysql2 Compatibility Issue
+**Error:** `Error: Please install mysql2 package manually`
+
+**Root Cause:** Node.js 24.x has compatibility issues with the `mysql2` package, causing Sequelize to fail when trying to load the MySQL dialect.
+
+**Fix Applied:** Changed to specific version `"node": "20.x"` in [`package.json`](package.json:120)
+
+**Why:**
+- Node.js 24.x is too new and has compatibility issues with mysql2
+- Node.js 20.x is more stable and widely supported
+- Using a specific version ensures stability and prevents automatic upgrades that could break the application
+- mysql2 ^3.15.3 is fully compatible with Node.js 20.x
 **Warning:** `Detected "engines": { "node": ">=14.0.0" } in your package.json that will automatically upgrade when a new major Node.js Version is released.`
 
-**Fix Applied:** Changed to specific version `"node": "24.x"` in [`package.json`](package.json:120)
+**Fix Applied:** Changed to specific version `"node": "20.x"` in [`package.json`](package.json:120)
 
-**Why:** Using `>=14.0.0` causes Vercel to automatically upgrade to new major Node.js versions, which can break the application. Using a specific version (24.x) ensures stability and meets Vercel's current requirements.
+**Why:** Using `>=14.0.0` causes Vercel to automatically upgrade to new major Node.js versions, which can break the application. Node.js 24.x has compatibility issues with mysql2 package. Node.js 20.x is more stable and widely supported.
 
 ---
 

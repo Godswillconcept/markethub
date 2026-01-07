@@ -5,15 +5,19 @@ This guide explains how to deploy the Stylay API server to Vercel as a serverles
 
 ## Issues Fixed
 
-### 1. Node.js Version Specification
-**Problem:** The `engines` field used `>=14.0.0`, which causes Vercel to automatically upgrade to new major Node.js versions, potentially breaking the application.
+### 1. Node.js Version and mysql2 Compatibility Issue
+**Error:** `Error: Please install mysql2 package manually`
 
-**Solution:** Changed to a specific Node.js version:
-```json
-"engines": {
-  "node": "24.x"
-}
-```
+**Root Cause:** Node.js 24.x has compatibility issues with the `mysql2` package, causing Sequelize to fail when trying to load the MySQL dialect.
+
+**Fix Applied:** Changed to specific version `"node": "20.x"` in [`package.json`](package.json:120)
+
+**Why:** 
+- Node.js 24.x is too new and has compatibility issues with mysql2
+- Node.js 20.x is more stable and widely supported
+- Using a specific version ensures stability and prevents automatic upgrades that could break the application
+- mysql2 ^3.15.3 is fully compatible with Node.js 20.x
+- This ensures database connections work correctly in serverless environment
 
 ### 2. Deprecated Dependencies
 **Problem:** Several deprecated packages were causing warnings during deployment.
@@ -65,13 +69,13 @@ This guide explains how to deploy the Stylay API server to Vercel as a serverles
 ### 4. Postinstall Script
 **Problem:** The `postinstall` script attempted to run migrations and seeds during deployment, which fails in serverless environments.
 
-**Solution:** Removed the `postinstall` script. Migrations and seeds should be run manually via the dedicated API endpoints.
+**Solution:** Removed `postinstall` script. Migrations and seeds should be run manually via dedicated API endpoints.
 
 ## Deployment Steps
 
 ### Prerequisites
 1. Vercel account (free tier works)
-2. Node.js 24.x installed locally
+2. Node.js 20.x installed locally
 3. Database connection (PostgreSQL or MySQL)
 4. Redis connection (optional, for caching)
 
@@ -347,7 +351,7 @@ npm audit fix
 
 ## Troubleshooting Checklist
 
-- [ ] Node.js version set to 18.x in package.json
+- [ ] Node.js version set to 20.x in package.json
 - [ ] All environment variables configured in Vercel
 - [ ] Database connection string is correct and accessible
 - [ ] Migrations and seeds have been run
