@@ -1,10 +1,9 @@
-const crypto = require('crypto');
+﻿const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const redis = require('../config/redis');
 const { TokenBlacklist, RefreshToken } = require('../models');
 const logger = require('../utils/logger');
-
 /**
  * Enhanced Token Blacklist Service with Session Tracking
  * Manages JWT token blacklisting using Redis for efficient lookup with database fallback
@@ -14,7 +13,6 @@ class TokenBlacklistService {
   constructor() {
     this.redis = redis;
   }
-
   /**
    * Hash the token for secure storage
    * @param {string} token - The JWT token to hash
@@ -23,7 +21,6 @@ class TokenBlacklistService {
   hashToken(token) {
     return crypto.createHash('sha256').update(token + process.env.JWT_SECRET).digest('hex');
   }
-
   /**
    * Check if Redis is available for use
    * @returns {boolean} - True if Redis is connected and enabled
@@ -31,7 +28,6 @@ class TokenBlacklistService {
   isRedisAvailable() {
     return this.redis.isConnected && this.redis.isEnabled;
   }
-
   /**
    * Add a token to the blacklist with Redis primary and database fallback
    * @param {string} token - The JWT token to blacklist
@@ -48,19 +44,14 @@ class TokenBlacklistService {
         deviceInfo = null,
         ipAddress = null
       } = options;
-
       const tokenHash = this.hashToken(token);
-      
       // Get token expiration time from JWT payload
       const decoded = jwt.decode(token);
       if (!decoded || !decoded.exp) {
-        logger.warn('Token blacklist: Unable to decode token expiration');
         return false;
       }
-
       const tokenExpiry = decoded.exp * 1000; // Convert to milliseconds
       const ttl = Math.max(0, Math.floor((tokenExpiry - Date.now()) / 1000));
-
       // Try Redis first if available
       if (this.isRedisAvailable()) {
         try {
@@ -74,13 +65,10 @@ class TokenBlacklistService {
             ip_address: ipAddress,
             blacklisted_at: Date.now()
           }));
-          logger.info(`Token blacklisted in Redis with TTL: ${ttl} seconds`);
-        } catch (redisError) {
-          logger.warn('Redis blacklist failed, falling back to database:', redisError.message);
+          } catch (redisError) {
           // Continue to database fallback
         }
       }
-
       // Database storage with enhanced context
       await TokenBlacklist.blacklistToken(
         tokenHash,
@@ -94,15 +82,12 @@ class TokenBlacklistService {
           ipAddress
         }
       );
-
-      logger.info(`Token blacklisted in database (type: ${tokenType}, expires: ${new Date(tokenExpiry).toISOString()})`);
       return true;
     } catch (error) {
       logger.error('Error blacklisting token:', error);
       return false;
     }
   }
-
   /**
    * Check if a token is blacklisted with Redis primary and database fallback
    * @param {string} token - The JWT token to check
@@ -112,7 +97,6 @@ class TokenBlacklistService {
     try {
       const tokenHash = this.hashToken(token);
       const now = Date.now();
-
       // Try Redis first if available
       if (this.isRedisAvailable()) {
         try {
@@ -122,11 +106,9 @@ class TokenBlacklistService {
             return true;
           }
         } catch (redisError) {
-          logger.warn('Redis blacklist check failed, falling back to database:', redisError.message);
           // Continue to database fallback
         }
       }
-
       // Database fallback
       const isBlacklisted = await TokenBlacklist.isTokenBlacklisted(tokenHash);
       return isBlacklisted;
@@ -135,7 +117,6 @@ class TokenBlacklistService {
       return false;
     }
   }
-
   /**
    * Blacklist all tokens for a specific user (logout all devices)
    * @param {number} userId - The user ID
@@ -145,13 +126,11 @@ class TokenBlacklistService {
   async blacklistAllUserTokens(userId, reason = 'user_logout') {
     try {
       const blacklistedCount = await TokenBlacklist.blacklistAllUserTokens(userId, reason);
-
       // Also blacklist in Redis if available
       if (this.isRedisAvailable()) {
         try {
           // Get all active refresh tokens for the user
           const activeTokens = await RefreshToken.findActiveTokensForUser(userId);
-          
           for (const token of activeTokens) {
             const redisKey = `blacklist:${token.token_hash}`;
             const ttl = Math.max(0, Math.floor((token.expires_at.getTime() - Date.now()) / 1000));
@@ -166,18 +145,14 @@ class TokenBlacklistService {
             }));
           }
         } catch (redisError) {
-          logger.warn('Failed to blacklist user tokens in Redis:', redisError.message);
-        }
+          }
       }
-
-      logger.info(`Blacklisted ${blacklistedCount} tokens for user ${userId}`);
       return blacklistedCount;
     } catch (error) {
       logger.error('Error blacklisting all user tokens:', error);
       throw error;
     }
   }
-
   /**
    * Clean up expired blacklist entries
    * @returns {Promise<number>} - Number of entries cleaned up
@@ -185,24 +160,18 @@ class TokenBlacklistService {
   async cleanup() {
     try {
       let cleanedCount = 0;
-      
       // Clean up Redis (if available) - Redis handles TTL automatically
       if (this.isRedisAvailable()) {
         // Redis keys with TTL are automatically cleaned up
-        console.log('Redis blacklist cleanup: handled automatically by TTL');
-      }
-      
+        }
       // Clean up database
       cleanedCount = await TokenBlacklist.cleanupExpired();
-      
-      console.log('Token blacklist cleanup completed');
       return cleanedCount;
     } catch (error) {
       console.error('Error during blacklist cleanup:', error);
       throw error;
     }
   }
-
   /**
    * Blacklist all tokens for a specific session
    * @param {string} sessionId - The session ID
@@ -212,7 +181,6 @@ class TokenBlacklistService {
   async blacklistSessionTokens(sessionId, reason = 'session_logout') {
     try {
       const sessionTokens = await RefreshToken.findTokensForSession(sessionId);
-      
       let blacklistedCount = 0;
       for (const token of sessionTokens) {
         if (await this.blacklistToken(
@@ -229,15 +197,12 @@ class TokenBlacklistService {
           blacklistedCount++;
         }
       }
-
-      logger.info(`Blacklisted ${blacklistedCount} tokens for session ${sessionId}`);
       return blacklistedCount;
     } catch (error) {
       logger.error('Error blacklisting session tokens:', error);
       throw error;
     }
   }
-
   /**
    * Get blacklist entries for a user
    * @param {number} userId - The user ID
@@ -251,7 +216,6 @@ class TokenBlacklistService {
       throw error;
     }
   }
-
   /**
    * Get blacklist entries for a session
    * @param {string} sessionId - The session ID
@@ -265,7 +229,6 @@ class TokenBlacklistService {
       throw error;
     }
   }
-
   /**
    * Verify token and blacklist it if valid
    * @param {string} token - The JWT token
@@ -277,25 +240,20 @@ class TokenBlacklistService {
     try {
       // First check if already blacklisted
       if (await this.isTokenBlacklisted(token)) {
-        logger.info('Token already blacklisted');
         return true;
       }
-
       // Verify token is valid before blacklisting
       try {
         jwt.verify(token, process.env.JWT_SECRET);
       } catch (verifyError) {
-        logger.warn('Token verification failed before blacklisting:', verifyError.message);
         // Still blacklist it even if expired/invalid
       }
-
       return await this.blacklistToken(token, tokenType, context);
     } catch (error) {
       logger.error('Error revoking token:', error);
       return false;
     }
   }
-
   /**
    * Get detailed blacklist information
    * @param {string} tokenHash - Optional specific token hash
@@ -309,19 +267,16 @@ class TokenBlacklistService {
         });
         return entry ? entry.toJSON() : null;
       }
-
       const entries = await TokenBlacklist.findAll({
         order: [['blacklisted_at', 'DESC']],
         limit: 100 // Limit to prevent huge responses
       });
-
       return entries.map(entry => entry.toJSON());
     } catch (error) {
       logger.error('Error getting blacklist details:', error);
       throw error;
     }
   }
-
   /**
    * Get blacklist statistics
    * @returns {Promise<Object>} - Statistics about the blacklist
@@ -335,11 +290,9 @@ class TokenBlacklistService {
         },
         database: {}
       };
-
       // Get database stats
       const dbStats = await TokenBlacklist.getStats();
       stats.database = dbStats;
-
       return stats;
     } catch (error) {
       logger.error('Error getting blacklist stats:', error);
@@ -347,5 +300,4 @@ class TokenBlacklistService {
     }
   }
 }
-
 module.exports = new TokenBlacklistService();

@@ -1,4 +1,4 @@
-const tokenBlacklistService = require('../services/token-blacklist-enhanced.service');
+const tokenBlacklistService = require('../services/token-blacklist.service');
 const AppError = require('../utils/appError');
 
 /**

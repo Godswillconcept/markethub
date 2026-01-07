@@ -1,5 +1,4 @@
-const { DataTypes, Op } = require('sequelize');
-
+﻿const { DataTypes, Op } = require('sequelize');
 /**
  * User Session Model
  * Tracks active user sessions with device fingerprinting and activity monitoring
@@ -82,7 +81,6 @@ module.exports = (sequelize, DataTypes) => {
       }
     ]
   });
-
   /**
    * Generate a secure session ID
    */
@@ -90,7 +88,6 @@ module.exports = (sequelize, DataTypes) => {
     const crypto = require('crypto');
     return crypto.randomBytes(32).toString('hex');
   };
-
   /**
    * Extract browser info from user agent
    */
@@ -103,7 +100,6 @@ module.exports = (sequelize, DataTypes) => {
     if (userAgent.includes('Opera')) return 'Opera';
     return 'Unknown';
   };
-
   /**
    * Extract OS info from user agent
    */
@@ -116,7 +112,6 @@ module.exports = (sequelize, DataTypes) => {
     if (userAgent.includes('iOS')) return 'iOS';
     return 'Unknown';
   };
-
   /**
    * Extract device type from user agent
    */
@@ -126,19 +121,16 @@ module.exports = (sequelize, DataTypes) => {
     if (userAgent.includes('Tablet')) return 'Tablet';
     return 'Desktop';
   };
-
   /**
    * Generate device fingerprint from request
    */
   UserSession.generateDeviceFingerprint = function(req) {
     const userAgent = req.get('User-Agent') || '';
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    
     const fingerprint = crypto
       .createHash('sha256')
       .update(userAgent + ip + process.env.JWT_SECRET)
       .digest('hex');
-
     return {
       fingerprint,
       userAgent,
@@ -147,14 +139,12 @@ module.exports = (sequelize, DataTypes) => {
       device: this.extractDevice(userAgent)
     };
   };
-
   /**
    * Find session by ID
    */
   UserSession.getSessionById = async function(sessionId) {
     return await this.findOne({ where: { id: sessionId } });
   };
-
   /**
    * Find active sessions for a user
    */
@@ -169,7 +159,6 @@ module.exports = (sequelize, DataTypes) => {
       order: [['last_activity', 'DESC']]
     });
   };
-
   /**
    * Find all sessions for a user (including inactive)
    */
@@ -179,7 +168,6 @@ module.exports = (sequelize, DataTypes) => {
       order: [['last_activity', 'DESC']]
     });
   };
-
   /**
    * Update session activity
    */
@@ -189,7 +177,6 @@ module.exports = (sequelize, DataTypes) => {
       { where: { id: sessionId } }
     );
   };
-
   /**
    * Revoke a specific session
    */
@@ -200,7 +187,6 @@ module.exports = (sequelize, DataTypes) => {
     );
     return result[0] > 0;
   };
-
   /**
    * Revoke all sessions for a user (optionally exclude current session)
    */
@@ -209,32 +195,27 @@ module.exports = (sequelize, DataTypes) => {
       user_id: userId,
       is_active: true
     };
-    
     if (excludeSessionId) {
       whereClause.id = { [Op.ne]: excludeSessionId };
     }
-    
     const result = await this.update(
       { is_active: false },
       { where: whereClause }
     );
     return result[0];
   };
-
   /**
    * Check if session is expired
    */
   UserSession.prototype.isExpired = function() {
     return new Date() > this.expires_at;
   };
-
   /**
    * Check if session is valid (active and not expired)
    */
   UserSession.prototype.isValid = function() {
     return this.is_active && !this.isExpired();
   };
-
   /**
    * Update last activity timestamp
    */
@@ -242,7 +223,6 @@ module.exports = (sequelize, DataTypes) => {
     this.last_activity = new Date();
     await this.save();
   };
-
   /**
    * Deactivate session
    */
@@ -250,7 +230,6 @@ module.exports = (sequelize, DataTypes) => {
     this.is_active = false;
     await this.save();
   };
-
   /**
    * Clean up expired sessions
    */
@@ -261,41 +240,31 @@ module.exports = (sequelize, DataTypes) => {
         expires_at: { [Op.lt]: now }
       }
     });
-    
     if (deletedCount > 0) {
-      console.log(`Cleaned up ${deletedCount} expired user sessions`);
-    }
-    
+      }
     return deletedCount;
   };
-
   /**
    * Clean up inactive sessions (older than specified days)
    */
   UserSession.cleanupInactive = async function(days = 30) {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
-    
     const deletedCount = await this.destroy({
       where: {
         is_active: false,
         last_activity: { [Op.lt]: cutoffDate }
       }
     });
-    
     if (deletedCount > 0) {
-      console.log(`Cleaned up ${deletedCount} inactive user sessions`);
-    }
-    
+      }
     return deletedCount;
   };
-
   /**
    * Get session statistics for a user
    */
   UserSession.getUserSessionStats = async function(userId) {
     const now = new Date();
-    
     const total = await this.count({ where: { user_id: userId } });
     const active = await this.count({
       where: {
@@ -311,7 +280,6 @@ module.exports = (sequelize, DataTypes) => {
       }
     });
     const inactive = total - active - expired;
-    
     return {
       total,
       active,
@@ -319,7 +287,6 @@ module.exports = (sequelize, DataTypes) => {
       inactive
     };
   };
-
   /**
    * Get session device info
    */
@@ -334,6 +301,5 @@ module.exports = (sequelize, DataTypes) => {
       is_current: false // This will be set by the controller
     };
   };
-
   return UserSession;
 };

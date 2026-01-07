@@ -1,8 +1,7 @@
-const refreshTokenService = require('./refresh-token.service');
+﻿const refreshTokenService = require('./refresh-token.service');
 const sessionService = require('./session.service');
-const tokenBlacklistService = require('./token-blacklist-enhanced.service');
+const tokenBlacklistService = require('./token-blacklist.service');
 const logger = require('../utils/logger');
-
 /**
  * Cleanup Service
  * Handles scheduled cleanup of expired tokens, sessions, and blacklist entries
@@ -19,13 +18,6 @@ class CleanupService {
         sessionService.cleanupExpiredSessions(),
         tokenBlacklistService.cleanup()
       ]);
-
-      logger.info('Token cleanup completed', {
-        refreshTokenCount,
-        sessionCount,
-        blacklistCount
-      });
-
       return {
         refreshTokenCount,
         sessionCount,
@@ -36,7 +28,6 @@ class CleanupService {
       throw error;
     }
   }
-
   /**
    * Clean up inactive tokens and sessions
    * @param {number} days - Number of days to keep inactive items
@@ -48,13 +39,6 @@ class CleanupService {
         refreshTokenService.cleanupInactiveTokens(days),
         sessionService.cleanupInactiveSessions(days)
       ]);
-
-      logger.info('Inactive items cleanup completed', {
-        refreshTokenCount,
-        sessionCount,
-        days
-      });
-
       return {
         refreshTokenCount,
         sessionCount,
@@ -65,36 +49,30 @@ class CleanupService {
       throw error;
     }
   }
-
   /**
    * Run scheduled cleanup job
    * @returns {Promise<Object>}
    */
   async runScheduledCleanup() {
-    logger.info('Starting scheduled cleanup job');
     try {
       const result = await this.cleanupExpiredTokens();
-      logger.info('Scheduled cleanup completed successfully', result);
       return result;
     } catch (error) {
       logger.error('Scheduled cleanup failed:', error);
       throw error;
     }
   }
-
   /**
    * Run comprehensive cleanup (expired + inactive)
    * @param {number} inactiveDays - Days to keep inactive items
    * @returns {Promise<Object>}
    */
   async runComprehensiveCleanup(inactiveDays = 30) {
-    logger.info('Starting comprehensive cleanup job');
     try {
       const [expiredResult, inactiveResult] = await Promise.all([
         this.cleanupExpiredTokens(),
         this.cleanupInactiveItems(inactiveDays)
       ]);
-
       const result = {
         expired: expiredResult,
         inactive: inactiveResult,
@@ -104,15 +82,12 @@ class CleanupService {
           blacklist: expiredResult.blacklistCount
         }
       };
-
-      logger.info('Comprehensive cleanup completed', result);
       return result;
     } catch (error) {
       logger.error('Comprehensive cleanup failed:', error);
       throw error;
     }
   }
-
   /**
    * Get cleanup statistics
    * @returns {Promise<Object>}
@@ -120,36 +95,29 @@ class CleanupService {
   async getCleanupStats() {
     try {
       const now = Date.now();
-      
       // Get counts of items that would be cleaned up
       const { RefreshToken, UserSession, TokenBlacklist } = require('../models');
-      
       const expiredRefreshTokens = await RefreshToken.count({
         where: { expires_at: { [Op.lt]: new Date() } }
       });
-
       const expiredSessions = await UserSession.count({
         where: { expires_at: { [Op.lt]: new Date() } }
       });
-
       const expiredBlacklist = await TokenBlacklist.count({
         where: { token_expiry: { [Op.lt]: now } }
       });
-
       const inactiveRefreshTokens = await RefreshToken.count({
         where: {
           is_active: false,
           updated_at: { [Op.lt]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
         }
       });
-
       const inactiveSessions = await UserSession.count({
         where: {
           is_active: false,
           last_activity: { [Op.lt]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
         }
       });
-
       return {
         pendingCleanup: {
           expired: {
@@ -169,16 +137,13 @@ class CleanupService {
       throw error;
     }
   }
-
   /**
    * Emergency cleanup - clean up everything expired immediately
    * @returns {Promise<Object>}
    */
   async emergencyCleanup() {
-    logger.warn('Running emergency cleanup');
     try {
       const result = await this.runComprehensiveCleanup(0); // Clean up everything
-      logger.info('Emergency cleanup completed', result);
       return result;
     } catch (error) {
       logger.error('Emergency cleanup failed:', error);
@@ -186,5 +151,4 @@ class CleanupService {
     }
   }
 }
-
 module.exports = new CleanupService();

@@ -1,5 +1,4 @@
-const { DataTypes, Op } = require('sequelize');
-
+﻿const { DataTypes, Op } = require('sequelize');
 /**
  * Enhanced Token Blacklist Model with Session Tracking
  * Stores blacklisted JWT tokens with session context and user-level blacklisting support
@@ -92,13 +91,11 @@ module.exports = (sequelize, DataTypes) => {
       }
     ]
   });
-
   /**
    * Blacklist a token with session context
    */
   TokenBlacklist.blacklistToken = async function(tokenHash, tokenType, tokenExpiry, options = {}) {
     const { reason = 'logout', userId = null, sessionId = null, deviceInfo = null, ipAddress = null } = options;
-    
     return await this.create({
       token_hash: tokenHash,
       token_type: tokenType,
@@ -110,13 +107,11 @@ module.exports = (sequelize, DataTypes) => {
       ip_address: ipAddress
     });
   };
-
   /**
    * Blacklist all tokens for a user (logout all devices)
    */
   TokenBlacklist.blacklistAllUserTokens = async function(userId, reason = 'user_logout') {
     const now = Date.now();
-    
     // Get all active refresh tokens for the user
     const { RefreshToken } = require('./refresh-token.model');
     const activeTokens = await RefreshToken.findAll({
@@ -125,7 +120,6 @@ module.exports = (sequelize, DataTypes) => {
         expires_at: { [Op.gt]: new Date() }
       }
     });
-
     // Blacklist each token
     const blacklisted = [];
     for (const token of activeTokens) {
@@ -145,13 +139,10 @@ module.exports = (sequelize, DataTypes) => {
         blacklisted.push(token.token_hash);
       } catch (error) {
         // Token might already be blacklisted, continue
-        console.warn(`Failed to blacklist token for user ${userId}:`, error.message);
-      }
+        }
     }
-
     return blacklisted.length;
   };
-
   /**
    * Check if a token is blacklisted
    */
@@ -163,10 +154,8 @@ module.exports = (sequelize, DataTypes) => {
         token_expiry: { [Op.gt]: now }
       }
     });
-    
     return !!blacklistedToken;
   };
-
   /**
    * Get blacklist entries for a user
    */
@@ -176,7 +165,6 @@ module.exports = (sequelize, DataTypes) => {
       order: [['blacklisted_at', 'DESC']]
     });
   };
-
   /**
    * Get blacklist entries for a session
    */
@@ -186,7 +174,6 @@ module.exports = (sequelize, DataTypes) => {
       order: [['blacklisted_at', 'DESC']]
     });
   };
-
   /**
    * Clean up expired blacklist entries
    */
@@ -197,36 +184,28 @@ module.exports = (sequelize, DataTypes) => {
         token_expiry: { [Op.lt]: now }
       }
     });
-    
     if (deletedCount > 0) {
-      console.log(`Cleaned up ${deletedCount} expired blacklist entries`);
-    }
-    
+      }
     return deletedCount;
   };
-
   /**
    * Get blacklist statistics
    */
   TokenBlacklist.getStats = async function() {
     const now = Date.now();
-    
     const total = await this.count();
     const active = await this.count({
       where: { token_expiry: { [Op.gt]: now } }
     });
     const expired = total - active;
-    
     const byType = await this.findAll({
       attributes: ['token_type', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
       group: ['token_type']
     });
-    
     const byReason = await this.findAll({
       attributes: ['reason', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
       group: ['reason']
     });
-    
     return {
       total,
       active,
@@ -241,6 +220,5 @@ module.exports = (sequelize, DataTypes) => {
       }, {})
     };
   };
-
   return TokenBlacklist;
 };

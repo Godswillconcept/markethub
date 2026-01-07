@@ -8,10 +8,10 @@ module.exports = (sequelize, DataTypes) => {
       // Remove product association as it's no longer needed
     }
 
-    // Instance method to increment view count
+    // Instance method to increment view count using atomic operation
     async incrementViewCount() {
-      this.view_count += 1;
-      await this.save();
+      await this.increment('view_count', { by: 1 });
+      await this.reload(); // Reload to get updated count
     }
 
     // Instance method to get formatted tags
@@ -100,6 +100,17 @@ module.exports = (sequelize, DataTypes) => {
             throw new Error('Maximum 10 featured images allowed');
           }
         }
+      },
+      get() {
+        const rawValue = this.getDataValue('featured_images');
+        if (typeof rawValue === 'string') {
+          try {
+            return JSON.parse(rawValue);
+          } catch (e) {
+            return [];
+          }
+        }
+        return rawValue || [];
       }
     },
     tags: {
@@ -166,6 +177,10 @@ module.exports = (sequelize, DataTypes) => {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
+      {
+        unique: true,
+        fields: ['slug']
+      },
       {
         fields: ['category']
       },

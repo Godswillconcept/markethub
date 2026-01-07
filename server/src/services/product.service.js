@@ -1,4 +1,4 @@
-const {
+﻿const {
   Product,
   ProductVariant,
   ProductImage,
@@ -17,7 +17,6 @@ const { Op } = require("sequelize");
 const slugify = require("slugify");
 const VariantService = require("./variant.service");
 const recentlyViewedService = require("./recently-viewed.service");
-
 /**
  * Unified Product Service
  * Provides centralized business logic for product operations with role-based authorization
@@ -40,7 +39,6 @@ class ProductService {
       admin: () => true, // Admin can view any analytics
     },
   };
-
   /**
    * Validate that a product exists and return it with associations
    * @param {number} productId - Product ID to validate
@@ -80,7 +78,6 @@ class ProductService {
     }
     return product;
   }
-
   /**
    * Validate that a vendor exists and is approved
    * @param {number} vendorId - Vendor ID to validate
@@ -102,7 +99,6 @@ class ProductService {
     }
     return vendor;
   }
-
   /**
    * Validate that a category exists
    * @param {number} categoryId - Category ID to validate
@@ -116,7 +112,6 @@ class ProductService {
     }
     return category;
   }
-
   /**
    * Generate a unique slug for a product name
    * @param {string} name - Product name
@@ -129,21 +124,17 @@ class ProductService {
       strict: true,
       remove: /[*+~.()'"!:@]/g,
     });
-
     const whereClause = { slug: { [Op.like]: `${slug}%` } };
     if (excludeProductId) {
       whereClause.id = { [Op.ne]: excludeProductId };
     }
-
     const slugCount = await Product.count({ where: whereClause });
     if (slugCount > 0) {
       const randomString = Math.random().toString(36).substring(2, 8);
       slug = `${slug}-${randomString}`;
     }
-
     return slug;
   }
-
   /**
    * Format product response with consistent structure
    * @param {Object} product - Product instance
@@ -174,7 +165,6 @@ class ProductService {
       images: product.images || [],
     };
   }
-
   /**
    * Check if user has authorization for a specific operation
    * @param {Object} product - Product instance
@@ -190,7 +180,6 @@ class ProductService {
     }
     return rules[userRole](product, userId);
   }
-
   /**
    * Enhanced product update method with full payload support, file uploads, and variant management
    * @param {number} productId - Product ID to update
@@ -211,7 +200,6 @@ class ProductService {
       images: rawImages = [],
       vendor_id: vendorId,
     } = updateData;
-
     return await sequelize.transaction(async (t) => {
       // Validate product exists with associations
       const product = await this.validateProductExists(productId, [
@@ -245,7 +233,6 @@ class ProductService {
           ],
         },
       ]);
-
       // Apply role-based authorization
       if (userRole === "vendor") {
         // For vendors, verify ownership and vendor approval
@@ -253,11 +240,9 @@ class ProductService {
           product.vendor_id,
           "update products"
         );
-
         if (product.vendor_id !== userId) {
           throw new AppError("Not authorized to update this product", 403);
         }
-
         if (vendor.status !== "approved") {
           throw new AppError("Your vendor account is not approved", 403);
         }
@@ -268,18 +253,15 @@ class ProductService {
           "be managed by admins"
         );
       }
-
       // Validate category if being updated
       if (category_id) {
         await this.validateCategoryExists(category_id);
       }
-
       // Generate new slug if name is being updated
       let slug = product.slug;
       if (name && name !== product.name) {
         slug = await this.generateUniqueSlug(name, product.id);
       }
-
       // Prepare update data - exclude stock from product update
       const updateFields = {
         name: name || product.name,
@@ -290,10 +272,8 @@ class ProductService {
         sku: sku || product.sku,
         status: status || product.status,
       };
-
       // Update the product
       await product.update(updateFields, { transaction: t });
-
       // Handle variant updates if provided (including empty array to remove variants)
       // Check if variants key exists in updateData, not just if rawVariants is truthy
       if (updateData.variants !== undefined) {
@@ -307,7 +287,6 @@ class ProductService {
               throw new AppError("Variants must be a valid JSON array", 400);
             }
           }
-
           // Validate variant data
           const validation = VariantService.validateVariantData(variants);
           if (!validation.isValid) {
@@ -316,7 +295,6 @@ class ProductService {
               400
             );
           }
-
           // Update variants and regenerate combinations
           await this.updateProductVariants(productId, variants, t);
         } catch (variantError) {
@@ -324,7 +302,6 @@ class ProductService {
           throw variantError;
         }
       }
-
       // Handle image updates if provided
       if (rawImages && rawImages.length > 0) {
         try {
@@ -335,7 +312,6 @@ class ProductService {
           throw imageError;
         }
       }
-
       // Fetch the updated product with associations
       const updatedProduct = await this.validateProductExists(productId, [
         { model: Category, attributes: ["id", "name", "slug"] },
@@ -370,11 +346,9 @@ class ProductService {
           ],
         },
       ]);
-
       return this.formatProductResponse(updatedProduct);
     });
   }
-
   /**
    * Update product variants and regenerate combinations
    * @param {number} productId - Product ID
@@ -384,30 +358,18 @@ class ProductService {
    */
   static async updateProductVariants(productId, variants, transaction) {
     try {
-      console.log(`=== VARIANT UPDATE DIAGNOSTIC ===`);
-      console.log(`Product ID: ${productId}`);
-      console.log(`Variants to process: ${variants ? variants.length : 0}`);
-
       // First, check for existing supply records that reference variant combinations
       const existingSupplies = await sequelize.models.Supply.count({
         where: { product_id: productId },
         transaction,
       });
-      console.log(`Existing supply records: ${existingSupplies}`);
-
       if (existingSupplies > 0) {
-        console.log(
-          `Found ${existingSupplies} supply records. These must be deleted first.`
-        );
-      }
-
+        }
       // Delete existing supply records first (child records)
       await sequelize.models.Supply.destroy({
         where: { product_id: productId },
         transaction,
       });
-      console.log(`Deleted ${existingSupplies} supply records`);
-
       // Delete existing inventory history records
       // First, get all inventory records for this product
       const inventoryRecords = await sequelize.models.Inventory.findAll({
@@ -415,35 +377,24 @@ class ProductService {
         attributes: ["id"],
         transaction,
       });
-
       const inventoryIds = inventoryRecords.map((inv) => inv.id);
-
       if (inventoryIds.length > 0) {
         await sequelize.models.InventoryHistory.destroy({
           where: { inventory_id: inventoryIds },
           transaction,
         });
-        console.log(
-          `Deleted inventory history records for ${inventoryIds.length} inventory records`
-        );
-      } else {
-        console.log(`No inventory records found for product ${productId}`);
-      }
-
+        } else {
+        }
       // Now delete variant combinations (parent records)
       await VariantCombination.destroy({
         where: { product_id: productId },
         transaction,
       });
-      console.log(`Deleted variant combinations`);
-
       // Delete existing variants
       await ProductVariant.destroy({
         where: { product_id: productId },
         transaction,
       });
-      console.log(`Deleted product variants`);
-
       // Create new variants and combinations
       // If variants list is empty, loop won't run, and we'll create a default combination below
       const createdVariants = [];
@@ -452,7 +403,6 @@ class ProductService {
           where: { name: variantData.type.toLowerCase() },
           transaction,
         });
-
         if (!variantType) {
           variantType = await VariantType.create(
             {
@@ -463,7 +413,6 @@ class ProductService {
             { transaction }
           );
         }
-
         const variant = await ProductVariant.create(
           {
             product_id: productId,
@@ -474,31 +423,23 @@ class ProductService {
           },
           { transaction }
         );
-
         createdVariants.push({
           id: variant.id,
           type: variantData.type,
           value: variantData.value,
         });
       }
-
-      console.log(`Created ${createdVariants.length} new variants`);
-
       // Generate and create combinations
       await VariantService.createCombinationsForProduct(
         productId,
         createdVariants,
         transaction
       );
-      console.log(`Created variant combinations`);
-
-      console.log(`=== VARIANT UPDATE COMPLETE ===`);
-    } catch (error) {
+      } catch (error) {
       console.error("Variant update error:", error);
       throw error;
     }
   }
-
   /**
    * Update product images
    * @param {number} productId - Product ID
@@ -512,7 +453,6 @@ class ProductService {
       where: { product_id: productId },
       transaction,
     });
-
     // Add new images if any
     if (images && images.length > 0) {
       await ProductImage.bulkCreate(
@@ -526,7 +466,6 @@ class ProductService {
       );
     }
   }
-
   /**
    * Unified product deletion method with role-based authorization
    * @param {number} productId - Product ID to delete
@@ -538,7 +477,6 @@ class ProductService {
     return await sequelize.transaction(async (t) => {
       // Validate product exists
       const product = await this.validateProductExists(productId);
-
       // Apply role-based authorization
       if (userRole === "vendor") {
         if (product.vendor_id !== userId) {
@@ -546,179 +484,103 @@ class ProductService {
         }
       }
       // Admins can delete any product (no additional check needed)
-
       // Check for existing references before deletion
-      console.log(
-        `[Product Deletion Debug] Checking references for product ${productId}`
-      );
-
       // Check order items
       const orderItemsCount = await sequelize.models.OrderItem.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Order items referencing product: ${orderItemsCount}`
-      );
-
       // Check cart items
       const cartItemsCount = await sequelize.models.CartItem.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Cart items referencing product: ${cartItemsCount}`
-      );
-
       // Check wishlist items
       const wishlistItemsCount = await sequelize.models.WishlistItem.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Wishlist items referencing product: ${wishlistItemsCount}`
-      );
-
       // Check reviews
       const reviewsCount = await sequelize.models.Review.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Reviews referencing product: ${reviewsCount}`
-      );
-
       // Check inventory
       const inventoryCount = await sequelize.models.Inventory.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Inventory records for product: ${inventoryCount}`
-      );
-
       // Check product images
       const imagesCount = await sequelize.models.ProductImage.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Product images for product: ${imagesCount}`
-      );
-
       // Check product variants
       const variantsCount = await sequelize.models.ProductVariant.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Product variants for product: ${variantsCount}`
-      );
-
       // Check supply records
       const supplyCount = await sequelize.models.Supply.count({
         where: { product_id: productId },
         transaction: t,
       });
-      console.log(
-        `[Product Deletion Debug] Supply records for product: ${supplyCount}`
-      );
-
       // Delete related records in proper order to avoid foreign key constraint issues
-      console.log(
-        `[Product Deletion Debug] Starting cleanup of related records...`
-      );
-
       // 1. Delete product variants (CASCADE should handle this, but being explicit)
       if (variantsCount > 0) {
         await sequelize.models.ProductVariant.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(
-          `[Product Deletion Debug] Deleted ${variantsCount} product variants`
-        );
-      }
-
+        }
       // 2. Delete product images
       if (imagesCount > 0) {
         await sequelize.models.ProductImage.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(
-          `[Product Deletion Debug] Deleted ${imagesCount} product images`
-        );
-      }
-
+        }
       // 3. Delete inventory records
       if (inventoryCount > 0) {
         await sequelize.models.Inventory.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(
-          `[Product Deletion Debug] Deleted ${inventoryCount} inventory records`
-        );
-      }
-
+        }
       // 4. Delete supply records
       if (supplyCount > 0) {
         await sequelize.models.Supply.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(
-          `[Product Deletion Debug] Deleted ${supplyCount} supply records`
-        );
-      }
-
+        }
       // 5. Delete reviews (these can be deleted as they don't affect order history)
       if (reviewsCount > 0) {
         await sequelize.models.Review.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(`[Product Deletion Debug] Deleted ${reviewsCount} reviews`);
-      }
-
+        }
       // 6. Delete wishlist items (product is no longer available)
       if (wishlistItemsCount > 0) {
         await sequelize.models.WishlistItem.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(
-          `[Product Deletion Debug] Deleted ${wishlistItemsCount} wishlist items`
-        );
-      }
-
+        }
       // 7. Delete cart items (product is no longer available)
       if (cartItemsCount > 0) {
         await sequelize.models.CartItem.destroy({
           where: { product_id: productId },
           transaction: t,
         });
-        console.log(
-          `[Product Deletion Debug] Deleted ${cartItemsCount} cart items`
-        );
-      }
-
+        }
       // 8. IMPORTANT: Order items should NOT be deleted as they are part of order history
       // Instead, we leave them as references to deleted products for audit trail
       if (orderItemsCount > 0) {
-        console.log(
-          `[Product Deletion Debug] WARNING: ${orderItemsCount} order items reference this product. These will remain for order history.`
-        );
-      }
-
+        }
       // Delete the product
       await product.destroy({ transaction: t });
-
-      console.log(
-        `[Product Deletion Debug] Product ${productId} deleted successfully`
-      );
-
       return {
         success: true,
         data: {
@@ -737,7 +599,6 @@ class ProductService {
       };
     });
   }
-
   /**
    * Unified product analytics method with role-based authorization
    * @param {number} productId - Product ID to get analytics for
@@ -757,7 +618,6 @@ class ProductService {
         attributes: ["stock", "is_active"],
       },
     ]);
-
     // Apply role-based authorization
     if (userRole === "vendor") {
       // Check if the product has a vendor and if the vendor's user_id matches the current user
@@ -767,12 +627,9 @@ class ProductService {
           403
         );
       }
-      console.log(`AUTHORIZATION PASSED: Vendor access granted`);
-    } else {
-      console.log(`AUTHORIZATION: Admin access granted`);
-    }
+      } else {
+      }
     // Admins can view any product analytics - no vendor check needed
-
     // Calculate total stock from combinations
     let totalStock = 0;
     if (product.combinations && product.combinations.length > 0) {
@@ -780,13 +637,11 @@ class ProductService {
         return sum + (combo.is_active ? combo.stock : 0);
       }, 0);
     }
-
     // Infer status based on stock
     let inferredStatus = product.status;
     if (product.status === "active") {
       inferredStatus = totalStock > 0 ? "In Stock" : "Out of Stock";
     }
-
     // Get order statistics for this product
     const orderStats = await sequelize.query(
       `
@@ -808,8 +663,6 @@ class ProductService {
         type: sequelize.QueryTypes.SELECT,
       }
     );
-
-
     // Get monthly sales data for the last 12 months
     const monthlySales = await sequelize.query(
       `
@@ -832,8 +685,6 @@ class ProductService {
         type: sequelize.QueryTypes.SELECT,
       }
     );
-
-
     // Get review statistics for this product
     const reviewStats = await sequelize.query(
       `
@@ -851,7 +702,6 @@ class ProductService {
         type: sequelize.QueryTypes.SELECT,
       }
     );
-
     // Get recent reviews for this product
     const recentReviews = await Review.findAll({
       where: { product_id: productId },
@@ -865,22 +715,17 @@ class ProductService {
       order: [["created_at", "DESC"]],
       limit: 5,
     });
-
-
     // Calculate metrics
     const stats = orderStats[0] || {};
     const conversionRate =
       stats.total_orders && product.impressions
         ? (stats.total_orders / product.impressions) * 100
         : 0;
-
     const avgOrderValue =
       stats.total_revenue && stats.total_orders
         ? stats.total_revenue / stats.total_orders
         : 0;
-
     const reviewData = reviewStats[0] || {};
-
     return {
       product: {
         id: product.id,
@@ -936,9 +781,7 @@ class ProductService {
   static async getAllProducts(queryParams) {
     const { page = 1, limit = 12, search, category, vendor, status } = queryParams;
     const offset = (page - 1) * limit;
-
     const whereClause = {};
-
     // Apply filters if provided
     if (search) {
       whereClause[Op.or] = [
@@ -947,11 +790,9 @@ class ProductService {
         { sku: { [Op.like]: `%${search}%` } },
       ];
     }
-
     // Filter by category (supports both ID and name/slug)
     if (category && category !== "All") {
       const isNumericId = !isNaN(category) && !isNaN(parseFloat(category));
-
       if (isNumericId) {
         whereClause.category_id = parseInt(category);
       } else {
@@ -964,7 +805,6 @@ class ProductService {
             ],
           },
         });
-
         if (categoryRecord) {
           whereClause.category_id = categoryRecord.id;
         } else {
@@ -972,17 +812,14 @@ class ProductService {
         }
       }
     }
-
     if (vendor && vendor !== "All") whereClause.vendor_id = vendor;
     if (status && status !== "All") whereClause.status = status;
-
     // Stock Subquery for total_stock
     const stockSubquery = `(
       SELECT COALESCE(SUM(vc.stock), 0)
       FROM variant_combinations vc
       WHERE vc.product_id = Product.id
     )`;
-
     const { count, rows: products } = await Product.findAndCountAll({
       attributes: [
         "id",
@@ -1041,12 +878,10 @@ class ProductService {
       ],
       order: [["created_at", "DESC"]],
     });
-
     // Process products to add computed fields like stock_status
     const processedProducts = products.map(product => {
       const p = product.toJSON();
       const totalStock = parseInt(p.total_stock || 0);
-      
       let stockStatus = "out_of_stock";
       if (totalStock > 0) {
         stockStatus = totalStock > 10 ? "in_stock" : "low_stock";
@@ -1055,7 +890,6 @@ class ProductService {
       p.stock_status = stockStatus;
       return p;
     });
-
     return {
       success: true,
       count: products.length,
@@ -1064,5 +898,4 @@ class ProductService {
     };
   }
 }
-
 module.exports = ProductService;

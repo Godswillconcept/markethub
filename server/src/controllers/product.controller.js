@@ -1,4 +1,4 @@
-const {
+﻿const {
   Product,
   ProductVariant,
   ProductImage,
@@ -21,7 +21,6 @@ const VariantService = require("../services/variant.service");
 const ImageProcessor = require("../utils/imageProcessor");
 const recentlyViewedService = require("../services/recently-viewed.service");
 const fs = require("fs");
-
 /**
  * Creates a new product for an approved vendor, with support for variants and images.
  * Only approved vendors can create products. Admins can create products for any vendor.
@@ -109,7 +108,6 @@ const createProduct = async (req, res, next) => {
       variants: rawVariants = [],
       vendor_id: vendorId, // Optional vendor_id for admin
     } = req.body;
-
     // Parse variants if it's a string
     let variants = rawVariants;
     if (typeof rawVariants === "string") {
@@ -125,34 +123,11 @@ const createProduct = async (req, res, next) => {
       maxSize: 10 * 1024 * 1024, // 10MB
       allowedTypes: ["image/jpeg", "image/png", "image/jpg", "image/webp"],
     });
-
     // Process images from multiple sources (multipart, base64, URLs)
     const processedImages = await imageProcessor.processImages(req, {
       fieldName: "images",
       maxCount: 10,
     });
-
-    console.log("=== PRODUCT CREATION DIAGNOSTIC ===");
-    console.log("Request body keys:", Object.keys(req.body));
-    console.log(
-      "Images from req.uploadedFiles:",
-      processedImages.length,
-      "files"
-    );
-    console.log(
-      "Images details:",
-      processedImages.map((img) => ({
-        fieldname: img.fieldname,
-        filename: img.filename,
-        url: img.url,
-      }))
-    );
-    console.log("Raw req.body.images:", req.body.images);
-    console.log("req.files present:", !!req.files);
-    console.log("req.files keys:", req.files ? Object.keys(req.files) : "N/A");
-    console.log("Content-Type:", req.get("Content-Type"));
-    console.log("=====================================");
-
     let vendor;
     let createdProduct;
     await sequelize.transaction(async (t) => {
@@ -165,7 +140,6 @@ const createProduct = async (req, res, next) => {
             403
           );
         }
-
         vendor = await Vendor.findByPk(vendorId, { transaction: t });
       } else {
         // Regular vendor creating their own product
@@ -173,30 +147,25 @@ const createProduct = async (req, res, next) => {
           where: { user_id: req.user.id },
           transaction: t,
         });
-
         if (!vendor) {
           throw new AppError("Vendor account not found", 404);
         }
       }
-
       // Check if vendor is approved
       if (vendor.status !== "approved") {
         throw new AppError("Only approved vendors can create products", 403);
       }
-
       // Check if category exists
       const category = await Category.findByPk(category_id, { transaction: t });
       if (!category) {
         throw new AppError("Category not found", 404);
       }
-
       // Generate unique slug from product name
       let slug = slugify(name, {
         lower: true,
         strict: true,
         remove: /[*+~.()'"!:@]/g,
       });
-
       // Check if slug already exists and make it unique if needed
       const slugCount = await Product.count({
         where: { slug: { [Op.like]: `${slug}%` } },
@@ -206,7 +175,6 @@ const createProduct = async (req, res, next) => {
         const randomString = Math.random().toString(36).substring(2, 8);
         slug = `${slug}-${randomString}`;
       }
-
       // Create the product with the vendor's ID (not user ID)
       const product = await Product.create(
         {
@@ -223,7 +191,6 @@ const createProduct = async (req, res, next) => {
         },
         { transaction: t }
       );
-
       // Add variants and generate combinations
       let createdVariants = [];
       if (variants && variants.length > 0) {
@@ -236,7 +203,6 @@ const createProduct = async (req, res, next) => {
               400
             );
           }
-
           // Create variants with type associations
           for (const variantData of variants) {
             // Find or create variant type
@@ -244,7 +210,6 @@ const createProduct = async (req, res, next) => {
               where: { name: variantData.type.toLowerCase() },
               transaction: t,
             });
-
             if (!variantType) {
               variantType = await VariantType.create(
                 {
@@ -255,7 +220,6 @@ const createProduct = async (req, res, next) => {
                 { transaction: t }
               );
             }
-
             // Create the variant
             const variant = await ProductVariant.create(
               {
@@ -267,37 +231,31 @@ const createProduct = async (req, res, next) => {
               },
               { transaction: t }
             );
-
             createdVariants.push({
               id: variant.id,
               type: variantData.type,
               value: variantData.value,
             });
           }
-
         } catch (variantError) {
           console.error("Variant creation error:", variantError);
           throw variantError;
         }
       }
-
       // Generate and create combinations (will handle empty variants for simple products)
       const combinations = await VariantService.createCombinationsForProduct(
         product.id,
         createdVariants,
         t
       );
-
       // If this is a simple product (no variants) and stock is provided, set the initial stock on the default combination
       if ((!createdVariants || createdVariants.length === 0) && stock !== undefined) {
         if (combinations && combinations.length > 0) {
           const defaultCombo = combinations[0];
           await defaultCombo.update({ stock: parseInt(stock, 10) || 0 }, { transaction: t });
-          
           // Note: Inventory history should ideally be tracked here too, but for initial creation we set the base value.
         }
       }
-
       // Add images if any
       if (processedImages && processedImages.length > 0) {
         await ProductImage.bulkCreate(
@@ -309,7 +267,6 @@ const createProduct = async (req, res, next) => {
           { transaction: t }
         );
       }
-
       // Fetch the created product with associations
       createdProduct = await Product.findByPk(product.id, {
         attributes: [
@@ -371,7 +328,6 @@ const createProduct = async (req, res, next) => {
         transaction: t,
       });
     }); // End of transaction
-
     res.status(201).json({
       success: true,
       data: createdProduct,
@@ -383,20 +339,14 @@ const createProduct = async (req, res, next) => {
         if (image.path && fs.existsSync(image.path)) {
           try {
             fs.unlinkSync(image.path);
-            console.log(`Cleaned up file: ${image.path}`);
           } catch (cleanupError) {
-            console.warn(
-              `Failed to clean up file ${image.path}:`,
-              cleanupError.message
-            );
-          }
+            }
         }
       });
     }
     next(error);
   }
 };
-
 /**
  * Retrieves a paginated list of active products with optional filtering by category, vendor, and search terms.
  * Supports both numeric category IDs and category names/slugs for flexible filtering.
@@ -452,14 +402,11 @@ const getProducts = async (req, res, next) => {
   try {
     const { page = 1, limit = 12, category, vendor, search } = req.query;
     const offset = (page - 1) * limit;
-
     const whereClause = {};
-
     // Filter by category (supports both ID and name/slug)
     if (category) {
       // Check if category is a numeric ID or string (name/slug)
       const isNumericId = !isNaN(category) && !isNaN(parseFloat(category));
-
       if (isNumericId) {
         whereClause.category_id = parseInt(category);
       } else {
@@ -472,7 +419,6 @@ const getProducts = async (req, res, next) => {
             ],
           },
         });
-
         if (categoryRecord) {
           whereClause.category_id = categoryRecord.id;
         } else {
@@ -480,7 +426,6 @@ const getProducts = async (req, res, next) => {
         }
       }
     }
-
     // Filter by vendor
     if (vendor) {
       // Verify vendor exists before filtering
@@ -489,7 +434,6 @@ const getProducts = async (req, res, next) => {
         whereClause.vendor_id = vendor;
       }
     }
-
     // Search by product name or description
     if (search) {
       whereClause[Op.or] = [
@@ -497,14 +441,12 @@ const getProducts = async (req, res, next) => {
         { description: { [Op.like]: `%${search}%` } },
       ];
     }
-
     // Use separate count query to avoid cartesian product explosion
     const count = await Product.count({
       where: whereClause,
       distinct: true,
       col: "Product.id",
     });
-
     const { rows: products } = await Product.findAndCountAll({
       attributes: [
         "id",
@@ -555,7 +497,6 @@ const getProducts = async (req, res, next) => {
       ],
       order: [["created_at", "DESC"]],
     });
-
     res.status(200).json({
       success: true,
       count: products.length,
@@ -566,7 +507,6 @@ const getProducts = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Retrieves detailed information about a specific product by its ID (numeric) or slug (string).
  * Increments product impression count for analytics purposes and tracks user views.
@@ -630,17 +570,14 @@ const getProducts = async (req, res, next) => {
 const getProductByIdentifier = async (req, res, next) => {
   try {
     const { identifier } = req.params;
-
     // Check if identifier is a number (ID) or string (slug)
     const isNumericId = !isNaN(identifier) && !isNaN(parseFloat(identifier));
-
     let whereClause = {};
     if (isNumericId) {
       whereClause.id = parseInt(identifier);
     } else {
       whereClause.slug = identifier;
     }
-
     const product = await Product.findOne({
       where: whereClause,
       attributes: [
@@ -702,17 +639,14 @@ const getProductByIdentifier = async (req, res, next) => {
         },
       ],
     });
-
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
-
     // Increment impression count for analytics
     await Product.increment("impressions", {
       by: 1,
       where: { id: product.id },
     });
-
     // Track the product view for recently viewed functionality
     const userId = req.user?.id;
     if (userId) {
@@ -729,10 +663,8 @@ const getProductByIdentifier = async (req, res, next) => {
         });
       } catch (error) {
         // Log error but don't fail the request
-        console.warn("Failed to track product view:", error.message);
-      }
+        }
     }
-
     res.status(200).json({
       success: true,
       data: product,
@@ -741,7 +673,6 @@ const getProductByIdentifier = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Retrieves comprehensive analytics summary for all products owned by a vendor.
  * Includes overall performance metrics, top-performing products, and aggregated statistics.
@@ -807,7 +738,6 @@ const getVendorAnalytics = async (req, res, next) => {
     if (!vendor) {
       return next(new AppError("Vendor account not found", 404));
     }
-
     // Get overall vendor analytics
     const vendorStats = await sequelize.query(
       `
@@ -826,7 +756,6 @@ const getVendorAnalytics = async (req, res, next) => {
         type: sequelize.QueryTypes.SELECT,
       }
     );
-
     // Get top performing products
     const topProducts = await sequelize.query(
       `
@@ -850,9 +779,7 @@ const getVendorAnalytics = async (req, res, next) => {
         type: sequelize.QueryTypes.SELECT,
       }
     );
-
     const stats = vendorStats[0] || {};
-
     res.status(200).json({
       success: true,
       data: {
@@ -879,7 +806,6 @@ const getVendorAnalytics = async (req, res, next) => {
     next(error);
   }
 };
-
 // Admin methods
 const getAllProducts = async (req, res, next) => {
   try {
@@ -889,11 +815,9 @@ const getAllProducts = async (req, res, next) => {
     next(error);
   }
 };
-
 const updateProductStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
-
     const product = await Product.findByPk(req.params.id, {
       include: [
         {
@@ -911,13 +835,10 @@ const updateProductStatus = async (req, res, next) => {
         { model: Category, as: "category", attributes: ["id", "name"] },
       ],
     });
-
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
-
     await product.update({ status });
-
     res.status(200).json({
       success: true,
       data: {
@@ -932,20 +853,16 @@ const updateProductStatus = async (req, res, next) => {
     next(error);
   }
 };
-
 const getProductsByStatus = async (req, res, next) => {
   try {
     const { status } = req.params;
     const { page = 1, limit = 12 } = req.query;
     const offset = (page - 1) * limit;
-
     const whereClause = {};
-
     // Only filter by status if not 'all'
     if (status !== "all") {
       whereClause.status = status;
     }
-
     const { count, rows: products } = await Product.findAndCountAll({
       attributes: [
         "id",
@@ -991,7 +908,6 @@ const getProductsByStatus = async (req, res, next) => {
       ],
       order: [["created_at", "DESC"]],
     });
-
     res.status(200).json({
       success: true,
       count: products.length,
@@ -1002,7 +918,6 @@ const getProductsByStatus = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * @desc    Update product with full payload support including images and variants
  * @route   PUT /api/v1/products/:id
@@ -1019,41 +934,17 @@ const updateProduct = async (req, res, next) => {
     ) {
       userRole = "admin";
     }
-
     // Initialize ImageProcessor for enhanced image handling
     const imageProcessor = new ImageProcessor({
       uploadPath: "product-images",
       maxSize: 10 * 1024 * 1024, // 10MB
       allowedTypes: ["image/jpeg", "image/png", "image/jpg", "image/webp"],
     });
-
     // Process images from multiple sources (multipart, base64, URLs)
     processedImages = await imageProcessor.processImages(req, {
       fieldName: "images",
       maxCount: 10,
     });
-
-    console.log("=== PRODUCT UPDATE DIAGNOSTIC ===");
-    console.log("Request body keys:", Object.keys(req.body));
-    console.log(
-      "Images from req.uploadedFiles:",
-      processedImages.length,
-      "files"
-    );
-    console.log(
-      "Images details:",
-      processedImages.map((img) => ({
-        fieldname: img.fieldname,
-        filename: img.filename,
-        url: img.url,
-      }))
-    );
-    console.log("Raw req.body.images:", req.body.images);
-    console.log("req.files present:", !!req.files);
-    console.log("req.files keys:", req.files ? Object.keys(req.files) : "N/A");
-    console.log("Content-Type:", req.get("Content-Type"));
-    console.log("=====================================");
-
     // Call the unified service method with processed images
     const updatedProduct = await ProductService.updateProduct(
       req.params.id,
@@ -1061,12 +952,10 @@ const updateProduct = async (req, res, next) => {
       userRole,
       req.user.id
     );
-
     // Add thumbnailUrl to the response if not already present
     if (updatedProduct && !updatedProduct.thumbnailUrl) {
       updatedProduct.thumbnailUrl = updatedProduct.thumbnail;
     }
-
     res.status(200).json({
       success: true,
       data: updatedProduct,
@@ -1078,20 +967,14 @@ const updateProduct = async (req, res, next) => {
         if (image.path && fs.existsSync(image.path)) {
           try {
             fs.unlinkSync(image.path);
-            console.log(`Cleaned up file: ${image.path}`);
           } catch (cleanupError) {
-            console.warn(
-              `Failed to clean up file ${image.path}:`,
-              cleanupError.message
-            );
-          }
+            }
         }
       });
     }
     next(error);
   }
 };
-
 const deleteProduct = async (req, res, next) => {
   try {
     // Determine user role - more robust role detection
@@ -1102,20 +985,17 @@ const deleteProduct = async (req, res, next) => {
     ) {
       userRole = "admin";
     }
-
     // Call the unified service method
     const result = await ProductService.deleteProduct(
       req.params.id,
       userRole,
       req.user.id
     );
-
     res.status(200).json(result);
   } catch (error) {
     next(error);
   }
 };
-
 /**
  * Retrieves a paginated list of all products belonging to a specific vendor.
  * Shows both active and inactive products for public access.
@@ -1168,13 +1048,10 @@ const getProductsByVendor = async (req, res, next) => {
   try {
     const { page = 1, limit = 12 } = req.query;
     const offset = (page - 1) * limit;
-
     const vendor = await Vendor.findByPk(req.params.id);
-
     if (!vendor) {
       return next(new AppError("Vendor not found", 404));
     }
-
     const { count, rows: products } = await Product.findAndCountAll({
       attributes: [
         "id",
@@ -1208,7 +1085,6 @@ const getProductsByVendor = async (req, res, next) => {
       ],
       order: [["created_at", "DESC"]],
     });
-
     res.status(200).json({
       success: true,
       count: products.length,
@@ -1219,7 +1095,6 @@ const getProductsByVendor = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Retrieves detailed analytics and metrics for a specific product.
  * Includes sales data, revenue, conversion rates, and monthly performance.
@@ -1292,14 +1167,12 @@ const getProductAnalytics = async (req, res, next) => {
     ) {
       userRole = "admin";
     }
-
     // Call the unified service method
     const analyticsData = await ProductService.getProductAnalytics(
       req.params.id,
       userRole,
       req.user.id
     );
-
     res.status(200).json({
       success: true,
       data: analyticsData,
@@ -1308,7 +1181,6 @@ const getProductAnalytics = async (req, res, next) => {
     next(error);
   }
 };
-
 module.exports = {
   createProduct,
   updateProduct,

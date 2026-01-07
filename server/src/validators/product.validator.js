@@ -1,7 +1,7 @@
 const { body, param, query } = require('express-validator');
 const { Vendor } = require('../models');
 const { Op } = require('sequelize');
-const { Product, Category, ProductVariant, ProductImage } = require('../models');
+const { Product, Category } = require('../models');
 
 // Common validation messages
 const messages = {
@@ -109,10 +109,6 @@ exports.createProductValidation = [
           throw new Error(`Variant at index ${index}: Name cannot exceed 100 characters`);
         }
 
-        // Debug logging to validate our assumptions
-        console.log(`[DEBUG] Variant validation - Index: ${index}, Name: "${name}", Type: ${typeof name}, Valid Types: [${validVariantTypes.join(', ')}]`);
-        console.log(`[DEBUG] Name trimmed: "${name.trim()}", Name length: ${name.length}`);
-        console.log(`[DEBUG] Includes check: ${validVariantTypes.includes(name)}`);
         
         if (!validVariantTypes.includes(name)) {
           throw new Error(`Variant at index ${index}: Name must be one of: ${validVariantTypes.join(', ')}`);
@@ -312,10 +308,6 @@ exports.updateProductValidation = [
           throw new Error(`Variant at index ${index}: Name cannot exceed 100 characters`);
         }
 
-        // Debug logging to validate our assumptions
-        console.log(`[DEBUG] Variant validation - Index: ${index}, Name: "${name}", Type: ${typeof name}, Valid Types: [${validVariantTypes.join(', ')}]`);
-        console.log(`[DEBUG] Name trimmed: "${name.trim()}", Name length: ${name.length}`);
-        console.log(`[DEBUG] Includes check: ${validVariantTypes.includes(name)}`);
         
         if (!validVariantTypes.includes(name)) {
           throw new Error(`Variant at index ${index}: Name must be one of: ${validVariantTypes.join(', ')}`);
@@ -675,10 +667,6 @@ exports.updateProductValidation = [
           throw new Error(`Variant at index ${index}: Name cannot exceed 100 characters`);
         }
 
-        // Debug logging to validate our assumptions
-        console.log(`[DEBUG] Variant validation - Index: ${index}, Name: "${name}", Type: ${typeof name}, Valid Types: [${validVariantTypes.join(', ')}]`);
-        console.log(`[DEBUG] Name trimmed: "${name.trim()}", Name length: ${name.length}`);
-        console.log(`[DEBUG] Includes check: ${validVariantTypes.includes(name)}`);
         
         if (!validVariantTypes.includes(name)) {
           throw new Error(`Variant at index ${index}: Name must be one of: ${validVariantTypes.join(', ')}`);

@@ -1,7 +1,6 @@
-const { Category, Product, Vendor, Store, ProductImage, Review, sequelize } = require('../models');
+﻿const { Category, Product, Vendor, Store, ProductImage, Review, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const slugify = require('slugify');
-
 /**
  * Create a new product category
  * Generates unique slug from category name and supports hierarchical categories.
@@ -35,7 +34,6 @@ const createCategory = async (req, res) => {
   try {
     const { name, parent_id, description, image } = req.body;
     const slug = req.body.slug || slugify(name, { lower: true, strict: true });
-
     const category = await Category.create({
       name,
       slug,
@@ -43,7 +41,6 @@ const createCategory = async (req, res) => {
       description: description || null,
       image: image || null
     });
-
     res.status(201).json({
       success: true,
       data: category
@@ -57,7 +54,6 @@ const createCategory = async (req, res) => {
     });
   }
 };
-
 /**
  * Get all categories with filtering and pagination
  * Supports hierarchical category display with parent-child relationships.
@@ -90,15 +86,12 @@ const getCategories = async (req, res) => {
   try {
     const { page = 1, limit = 10, parent_id, search } = req.query;
     const offset = (page - 1) * limit;
-    
     const whereClause = {};
-    
     if (parent_id === 'null' || parent_id === '') {
       whereClause.parent_id = null;
     } else if (parent_id) {
       whereClause.parent_id = parent_id;
     }
-    
     if (search) {
       const searchTerm = search.toLowerCase();
       whereClause[Op.or] = [
@@ -106,7 +99,6 @@ const getCategories = async (req, res) => {
         { description: { [Op.like]: `%${searchTerm}%` } }
       ];
     }
-    
     const { count, rows: categories } = await Category.findAndCountAll({
       where: whereClause,
       limit: parseInt(limit),
@@ -125,7 +117,6 @@ const getCategories = async (req, res) => {
         }
       ]
     });
-
     res.status(200).json({
       success: true,
       data: categories,
@@ -145,7 +136,6 @@ const getCategories = async (req, res) => {
     });
   }
 };
-
 /**
  * Get category by ID or slug with full details
  * Supports both numeric IDs and URL-friendly slugs for category identification.
@@ -170,17 +160,14 @@ const getCategories = async (req, res) => {
 const getCategoryByIdentifier = async (req, res) => {
   try {
     const { identifier } = req.params;
-
     // Check if identifier is a number (ID) or string (slug)
     const isNumericId = !isNaN(identifier) && !isNaN(parseFloat(identifier));
-
     let whereClause = {};
     if (isNumericId) {
       whereClause.id = parseInt(identifier);
     } else {
       whereClause.slug = identifier;
     }
-
     const category = await Category.findOne({
       where: whereClause,
       include: [
@@ -196,14 +183,12 @@ const getCategoryByIdentifier = async (req, res) => {
         }
       ]
     });
-
     if (!category) {
       return res.status(404).json({
         success: false,
         message: 'Category not found'
       });
     }
-
     res.status(200).json({
       success: true,
       data: category
@@ -217,9 +202,6 @@ const getCategoryByIdentifier = async (req, res) => {
     });
   }
 };
-
-
-
 /**
  * Update category information
  * Supports partial updates and automatically generates new slug when name changes.
@@ -255,14 +237,12 @@ const updateCategory = async (req, res) => {
   try {
     const { name, slug, parent_id, description, image } = req.body;
     const category = await Category.findByPk(req.params.id);
-
     if (!category) {
       return res.status(404).json({
         success: false,
         message: 'Category not found'
       });
     }
-
     // Update category fields
     category.name = name || category.name;
     // If name is being updated, update the slug as well
@@ -274,9 +254,7 @@ const updateCategory = async (req, res) => {
     category.parent_id = parent_id !== undefined ? parent_id : category.parent_id;
     category.description = description !== undefined ? description : category.description;
     category.image = image !== undefined ? image : category.image;
-
     await category.save();
-
     res.status(200).json({
       success: true,
       data: category
@@ -290,7 +268,6 @@ const updateCategory = async (req, res) => {
     });
   }
 };
-
 /**
  * Delete category
  * Permanently removes category from database. Admin access required.
@@ -315,16 +292,13 @@ const updateCategory = async (req, res) => {
 const deleteCategory = async (req, res) => {
   try {
     const category = await Category.findByPk(req.params.id);
-
     if (!category) {
       return res.status(404).json({
         success: false,
         message: 'Category not found'
       });
     }
-
     await category.destroy();
-
     res.status(200).json({
       success: true,
       message: 'Category deleted successfully'
@@ -338,7 +312,6 @@ const deleteCategory = async (req, res) => {
     });
   }
 };
-
 /**
  * Get hierarchical category tree
  * Returns nested category structure with unlimited depth.
@@ -382,9 +355,7 @@ const getCategoryTree = async (req, res) => {
         attributes: ['id', 'name', 'slug', 'image'],
         order: [['name', 'ASC']]
       });
-
       const result = [];
-      
       for (const category of categories) {
         const children = await buildTree(category.id);
         result.push({
@@ -392,12 +363,9 @@ const getCategoryTree = async (req, res) => {
           children: children.length ? children : undefined
         });
       }
-      
       return result;
     };
-
     const categoryTree = await buildTree();
-
     res.status(200).json({
       success: true,
       data: categoryTree
@@ -411,7 +379,6 @@ const getCategoryTree = async (req, res) => {
     });
   }
 };
-
 /**
  * Get products belonging to a category with advanced filtering
  * Supports hierarchical category queries (includes subcategories), price filtering,
@@ -448,17 +415,14 @@ const getCategoryTree = async (req, res) => {
  */
 const getCategoryProducts = async (req, res) => {
   try {
-    console.log(req.params);
     const { identifier } = req.params;
     const { page = 1, limit = 12, minPrice, maxPrice, sortBy = 'createdAt', sortOrder = 'DESC' } = req.query;
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
-
     // Check if category exists (support both ID and slug)
     const isNumericId = !isNaN(identifier) && !isNaN(parseFloat(identifier));
     const categoryWhereClause = isNumericId ? { id: parseInt(identifier) } : { slug: identifier };
-
     const category = await Category.findOne({ where: categoryWhereClause });
     if (!category) {
       return res.status(404).json({
@@ -466,7 +430,6 @@ const getCategoryProducts = async (req, res) => {
         message: 'Category not found'
       });
     }
-
     // Get category IDs: always include self; for parent categories, include direct children
     let categoryIds = [category.id];
     if (category.parent_id === null) {
@@ -477,13 +440,11 @@ const getCategoryProducts = async (req, res) => {
       });
       categoryIds = [...categoryIds, ...directChildren.map(c => c.id)]; // Use category.id instead of id
     }
-
     // Build where clause
     const whereClause = {
       category_id: { [Op.in]: categoryIds },
       status: 'active' // Only show active products
     };
-
     // Price filtering
     const priceFilter = {};
     if (minPrice) {
@@ -495,7 +456,6 @@ const getCategoryProducts = async (req, res) => {
     if (Object.keys(priceFilter).length > 0) {
       whereClause.price = priceFilter;
     }
-
     // Sorting
     const sortFieldMap = {
       'createdAt': 'created_at',
@@ -512,14 +472,12 @@ const getCategoryProducts = async (req, res) => {
     } else {
       order.push(['created_at', 'DESC']); // Default sort
     }
-
     // Get the total count of products for pagination using Sequelize's count method
     const totalCount = await Product.count({
       where: whereClause,
       distinct: true,
       col: 'id'
     });
-
     // Get the products with their related data (removed Review include to avoid duplicates; fetch stats separately)
     const products = await Product.findAll({
       where: whereClause,
@@ -559,7 +517,6 @@ const getCategoryProducts = async (req, res) => {
       subQuery: false,
       group: ['Product.id', 'vendor.id', 'vendor->store.id', 'category.id', 'images.id']
     });
-
     // Get review stats for all products in one query
     const productIds = products.map(p => p.id);
     const reviewStats = await Review.findAll({
@@ -574,7 +531,6 @@ const getCategoryProducts = async (req, res) => {
       group: ['product_id'],
       raw: true
     });
-
     // Create a map of product_id to review stats
     const reviewStatsMap = reviewStats.reduce((acc, stat) => {
       acc[stat.product_id] = {
@@ -583,12 +539,10 @@ const getCategoryProducts = async (req, res) => {
       };
       return acc;
     }, {});
-
     // Add review stats and category info to each product
     const productsWithReviews = products.map(product => {
       const stats = reviewStatsMap[product.id] || { average_rating: 0, review_count: 0 };
       const productData = product.get({ plain: true });
-      
       return {
         ...productData,
         average_rating: stats.average_rating,
@@ -601,7 +555,6 @@ const getCategoryProducts = async (req, res) => {
         } : null
       };
     });
-
     // Get child categories if this is a parent category
     let childCategories = [];
     if (category.parent_id === null) {
@@ -611,7 +564,6 @@ const getCategoryProducts = async (req, res) => {
         raw: true
       });
     }
-
     res.status(200).json({
       success: true,
       data: {
@@ -640,7 +592,6 @@ const getCategoryProducts = async (req, res) => {
     });
   }
 };
-
 module.exports = {
   createCategory,
   getCategories,

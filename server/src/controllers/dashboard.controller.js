@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard Controller - Comprehensive Review and Fixes Applied
  *
  * This controller has been thoroughly reviewed and optimized with the following improvements:
@@ -39,12 +39,10 @@
  * All methods now include proper error handling, input validation, and optimized database queries
  * for better performance and reliability in production environments.
  */
-
 const { Op, Sequelize, fn, col, literal } = require("sequelize");
 const db = require("../models");
 const catchAsync = require("../utils/catchAsync");
 const AppError = require("../utils/appError");
-
 // Helper function for pagination with validation
 const paginate = (page = 1, limit = 20) => {
   try {
@@ -56,7 +54,6 @@ const paginate = (page = 1, limit = 20) => {
     throw new Error("Invalid pagination parameters");
   }
 };
-
 // Helper function for pagination response
 const createPaginationResponse = (data, page, limit, total) => {
   const totalPages = Math.ceil(total / limit);
@@ -72,7 +69,6 @@ const createPaginationResponse = (data, page, limit, total) => {
     },
   };
 };
-
 /**
  * Retrieves paginated list of newest products based on their supply creation date.
  * Shows recently added products to the platform for discovery and browsing.
@@ -132,7 +128,6 @@ const createPaginationResponse = (data, page, limit, total) => {
 const getNewArrivals = catchAsync(async (req, res, next) => {
   const { page = 1, limit = 10 } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit);
-
   const { count, rows: products } = await db.Product.findAndCountAll({
     attributes: [
       "id",
@@ -183,14 +178,12 @@ const getNewArrivals = catchAsync(async (req, res, next) => {
     offset,
     distinct: true,
   });
-
   const response = createPaginationResponse(products, page, limit, count);
   res.status(200).json({
     status: "success",
     ...response,
   });
 });
-
 /**
  * Retrieves the 12 most recently updated active products for trending display.
  * Shows products that have been recently modified or updated on the platform.
@@ -232,11 +225,9 @@ const getNewArrivals = catchAsync(async (req, res, next) => {
 const getTrendingNow = catchAsync(async (req, res, next) => {
   const { limit = 10, page = 1 } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit); // FIX: Use paginate helper
-  
   // Get products sorted by recent sales momentum (last 7 days)
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  
   // FIX: Use findAndCountAll for proper pagination metadata
   const { count, rows: products } = await db.Product.findAndCountAll({
     attributes: [
@@ -297,16 +288,13 @@ const getTrendingNow = catchAsync(async (req, res, next) => {
     offset, // FIX: Add offset for pagination
     distinct: true, // FIX: Prevents duplicate rows
   });
-
   // FIX: Return paginated response with metadata
   const response = createPaginationResponse(products, page, limit, count);
-  
   res.status(200).json({
     status: "success",
     ...response,
   });
 });
-
 /**
  * Retrieves paginated list of most recent journal entries for content discovery.
  * Shows recently updated or published journal content with associated products.
@@ -373,21 +361,17 @@ const getTrendingNow = catchAsync(async (req, res, next) => {
 const getLatestJournal = catchAsync(async (req, res, next) => {
   const { page = 1, limit = 12 } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit);
-
   const { count, rows: journals } = await db.Journal.findAndCountAll({
     order: [["updated_at", "DESC"]],
     limit: limitNum,
     offset,
   });
-
   const response = createPaginationResponse(journals, page, limit, count);
   res.status(200).json({
     status: "success",
     ...response,
   });
 });
-
-
 /**
  * Retrieves comprehensive dashboard metrics for an approved vendor.
  * Provides key performance indicators including live products count, sales data, and analytics.
@@ -427,17 +411,14 @@ const getVendorDashboard = catchAsync(async (req, res, next) => {
     attributes: ["id"],
     where: { user_id: req.user.id },
   }).then((v) => (v ? v.id : null));
-
   if (!vendorId) {
     return next(new AppError("Vendor not found", 404));
   }
-
   // Calculate repeated date ranges
   const currentMonth = new Date();
   currentMonth.setDate(1);
   const nextMonth = new Date(currentMonth);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
-
   // Use Literal Subqueries for optimal performance (Single DB Round Trip)
   const dashboardData = await db.Vendor.findOne({
     where: { id: vendorId },
@@ -481,7 +462,6 @@ const getVendorDashboard = catchAsync(async (req, res, next) => {
       ],
     ],
   });
-
   res.status(200).json({
     status: "success",
     data: {
@@ -496,7 +476,6 @@ const getVendorDashboard = catchAsync(async (req, res, next) => {
     },
   });
 });
-
 /**
  * Retrieves paginated list of products owned by the authenticated vendor.
  * Provides detailed product information for vendor product management.
@@ -572,18 +551,14 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
       user_id: req.user.id
     },
   });
-
   if (!vendor) {
     return next(new AppError("Vendor not found", 404));
   }
-
   const vendorId = vendor.id;
   const { page = 1, limit = 20, status = "" } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit);
-
   // Build base where clause
   const whereClause = { vendor_id: vendorId };
-  
   // Handle status filtering based on stock levels using subquery approach
   if (status && status !== "All") {
     if (status === "out_of_stock") {
@@ -606,7 +581,6 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
       `);
     }
   }
-  
   const { count, rows: products } = await db.Product.findAndCountAll({
     where: whereClause,
     include: [
@@ -650,7 +624,6 @@ const getVendorProducts = catchAsync(async (req, res, next) => {
     ...response,
   });
 });
-
 /**
  * Retrieves comprehensive earnings data for an approved vendor.
  * Includes total earnings, monthly performance metrics, and payout information.
@@ -690,17 +663,14 @@ const getVendorEarnings = catchAsync(async (req, res, next) => {
     attributes: ["id"],
     where: { user_id: req.user.id },
   }).then((v) => (v ? v.id : null));
-
   if (!vendorId) {
     return next(new AppError("Vendor not found", 404));
   }
-
   // Calculate repeated date ranges
   const currentMonth = new Date();
   currentMonth.setDate(1);
   const nextMonth = new Date(currentMonth);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
-
   const earningsData = await db.Vendor.findOne({
     where: { id: vendorId },
     attributes: [
@@ -750,7 +720,6 @@ const getVendorEarnings = catchAsync(async (req, res, next) => {
       ],
     ],
   });
-
   res.status(200).json({
     status: "success",
     data: {
@@ -769,7 +738,6 @@ const getVendorEarnings = catchAsync(async (req, res, next) => {
     },
   });
 });
-
 /**
  * Retrieves detailed breakdown of vendor earnings with pagination.
  * Shows individual sales transactions with product details and payout information.
@@ -843,15 +811,12 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
       user_id: req.user.id
     },
   });
-
   if (!vendor) {
     return next(new AppError("Vendor not found", 404));
   }
-
   const vendorId = vendor.id;
   const { page = 1, limit = 20 } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit);
-
   const { count, rows: earnings } = await db.OrderItem.findAndCountAll({
     where: { vendor_id: vendorId },
     include: [
@@ -891,28 +856,23 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
     offset,
     distinct: true, // FIX: Prevents duplicate rows and ensures count matches data
   });
-
   // FIX: No longer need post-query filtering since required: true ensures data integrity
   const validEarnings = earnings;
-
   // Get payout dates for all earnings, sorted by payout_date ascending
   const payoutRecords = await db.Payout.findAll({
     where: { vendor_id: vendorId, status: "paid" }, // Only consider paid payouts
     attributes: ["payout_date"], // Only need the date for comparison
     order: [["payout_date", "ASC"]], // Sort ascending for efficient lookup
   });
-
   // Extract unique sorted payout dates
   const sortedPayoutDates = payoutRecords
     .map((p) => (p.payout_date ? new Date(p.payout_date) : null))
     .filter(Boolean) // Remove nulls
     .sort((a, b) => a.getTime() - b.getTime()); // Ensure chronological order
-
   // Map earnings with payout information efficiently
   const earningsWithPayouts = validEarnings.map((earning) => {
     const earningCreatedAt = new Date(earning.created_at);
     let payoutDate = null;
-
     // Find the first payout date that is on or after the earning's creation date
     // This implies the earning would be covered by this payout
     for (const pDate of sortedPayoutDates) {
@@ -921,7 +881,6 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
         break;
       }
     }
-
     return {
       date: earning.created_at,
       product: earning.product.name, // Safe to access now after filtering
@@ -931,7 +890,6 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
       payoutDate,
     };
   });
-
   // Use the filtered count for pagination
   const response = createPaginationResponse(
     earningsWithPayouts,
@@ -939,37 +897,29 @@ const getVendorEarningsBreakdown = catchAsync(async (req, res, next) => {
     limit,
     count // Still use original count for total records that match the query
   );
-  
   res.status(200).json({
     status: "success",
     ...response,
   });
 });
-
-
 // Helper function to validate and calculate date range for monthly filtering
 const calculateDateRange = (year, month) => {
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth() + 1; // JavaScript months are 0-indexed
-  
   // Default to current month if no parameters provided (backward compatibility)
   const targetYear = year ? parseInt(year) : currentYear;
   const targetMonth = month ? parseInt(month) : currentMonth;
-  
   // Validate year range (between 2000 and current year + 1 for future planning)
   if (isNaN(targetYear) || targetYear < 2000 || targetYear > currentYear + 1) {
     throw new Error(`Invalid year. Please provide a year between 2000 and ${currentYear + 1}.`);
   }
-  
   // Validate month range (1-12)
   if (isNaN(targetMonth) || targetMonth < 1 || targetMonth > 12) {
     throw new Error("Invalid month. Please provide a month between 1 and 12.");
   }
-  
   // Handle edge case: future dates should default to current month
   if (targetYear > currentYear || (targetYear === currentYear && targetMonth > currentMonth)) {
-    console.warn(`Requested date ${targetYear}-${targetMonth} is in the future. Defaulting to current month.`);
     const now = new Date();
     return {
       startDate: new Date(now.getFullYear(), now.getMonth(), 1),
@@ -979,17 +929,11 @@ const calculateDateRange = (year, month) => {
       isFuture: true
     };
   }
-  
   // Handle leap year edge case for February
   const isLeapYear = (targetYear % 4 === 0 && targetYear % 100 !== 0) || (targetYear % 400 === 0);
-  if (targetMonth === 2 && !isLeapYear) {
-    console.log(`Non-leap year ${targetYear} detected for February. Handling accordingly.`);
-  }
-  
   // Calculate start and end dates for the target month
   const startDate = new Date(targetYear, targetMonth - 1, 1); // Month is 0-indexed in JavaScript
   const endDate = new Date(targetYear, targetMonth, 1); // First day of next month
-  
   return {
     startDate,
     endDate,
@@ -999,7 +943,6 @@ const calculateDateRange = (year, month) => {
     isLeapYear
   };
 };
-
 // Helper function to format month name for metadata
 const formatMonthName = (year, month) => {
   const monthNames = [
@@ -1008,7 +951,6 @@ const formatMonthName = (year, month) => {
   ];
   return `${monthNames[month - 1]} ${year}`;
 };
-
 /**
  * Retrieves comprehensive dashboard metrics for administrative oversight with monthly filtering.
  * Provides platform-wide statistics including vendor counts, financial metrics, and operational data.
@@ -1069,34 +1011,18 @@ const formatMonthName = (year, month) => {
 const getAdminDashboard = catchAsync(async (req, res, next) => {
   try {
     const { year, month } = req.query;
-    
-    console.log(`[Admin Dashboard] Request received - Year: ${year}, Month: ${month}`);
-    
     // Calculate date range with validation
     let dateRange;
     try {
       dateRange = calculateDateRange(year, month);
     } catch (error) {
-      console.error(`[Admin Dashboard] Date validation error: ${error.message}`);
       return next(new AppError(error.message, 400));
     }
-    
     const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
-    
-    // Log the processing details
-    console.log(`[Admin Dashboard] Processing dashboard for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
-    if (isFuture) {
-      console.log(`[Admin Dashboard] Warning: Requested future period, defaulted to current month`);
-    }
-    if (isLeapYear && targetMonth === 2) {
-      console.log(`[Admin Dashboard] Leap year detected: ${targetYear}`);
-    }
-    
     // Total Vendors (always count approved vendors, no date filtering)
     const totalVendors = await db.Vendor.count({
       where: { status: "approved" },
     });
-    
     // Platform Income for the specified period
     const monthlyIncome = await db.PaymentTransaction.sum("amount", {
       where: {
@@ -1108,10 +1034,8 @@ const getAdminDashboard = catchAsync(async (req, res, next) => {
         },
       },
     }) || 0;
-    
     // Total Products (always count all products, no date filtering)
     const totalProducts = await db.Product.count();
-    
     // Total Sales for the specified period
     const monthlySales = await db.Order.sum("total_amount", {
       where: {
@@ -1122,7 +1046,6 @@ const getAdminDashboard = catchAsync(async (req, res, next) => {
         },
       },
     }) || 0;
-    
     // Order statuses for the specified period
     const orderStatuses = {
       delivered: await db.Order.count({
@@ -1171,11 +1094,9 @@ const getAdminDashboard = catchAsync(async (req, res, next) => {
         },
       }),
     };
-    
     // Determine if this is default behavior (no year/month specified)
     const currentDate = new Date();
     const isDefault = !year && !month;
-    
     const response = {
       status: "success",
       data: {
@@ -1200,15 +1121,8 @@ const getAdminDashboard = catchAsync(async (req, res, next) => {
         },
       },
     };
-    
-    // Log successful processing
-    console.log(`[Admin Dashboard] Successfully processed dashboard data for ${formatMonthName(targetYear, targetMonth)}`);
-    console.log(`[Admin Dashboard] Metrics: Vendors=${totalVendors}, Products=${totalProducts}, Sales=${monthlySales}, Income=${monthlyIncome}`);
-    
     res.status(200).json(response);
-    
   } catch (error) {
-    console.error(`[Admin Dashboard] Unexpected error: ${error.message}`, error.stack);
     return next(new AppError("Internal server error while processing dashboard data", 500));
   }
 });
@@ -1292,29 +1206,14 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
   try {
     const { limit = 10, year, month } = req.query;
     const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 50)); // Max 50 vendors
-
-    console.log(`[Top Selling Vendors] Request received - Year: ${year}, Month: ${month}, Limit: ${limitNum}`);
-    
     // Calculate date range with validation
     let dateRange;
     try {
       dateRange = calculateDateRange(year, month);
     } catch (error) {
-      console.error(`[Top Selling Vendors] Date validation error: ${error.message}`);
       return next(new AppError(error.message, 400));
     }
-    
     const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
-    
-    // Log the processing details
-    console.log(`[Top Selling Vendors] Processing vendors for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
-    if (isFuture) {
-      console.log(`[Top Selling Vendors] Warning: Requested future period, defaulted to current month`);
-    }
-    if (isLeapYear && targetMonth === 2) {
-      console.log(`[Top Selling Vendors] Leap year detected: ${targetYear}`);
-    }
-
     // STEP 1: Aggregate sales per vendor with date filtering
     const vendorSales = await db.OrderItem.findAll({
       attributes: [
@@ -1346,11 +1245,9 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
       limit: limitNum,
       raw: true,
     });
-
     if (vendorSales.length === 0) {
       const currentDate = new Date();
       const isDefault = !year && !month;
-      
       return res.status(200).json({
         status: "success",
         data: [],
@@ -1371,9 +1268,7 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
         message: `No vendor sales data available for ${formatMonthName(targetYear, targetMonth)}.`,
       });
     }
-
     const vendorIds = vendorSales.map((v) => v.vendor_id);
-
     // STEP 2: Fetch full vendor details separately
     const vendors = await db.Vendor.findAll({
       where: { id: { [Op.in]: vendorIds } },
@@ -1392,7 +1287,6 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
       order: [[literal(`FIELD(Vendor.id, ${vendorIds.join(",")})`)]], // Preserve sales order
       raw: false,
     });
-
     // STEP 3: Combine + format beautifully
     const salesMap = new Map(
       vendorSales.map((v) => [
@@ -1404,7 +1298,6 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
         },
       ])
     );
-
     const result = vendors.map((vendor) => {
       const sales = salesMap.get(vendor.id) || {
         total_sales: 0,
@@ -1413,7 +1306,6 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
       };
       const user = vendor.User;
       const store = vendor.store;
-
       return {
         id: vendor.id,
         name: user
@@ -1437,11 +1329,9 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
         },
       };
     });
-
     // Determine if this is default behavior (no year/month specified)
     const currentDate = new Date();
     const isDefault = !year && !month;
-
     // FIX: Add pagination metadata for consistency with other endpoints
     const response = createPaginationResponse(
       result,
@@ -1449,7 +1339,6 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
       limitNum,
       result.length
     );
-    
     // Add metadata separately
     response.metadata = {
       period: formatMonthName(targetYear, targetMonth),
@@ -1469,21 +1358,12 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
       total_vendors_returned: result.length,
       top_performer: result[0]?.business_name || null,
     };
-
-    // Log successful processing
-    console.log(`[Top Selling Vendors] Successfully processed ${result.length} vendors for ${formatMonthName(targetYear, targetMonth)}`);
-    console.log(`[Top Selling Vendors] Top performer: ${response.summary.top_performer}`);
-
     res.status(200).json(response);
-    
   } catch (error) {
-    console.error(`[Top Selling Vendors] Unexpected error: ${error.message}`, error.stack);
     return next(new AppError("Internal server error while processing top selling vendors", 500));
   }
 });
-
 /**
-
 /**
  * Retrieves monthly sales statistics for the current year.
  * Provides aggregated sales data grouped by month for trend analysis.
@@ -1527,16 +1407,13 @@ const getTopSellingVendors = catchAsync(async (req, res, next) => {
  */
 const getAdminSalesStats = catchAsync(async (req, res, next) => {
   const { year, month } = req.query;
-  
   // Validate and set year (default to current year)
   const currentYear = new Date().getFullYear();
   const targetYear = year ? parseInt(year) : currentYear;
-  
   // Validate year range (between 2000 and current year + 1)
   if (isNaN(targetYear) || targetYear < 2000 || targetYear > currentYear + 1) {
     return next(new AppError("Invalid year. Please provide a year between 2000 and current year.", 400));
   }
-  
   // Validate month if provided (1-12)
   let targetMonth = null;
   if (month) {
@@ -1545,10 +1422,8 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
       return next(new AppError("Invalid month. Please provide a month between 1 and 12.", 400));
     }
   }
-
   // Build date range based on filters
   let dateStart, dateEnd;
-  
   if (targetMonth) {
     // Filter for specific month in the year
     dateStart = new Date(targetYear, targetMonth - 1, 1);
@@ -1558,7 +1433,6 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
     dateStart = new Date(targetYear, 0, 1);
     dateEnd = new Date(targetYear + 1, 0, 1);
   }
-
   // FIXED: Use "delivered" instead of "completed" as it's the valid status
   // You can also use ['delivered', 'shipped'] if you want to include both
   const orderStats = await db.Order.findAll({
@@ -1583,13 +1457,11 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
     ],
     raw: true,
   });
-
   // Then get the total products sold for each month using a separate query
   const salesStatsWithProducts = await Promise.all(
     orderStats.map(async (stat) => {
       const monthStart = new Date(stat.year, stat.month - 1, 1);
       const monthEnd = new Date(stat.year, stat.month, 1);
-
       const productsSold =
         (await db.OrderItem.sum("quantity", {
           include: [
@@ -1608,7 +1480,6 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
             },
           ],
         })) || 0;
-
       return {
         month: parseInt(stat.month),
         year: parseInt(stat.year),
@@ -1618,7 +1489,6 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
       };
     })
   );
-
   res.status(200).json({
     status: "success",
     data: salesStatsWithProducts,
@@ -1632,7 +1502,6 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
     }
   });
 });
-
 /**
  * Retrieves top performing categories based on product sales with monthly filtering.
  * Shows category performance metrics including product count and total units sold for specified period.
@@ -1709,29 +1578,14 @@ const getAdminSalesStats = catchAsync(async (req, res, next) => {
 const getAdminTopCategories = catchAsync(async (req, res, next) => {
   try {
     const { year, month } = req.query;
-    
-    console.log(`[Admin Top Categories] Request received - Year: ${year}, Month: ${month}`);
-    
     // Calculate date range with validation
     let dateRange;
     try {
       dateRange = calculateDateRange(year, month);
     } catch (error) {
-      console.error(`[Admin Top Categories] Date validation error: ${error.message}`);
       return next(new AppError(error.message, 400));
     }
-    
     const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
-    
-    // Log the processing details
-    console.log(`[Admin Top Categories] Processing categories for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
-    if (isFuture) {
-      console.log(`[Admin Top Categories] Warning: Requested future period, defaulted to current month`);
-    }
-    if (isLeapYear && targetMonth === 2) {
-      console.log(`[Admin Top Categories] Leap year detected: ${targetYear}`);
-    }
-
     // Get top categories with date filtering for product sales
     // For monthly filtering, we need to calculate sales based on order_items within the date range
     const topCategories = await db.Category.findAll({
@@ -1810,7 +1664,6 @@ const getAdminTopCategories = catchAsync(async (req, res, next) => {
       subQuery: false,
       raw: true, // CRITICAL: Returns plain objects for GROUP BY queries
     });
-
     // Format the response data with proper type conversion
     const validatedCategories = topCategories.map((category) => ({
       id: category.id,
@@ -1822,11 +1675,9 @@ const getAdminTopCategories = catchAsync(async (req, res, next) => {
       total_sold: parseInt(category.total_sold) || 0,
       total_revenue: parseFloat(category.total_revenue) || 0,
     }));
-
     // Determine if this is default behavior (no year/month specified)
     const currentDate = new Date();
     const isDefault = !year && !month;
-
     const response = {
       status: "success",
       data: validatedCategories,
@@ -1846,19 +1697,11 @@ const getAdminTopCategories = catchAsync(async (req, res, next) => {
         total_categories: validatedCategories.length,
       },
     };
-
-    // Log successful processing
-    console.log(`[Admin Top Categories] Successfully processed ${validatedCategories.length} categories for ${formatMonthName(targetYear, targetMonth)}`);
-    console.log(`[Admin Top Categories] Top category: ${validatedCategories[0]?.name || 'None'}`);
-
     res.status(200).json(response);
-    
   } catch (error) {
-    console.error(`[Admin Top Categories] Unexpected error: ${error.message}`, error.stack);
     return next(new AppError("Internal server error while processing top categories", 500));
   }
 });
-
 /**
  * Retrieves paginated list of recent orders with user information and basic order details.
  * Provides recent order data for dashboard display with appropriate pagination and filters.
@@ -1923,7 +1766,6 @@ const getAdminTopCategories = catchAsync(async (req, res, next) => {
 const getRecentOrders = catchAsync(async (req, res, next) => {
   const { page = 1, limit = 20, status, payment_status } = req.query;
   const { limit: limitNum, offset } = paginate(page, limit);
-
   // Validate query parameters
   const validOrderStatuses = [
     "pending",
@@ -1933,7 +1775,6 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
     "cancelled",
   ];
   const validPaymentStatuses = ["pending", "paid", "failed", "refunded"];
-
   // Build where clause for filters with validation
   const whereClause = {};
   if (status && validOrderStatuses.includes(status)) {
@@ -1942,7 +1783,6 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
   if (payment_status && validPaymentStatuses.includes(payment_status)) {
     whereClause.payment_status = payment_status;
   }
-
   const { count, rows: orders } = await db.Order.findAndCountAll({
     attributes: [
       "id",
@@ -1995,13 +1835,11 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
     offset,
     distinct: true,
   });
-
   // Format the response to flatten order items for client compatibility
   const formattedOrders = orders.map((order) => {
     // Flatten order items to match client expectations (image, title, qty)
     // Each order now includes the first item's details as flat properties
     const firstItem = order.items && order.items.length > 0 ? order.items[0] : null;
-    
     return {
       id: order.id,
       user_id: order.user_id,
@@ -2030,7 +1868,6 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
       })) : [],
     };
   });
-
   const response = createPaginationResponse(
     formattedOrders,
     page,
@@ -2115,32 +1952,16 @@ const getRecentOrders = catchAsync(async (req, res, next) => {
 const getTopSellingItems = catchAsync(async (req, res, next) => {
   try {
     const { limit = 10, year, month } = req.query;
-
     // Validate limit parameter
     const limitNum = Math.max(1, Math.min(parseInt(limit) || 10, 100)); // Between 1-100
-
-    console.log(`[Top Selling Items] Request received - Year: ${year}, Month: ${month}, Limit: ${limitNum}`);
-    
     // Calculate date range with validation
     let dateRange;
     try {
       dateRange = calculateDateRange(year, month);
     } catch (error) {
-      console.error(`[Top Selling Items] Date validation error: ${error.message}`);
       return next(new AppError(error.message, 400));
     }
-    
     const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
-    
-    // Log the processing details
-    console.log(`[Top Selling Items] Processing items for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
-    if (isFuture) {
-      console.log(`[Top Selling Items] Warning: Requested future period, defaulted to current month`);
-    }
-    if (isLeapYear && targetMonth === 2) {
-      console.log(`[Top Selling Items] Leap year detected: ${targetYear}`);
-    }
-
     // First, get the top selling products by quantity with date filtering
     const topSellingProducts = await db.OrderItem.findAll({
       attributes: ["product_id", [fn("SUM", col("quantity")), "total_quantity"]],
@@ -2166,14 +1987,11 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
       limit: limitNum,
       raw: true,
     });
-
     // Then get the complete product details for these top sellers
     const productIds = topSellingProducts.map((item) => item.product_id);
-
     if (productIds.length === 0) {
       const currentDate = new Date();
       const isDefault = !year && !month;
-      
       return res.status(200).json({
         status: "success",
         data: [],
@@ -2194,7 +2012,6 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
         message: `No selling items data available for ${formatMonthName(targetYear, targetMonth)}.`,
       });
     }
-
     const products = await db.Product.findAll({
       attributes: [
         "id",
@@ -2236,7 +2053,6 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
         status: "active",
       },
     });
-
     // Combine the sales data with product details
     const topSellingItems = topSellingProducts
       .map((salesItem) => {
@@ -2248,11 +2064,9 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
         };
       })
       .filter((item) => item.product !== null); // Remove products that weren't found
-
     // Determine if this is default behavior (no year/month specified)
     const currentDate = new Date();
     const isDefault = !year && !month;
-
     // FIX: Add pagination metadata for consistency with other endpoints
     const response = createPaginationResponse(
       topSellingItems,
@@ -2260,7 +2074,6 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
       limitNum,
       topSellingItems.length
     );
-    
     // Add metadata separately
     response.metadata = {
       period: formatMonthName(targetYear, targetMonth),
@@ -2277,19 +2090,11 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
       },
       requestedLimit: limitNum,
     };
-
-    // Log successful processing
-    console.log(`[Top Selling Items] Successfully processed ${topSellingItems.length} items for ${formatMonthName(targetYear, targetMonth)}`);
-    console.log(`[Top Selling Items] Top seller: ${topSellingItems[0]?.product?.name || 'None'}`);
-
     res.status(200).json(response);
-    
   } catch (error) {
-    console.error(`[Top Selling Items] Unexpected error: ${error.message}`, error.stack);
     return next(new AppError("Internal server error while processing top selling items", 500));
   }
 });
-
 /**
  * Retrieves comprehensive vendor overview with detailed metrics and analytics.
  * Provides complete vendor performance data including sales, earnings, ratings, and product-level insights.
@@ -2409,16 +2214,13 @@ const getTopSellingItems = catchAsync(async (req, res, next) => {
 const getVendorOverview = catchAsync(async (req, res, next) => {
   const { vendorId } = req.params;
   const { page = 1, limit = 10 } = req.query;
-
   // Validate vendor ID
   const vendorID = parseInt(vendorId);
   if (isNaN(vendorID) || vendorID <= 0) {
     return next(new AppError("Invalid vendor ID", 400));
   }
-
   // Validate and get pagination parameters for products
   const { limit: limitNum, offset } = paginate(page, limit);
-
   // Get vendor basic information
   const vendor = await db.Vendor.findOne({
     where: { id: vendorID },
@@ -2434,11 +2236,9 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
       },
     ],
   });
-
   if (!vendor) {
     return next(new AppError("Vendor not found", 404));
   }
-
   // Calculate overall metrics
   const [
     totalSales,
@@ -2458,7 +2258,6 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
         },
       ],
     }).then((val) => val || 0),
-
     // Total completed payouts
     db.Payout.count({
       where: {
@@ -2466,31 +2265,25 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
         status: "paid",
       },
     }),
-
     // Product tags count
     db.VendorProductTag.count({
       where: { vendor_id: vendorID },
     }),
-
     // Total products count
     db.Product.count({
       where: { vendor_id: vendorID },
     }),
-
     // Total product views
     db.Product.sum("impressions", {
       where: { vendor_id: vendorID },
     }).then((val) => val || 0),
   ]);
-
   // Calculate conversion rates
   const earningsConversion =
     totalViews > 0 ? (totalSales / totalViews).toFixed(2) : "0.00";
   const salesConversion = earningsConversion; // Same as earnings for this context
-
   // Get monthly ratings for vendor's products - DEBUG: Add logging to identify ambiguous column issue
   // Monthly ratings query for vendor products
-
   const monthlyRatings = await db.Review.findAll({
     attributes: [
       [literal("DATE_FORMAT(`Review`.`created_at`, '%Y-%m')"), "month"],
@@ -2509,24 +2302,18 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
     limit: 12,
     raw: true,
   }).catch((error) => {
-    console.error("[DEBUG] Error in monthly ratings query:", error.message);
-    console.error("[DEBUG] Full error:", error);
     throw error;
   });
-
-
   // Format monthly ratings
   const formattedMonthlyRatings = monthlyRatings.map((rating) => ({
     month: rating.month,
     average_rating: parseFloat(rating.average_rating).toFixed(1),
     total_reviews: parseInt(rating.total_reviews),
   }));
-
   // FIX: Separate count query for accurate pagination with GROUP BY
   const productsBreakdownCount = await db.Product.count({
     where: { vendor_id: vendorID },
   });
-
   // Get products breakdown with pagination
   const vendorProducts =
     await db.Product.findAll({
@@ -2558,13 +2345,8 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
       limit: limitNum,
       offset: offset,
     }).catch((error) => {
-      console.error(
-        "[DEBUG] Error in products breakdown query:",
-        error.message
-      );
       throw error;
     });
-
   // Get stock data separately for each product
   var productIds = vendorProducts.map((p) => p.id);
   const stockData = await Promise.all(
@@ -2576,13 +2358,11 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
       return { product_id: productId, total_stock: totalStock };
     })
   );
-
   // Create stock map
   const stockMap = new Map();
   stockData.forEach((item) => {
     stockMap.set(item.product_id, item.total_stock);
   });
-
   // Get sales data for each product
   productIds = vendorProducts.map((p) => p.id);
   const productSales = await Promise.all(
@@ -2598,11 +2378,9 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
             },
           ],
         })) || 0;
-
       const supplyCount = await db.Supply.count({
         where: { product_id: productId },
       });
-
       return {
         product_id: productId,
         total_sales: parseFloat(sales).toFixed(2),
@@ -2610,7 +2388,6 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
       };
     })
   );
-
   // Create sales and supply maps
   const salesMap = new Map();
   const supplyMap = new Map();
@@ -2618,7 +2395,6 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
     salesMap.set(item.product_id, item.total_sales);
     supplyMap.set(item.product_id, item.supplied_count);
   });
-
   // Format products breakdown
   const productsBreakdown = vendorProducts.map((product) => ({
     product_id: product.id,
@@ -2633,7 +2409,6 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
       : 0,
     last_updated: product.updated_at,
   }));
-
   // Prepare response
   const response = {
     vendor_info: {
@@ -2672,13 +2447,11 @@ const getVendorOverview = catchAsync(async (req, res, next) => {
       hasPrevPage: page > 1,
     },
   };
-
   res.status(200).json({
     status: "success",
     data: response,
   });
 });
-
 /**
  * Retrieves comprehensive vendor onboarding statistics with advanced filtering capabilities.
  * Provides key metrics for vendor performance and onboarding success tracking with flexible filtering options.
@@ -2779,9 +2552,7 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
     sortBy = "approved_at",
     sortOrder = "DESC",
   } = req.query;
-
   const { limit: limitNum, offset } = paginate(page, limit);
-
   // Validate parameters
   const validStatuses = ["approved", "pending", "rejected", "suspended", "deactivated"];
   const validSortFields = [
@@ -2793,13 +2564,10 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
     "date_joined",
   ];
   const validSortOrders = ["ASC", "DESC"];
-
   // 1. Build WHERE clause for standard Vendor columns
   const whereClause = {};
-  
   // Store WHERE clause for deactivated status filtering
   const storeWhereClause = {};
-
   // Status filter
   // "deactivated" is a virtual status that checks Store.is_verified = false OR Store.status = 0
   if (status && validStatuses.includes(status)) {
@@ -2826,7 +2594,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
   } else if (!status) {
     whereClause.status = "approved";
   }
-
   // Date range filters (on approved_at)
   if (dateFrom) {
     const fromDate = new Date(dateFrom);
@@ -2837,7 +2604,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
       };
     }
   }
-
   if (dateTo) {
     const toDate = new Date(dateTo);
     if (!isNaN(toDate.getTime())) {
@@ -2847,7 +2613,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
       };
     }
   }
-
   // Search filter (complex)
   if (search) {
     const searchTerm = search.toLowerCase();
@@ -2858,7 +2623,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
       { "$store.business_name$": { [Op.like]: `%${searchTerm}%` } },
     ];
   }
-
   // 2. Define Subqueries for computed fields
   // Total Earnings: Sum of paid order items for this vendor
   const totalEarningsLiteral = literal(`(
@@ -2868,24 +2632,20 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
     WHERE oi.vendor_id = \`Vendor\`.\`id\`
     AND o.payment_status = 'paid'
   )`);
-
   // Product Tags Count
   const productTagsLiteral = literal(`(
     SELECT COUNT(*)
     FROM \`vendor_product_tags\` AS vpt
     WHERE vpt.vendor_id = \`Vendor\`.\`id\`
   )`);
-
   // 3. Build HAVING clause for computed columns
   const havingClause = {};
-  
   if (minEarnings !== undefined) {
     const minEarn = parseFloat(minEarnings);
     if (!isNaN(minEarn)) {
       havingClause.total_earnings = { [Op.gte]: minEarn };
     }
   }
-
   if (maxEarnings !== undefined) {
     const maxEarn = parseFloat(maxEarnings);
     if (!isNaN(maxEarn)) {
@@ -2895,14 +2655,12 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
       };
     }
   }
-
   if (minProductTags !== undefined) {
     const minTags = parseInt(minProductTags);
     if (!isNaN(minTags)) {
       havingClause.product_tags_count = { [Op.gte]: minTags };
     }
   }
-
   if (maxProductTags !== undefined) {
     const maxTags = parseInt(maxProductTags);
     if (!isNaN(maxTags)) {
@@ -2912,13 +2670,11 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
       };
     }
   }
-
   // 4. Determine Sort Order
   let order;
   const finalSortOrder = validSortOrders.includes(sortOrder.toUpperCase())
     ? sortOrder.toUpperCase()
     : "DESC";
-  
   switch (sortBy) {
     case "vendor_name":
       order = [[literal("CONCAT(`User`.`first_name`, ' ', `User`.`last_name`)"), finalSortOrder]];
@@ -2938,7 +2694,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
       order = [["approved_at", finalSortOrder]];
       break;
   }
-
   // 5. Execute Query
   // Note: findAndCountAll with 'having' can be tricky with Sequelize.
   // We need to ensure attributes are included for the having clause to work.
@@ -2973,7 +2728,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
     offset,
     subQuery: false, // Essential for HAVING and custom attributes to work with limits properly
   });
-
   // Calculate total filtering count if having clause is used, 
   // because findAndCountAll with subQuery: false and HAVING usually returns the count of ALL rows before limit/offset but after having?
   // Actually, Sequelize findAndCountAll sometimes returns an array for 'count' when GROUP BY or HAVING is involved.
@@ -2984,7 +2738,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
   } else {
     totalFiltered = count;
   }
-
   // 6. Format Response
   const formattedVendors = vendors.map((vendor) => ({
     vendor_id: vendor.id,
@@ -3000,14 +2753,12 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
     status: vendor.status,
     date_joined: vendor.approved_at,
   }));
-
   const response = createPaginationResponse(
     formattedVendors,
     page,
     limit,
     totalFiltered
   );
-
   res.status(200).json({
     status: "success",
     ...response,
@@ -3028,8 +2779,6 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
     },
   });
 });
-
-
 /**
  * Retrieves vendor-specific top selling products with monthly filtering.
  * Provides comprehensive product performance metrics for authenticated vendors with support for monthly analysis.
@@ -3164,12 +2913,8 @@ const getVendorOnboardingStats = catchAsync(async (req, res, next) => {
 const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
   try {
     const { page = 1, limit = 20, year, month } = req.query;
-    
-    console.log(`[Vendor Top Selling Products] Request received - User: ${req.user?.id}, Year: ${year}, Month: ${month}, Page: ${page}, Limit: ${limit}`);
-    
     // Validate and get pagination parameters
     const { limit: limitNum, offset } = paginate(page, limit);
-    
     // Vendor authentication and validation
     const vendor = await db.Vendor.findOne({
       where: { user_id: req.user.id },
@@ -3185,40 +2930,21 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
         },
       ],
     });
-
     if (!vendor) {
-      console.error(`[Vendor Top Selling Products] Vendor not found for user: ${req.user.id}`);
       return next(new AppError("Vendor not found or not approved", 404));
     }
-
     if (vendor.status !== "approved") {
-      console.error(`[Vendor Top Selling Products] Vendor not approved. Status: ${vendor.status}`);
       return next(new AppError("Access denied. Vendor account is not approved", 403));
     }
-
     const vendorId = vendor.id;
-    console.log(`[Vendor Top Selling Products] Processing for vendor ID: ${vendorId}`);
-    
     // Calculate date range with validation using existing utilities
     let dateRange;
     try {
       dateRange = calculateDateRange(year, month);
     } catch (error) {
-      console.error(`[Vendor Top Selling Products] Date validation error: ${error.message}`);
       return next(new AppError(error.message, 400));
     }
-    
     const { startDate, endDate, targetYear, targetMonth, isFuture, isLeapYear } = dateRange;
-    
-    // Log the processing details
-    console.log(`[Vendor Top Selling Products] Processing products for ${formatMonthName(targetYear, targetMonth)} (${targetYear}-${targetMonth})`);
-    if (isFuture) {
-      console.log(`[Vendor Top Selling Products] Warning: Requested future period, defaulted to current month`);
-    }
-    if (isLeapYear && targetMonth === 2) {
-      console.log(`[Vendor Top Selling Products] Leap year detected: ${targetYear}`);
-    }
-
     // Query 1: Get product sales data with vendor filtering and date range
     const productSalesData = await db.OrderItem.findAll({
       attributes: [
@@ -3251,13 +2977,10 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
       offset,
       raw: true,
     });
-
     // Query 2: Get complete product details for the sold products
     const productIds = productSalesData.map((item) => item.product_id);
-
     if (productIds.length === 0) {
       const isDefault = !year && !month;
-      
       return res.status(200).json({
         status: "success",
         data: {
@@ -3304,7 +3027,6 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
         message: `No products sold for ${formatMonthName(targetYear, targetMonth)}.`,
       });
     }
-
     // Query 3: Get detailed product information including stock, views, categories
     const products = await db.Product.findAll({
       where: {
@@ -3335,7 +3057,6 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
       ],
       subQuery: false,
     });
-
     // Query 4: Calculate monthly aggregations for the vendor
     const monthlyStats = await db.OrderItem.findOne({
       attributes: [
@@ -3363,7 +3084,6 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
       },
       raw: true,
     });
-
     // Combine and format the data
     const salesMap = new Map(
       productSalesData.map((item) => [
@@ -3375,7 +3095,6 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
         },
       ])
     );
-
     // Calculate profit margins and conversion rates
     const processedProducts = products.map((product) => {
       const sales = salesMap.get(product.id) || {
@@ -3383,25 +3102,20 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
         revenue: 0,
         order_count: 0,
       };
-      
       const currentStock = parseInt(product.getDataValue("current_stock") || 0);
       const views = product.impressions || 0;
       const impressions = product.impressions || 0;
-      
       // Calculate stock status
       let stockStatus = "out_of_stock";
       if (currentStock > 0) {
         stockStatus = currentStock > 10 ? "in_stock" : "low_stock";
       }
-      
       // Calculate conversion rate
       const conversionRate = views > 0 ? ((sales.units_sold / views) * 100).toFixed(2) : "0.00";
-      
       // Calculate profit margin (assuming 30% cost basis)
       const costBasis = product.price * 0.7;
       const profitMargin = sales.revenue > 0 ? 
         (((sales.revenue - (sales.units_sold * costBasis)) / sales.revenue) * 100).toFixed(2) : "0.00";
-      
       return {
         product_id: product.id,
         product_name: product.name,
@@ -3421,10 +3135,8 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
         discounted_price: product.discounted_price ? parseFloat(product.discounted_price) : null,
       };
     });
-
     // Sort products by units sold (most to least)
     processedProducts.sort((a, b) => b.units_sold - a.units_sold);
-
     // Format monthly aggregations
     const monthlyAggregations = {
       total_revenue: parseFloat(monthlyStats?.total_revenue || 0).toFixed(2),
@@ -3434,10 +3146,8 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
       top_performer_id: processedProducts[0]?.product_id || null,
       top_performer_name: processedProducts[0]?.product_name || null,
     };
-
     // Determine if this is default behavior (no year/month specified)
     const isDefault = !year && !month;
-
     // Get total count for pagination
     const totalProductsSold = await db.OrderItem.count({
       include: [
@@ -3460,7 +3170,6 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
       },
       distinct: true,
     });
-
     const response = {
       status: "success",
       data: {
@@ -3499,19 +3208,11 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
         hasPrevPage: page > 1,
       },
     };
-
-    // Log successful processing
-    console.log(`[Vendor Top Selling Products] Successfully processed ${processedProducts.length} products for vendor ${vendorId}`);
-    console.log(`[Vendor Top Selling Products] Total revenue: ${monthlyAggregations.total_revenue}, Top performer: ${monthlyAggregations.top_performer_name}`);
-
     res.status(200).json(response);
-    
   } catch (error) {
-    console.error(`[Vendor Top Selling Products] Unexpected error: ${error.message}`, error.stack);
     return next(new AppError("Internal server error while processing vendor top selling products", 500));
   }
 });
-
 /**
  * Retrieves paginated list of products added by administrators with comprehensive filtering.
  * Provides detailed product information including images, variants, inventory, and category data.
@@ -3642,8 +3343,6 @@ const getVendorTopSellingProducts = catchAsync(async (req, res, next) => {
  *   }
  * }
  */
-
-
 module.exports = {
   // customers 
   getNewArrivals,

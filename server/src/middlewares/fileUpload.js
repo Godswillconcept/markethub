@@ -31,17 +31,6 @@ const generateUniqueFilename = (originalName, fieldname) => {
 const uploadFiles = (fieldName = 'files', maxCount = 11, diskName = 'local') => {
   return async (req, res, next) => {
     try {
-      // DEBUG: Log file upload eligibility check
-      console.log("=== FILE UPLOAD ELIGIBILITY DEBUG ===");
-      console.log("Request method:", req.method);
-      console.log("Request path:", req.originalUrl);
-      console.log("Field name:", fieldName);
-      console.log("Max count:", maxCount);
-      console.log("Disk name:", diskName);
-      console.log("Has req.files:", !!req.files);
-      console.log("Files object keys:", req.files ? Object.keys(req.files) : "N/A");
-      console.log("=====================================");
-
       // Set timeout to prevent hanging
       req.setTimeout(30000);
 
@@ -50,7 +39,6 @@ const uploadFiles = (fieldName = 'files', maxCount = 11, diskName = 'local') => 
 
       // Check if files exist
       if (!req.files) {
-        console.log("No files found, continuing without upload processing");
         return next();
       }
 
@@ -101,13 +89,6 @@ const uploadFiles = (fieldName = 'files', maxCount = 11, diskName = 'local') => 
           // Add file info to request
           const relativePath = `${disk.url}/${filename}`;
           
-          logger.info('File URL generation debug:', {
-            diskUrl: disk.url,
-            filename,
-            relativePath,
-            diskName
-          });
-          
           const fileInfo = {
             fieldname: fieldName,
             originalname: file.name,
@@ -120,13 +101,6 @@ const uploadFiles = (fieldName = 'files', maxCount = 11, diskName = 'local') => 
             url: relativePath
           };
 
-          logger.info('File uploaded successfully:', {
-            fieldname: fileInfo.fieldname,
-            path: fileInfo.path,
-            url: fileInfo.url,
-            size: fileInfo.size
-          });
-
           req.uploadedFiles.push(fileInfo);
         } catch (error) {
           // Clean up any uploaded files if one fails
@@ -137,18 +111,13 @@ const uploadFiles = (fieldName = 'files', maxCount = 11, diskName = 'local') => 
                   fs.unlinkSync(uploadedFile.path);
                 }
               } catch (e) {
-                logger.warn(`File cleanup skipped due to lock: ${uploadedFile.path}`);
+                // File cleanup skipped due to lock
               }
             });
           }
           return next(error);
         }
       }
-
-      logger.info('Files uploaded successfully:', {
-        count: req.uploadedFiles.length,
-        files: req.uploadedFiles.map(f => ({ name: f.filename, size: f.size, url: f.url }))
-      });
 
       next();
     } catch (error) {

@@ -1,5 +1,4 @@
-const { DataTypes, Op } = require('sequelize');
-
+﻿const { DataTypes, Op } = require('sequelize');
 /**
  * Refresh Token Model
  * Stores refresh tokens with device fingerprinting and session tracking
@@ -95,7 +94,6 @@ module.exports = (sequelize, DataTypes) => {
       }
     ]
   });
-
   /**
    * Generate a secure hash from a refresh token
    */
@@ -103,14 +101,12 @@ module.exports = (sequelize, DataTypes) => {
     const crypto = require('crypto');
     return crypto.createHash('sha256').update(token).digest('hex');
   };
-
   /**
    * Find a token by its hash
    */
   RefreshToken.findByTokenHash = async function(tokenHash) {
     return await this.findOne({ where: { token_hash: tokenHash } });
   };
-
   /**
    * Find active tokens for a user
    */
@@ -125,7 +121,6 @@ module.exports = (sequelize, DataTypes) => {
       order: [['last_used_at', 'DESC']]
     });
   };
-
   /**
    * Find tokens for a specific session
    */
@@ -135,7 +130,6 @@ module.exports = (sequelize, DataTypes) => {
       order: [['created_at', 'DESC']]
     });
   };
-
   /**
    * Revoke a specific token
    */
@@ -146,7 +140,6 @@ module.exports = (sequelize, DataTypes) => {
     );
     return result[0] > 0;
   };
-
   /**
    * Revoke all tokens for a user
    */
@@ -157,7 +150,6 @@ module.exports = (sequelize, DataTypes) => {
     );
     return result[0];
   };
-
   /**
    * Revoke all tokens for a session
    */
@@ -168,7 +160,6 @@ module.exports = (sequelize, DataTypes) => {
     );
     return result[0];
   };
-
   /**
    * Update last used timestamp
    */
@@ -178,7 +169,6 @@ module.exports = (sequelize, DataTypes) => {
       { where: { token_hash: tokenHash } }
     );
   };
-
   /**
    * Clean up expired tokens
    */
@@ -189,41 +179,31 @@ module.exports = (sequelize, DataTypes) => {
         expires_at: { [Op.lt]: now }
       }
     });
-    
     if (deletedCount > 0) {
-      console.log(`Cleaned up ${deletedCount} expired refresh tokens`);
-    }
-    
+      }
     return deletedCount;
   };
-
   /**
    * Clean up inactive tokens (older than 30 days)
    */
   RefreshToken.cleanupInactive = async function(days = 30) {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
-    
     const deletedCount = await this.destroy({
       where: {
         is_active: false,
         updated_at: { [Op.lt]: cutoffDate }
       }
     });
-    
     if (deletedCount > 0) {
-      console.log(`Cleaned up ${deletedCount} inactive refresh tokens`);
-    }
-    
+      }
     return deletedCount;
   };
-
   /**
    * Get token statistics for a user
    */
   RefreshToken.getUserTokenStats = async function(userId) {
     const now = new Date();
-    
     const total = await this.count({ where: { user_id: userId } });
     const active = await this.count({
       where: {
@@ -239,7 +219,6 @@ module.exports = (sequelize, DataTypes) => {
       }
     });
     const inactive = total - active - expired;
-    
     return {
       total,
       active,
@@ -247,20 +226,17 @@ module.exports = (sequelize, DataTypes) => {
       inactive
     };
   };
-
   /**
    * Check if token is expired
    */
   RefreshToken.prototype.isExpired = function() {
     return new Date() > this.expires_at;
   };
-
   /**
    * Check if token is valid (active and not expired)
    */
   RefreshToken.prototype.isValid = function() {
     return this.is_active && !this.isExpired();
   };
-
   return RefreshToken;
 };

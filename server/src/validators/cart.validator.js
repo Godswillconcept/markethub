@@ -1,7 +1,6 @@
-const { body, param, query } = require('express-validator');
+﻿const { body, param, query } = require('express-validator');
 const { Product, ProductVariant, Cart, CartItem } = require('../models');
 const { Op } = require('sequelize');
-
 // Validation for getting cart
 /**
  * Validation rules for retrieving cart contents.
@@ -20,7 +19,6 @@ exports.getCartValidation = [
     .isBoolean()
     .withMessage('include_items must be a boolean value')
 ];
-
 // Validation for adding item to cart
 /**
  * Validation rules for adding items to cart.
@@ -51,7 +49,6 @@ exports.addToCartValidation = [
       }
       return true;
     }),
-
   body('quantity')
     .notEmpty()
     .withMessage('Quantity is required')
@@ -82,7 +79,6 @@ exports.addToCartValidation = [
       }
       return true;
     }),
-
   body('variant_id')
     .optional()
     .isInt({ min: 1 })
@@ -102,7 +98,6 @@ exports.addToCartValidation = [
       }
       return true;
     }),
-
   body('price')
     .optional()
     .isFloat({ min: 0 })
@@ -113,7 +108,6 @@ exports.addToCartValidation = [
         if (!product) {
           throw new Error('Product not found');
         }
-
         if (req.body.variant_id) {
           const variant = await ProductVariant.findByPk(req.body.variant_id);
           if (variant && variant.additional_price) {
@@ -138,42 +132,33 @@ exports.addToCartValidation = [
         if (!Array.isArray(value) || value.length === 0) return true;
         const productId = req.body.product_id;
         if (!productId) throw new Error('Product ID required for selected variants');
-
         // Ensure productId is a number
         const numericProductId = Number(productId);
         if (isNaN(numericProductId)) {
           throw new Error('Invalid product ID');
         }
-
         const productVariants = await ProductVariant.findAll({ where: { product_id: numericProductId } });
         const variantMap = new Map(productVariants.map(v => [Number(v.id), v])); // Ensure ID is treated as number
         const seenIds = new Set();
-
         for (const sel of value) {
           if (typeof sel !== 'object' || !sel.name || !sel.value) {
             throw new Error('Invalid selected variant: requires name (str), value (str)');
           }
-
           // Ensure sel.id is treated as a number
           const variantId = Number(sel.id);
-          console.log('Validating variant:', { id: sel.id, name: sel.name, value: sel.value, additional_price: sel.additional_price, variantId });
           if (isNaN(variantId)) {
             throw new Error('Invalid variant ID: must be a number');
           }
-
           if (sel.additional_price !== undefined && (typeof sel.additional_price !== 'number' || sel.additional_price < 0)) {
             throw new Error('Invalid selected variant: additional_price must be a non-negative number');
           }
-
           if (seenIds.has(variantId)) throw new Error('Duplicate variant ID');
           seenIds.add(variantId);
-
           const variant = variantMap.get(variantId);
           if (!variant) {
             const availableIds = Array.from(variantMap.keys()).sort((a, b) => a - b).join(', ');
             throw new Error(`Variant ${variantId} not found for product. Available variant IDs: ${availableIds || 'none'}`);
           }
-
           if (variant.stock !== null && variant.stock < req.body.quantity) {
             throw new Error(`Low stock for ${sel.value}: ${variant.stock} available`);
           }
@@ -181,8 +166,6 @@ exports.addToCartValidation = [
         return true;
       })
 ];
-
-
 // Validation for updating cart item
 /**
  * Validation rules for updating cart item quantity.
@@ -207,12 +190,10 @@ exports.updateCartItemValidation = [
       if (isNaN(numericValue) || numericValue <= 0) {
         throw new Error('Invalid cart item ID format');
       }
-
       const cartItem = await CartItem.findByPk(numericValue);
       if (!cartItem) {
         throw new Error(`Cart item with ID ${numericValue} does not exist or has been removed`);
       }
-
       // Check if user owns this cart item (if authenticated)
       if (req.user) {
         const cart = await Cart.findByPk(cartItem.cart_id);
@@ -226,10 +207,8 @@ exports.updateCartItemValidation = [
           throw new Error('Access denied to this cart item');
         }
       }
-
       return true;
     }),
-
   body('quantity')
     .notEmpty()
     .withMessage('Quantity is required')
@@ -237,18 +216,15 @@ exports.updateCartItemValidation = [
     .withMessage('Quantity must be between 0 and 100')
     .custom(async (value, { req }) => {
       if (value === 0) return true; // Allow removing item by setting quantity to 0
-
       // Validate quantity range
       if (value < 0 || value > 100) {
         throw new Error('Quantity must be between 0 and 100');
       }
-
       // For stock checking, we don't need to validate here since the param validation
       // already ensures the cart item exists. Stock checking will be done in the controller.
       return true;
     })
 ];
-
 // Validation for removing item from cart
 /**
  * Validation rules for removing items from cart.
@@ -272,12 +248,10 @@ exports.removeFromCartValidation = [
       if (isNaN(numericValue) || numericValue <= 0) {
         throw new Error('Invalid cart item ID format');
       }
-
       const cartItem = await CartItem.findByPk(numericValue);
       if (!cartItem) {
         throw new Error(`Cart item with ID ${numericValue} does not exist or has been removed`);
       }
-
       // Check if user owns this cart item (if authenticated)
       if (req.user) {
         const cart = await Cart.findByPk(cartItem.cart_id);
@@ -291,11 +265,9 @@ exports.removeFromCartValidation = [
           throw new Error('Access denied to this cart item');
         }
       }
-
       return true;
     })
 ];
-
 // Validation for clearing cart
 /**
  * Validation rules for clearing entire cart.
@@ -309,7 +281,6 @@ exports.removeFromCartValidation = [
 exports.clearCartValidation = [
   // No additional validation needed - cart ownership is checked in controller
 ];
-
 // Validation for getting cart summary
 /**
  * Validation rules for retrieving cart summary with optional shipping/tax calculations.
@@ -330,23 +301,19 @@ exports.getCartSummaryValidation = [
     .optional()
     .isBoolean()
     .withMessage('include_shipping must be a boolean value'),
-
   query('include_tax')
     .optional()
     .isBoolean()
     .withMessage('include_tax must be a boolean value'),
-
   query('shipping_cost')
     .optional()
     .isFloat({ min: 0 })
     .withMessage('Shipping cost must be a positive number'),
-
   query('tax_rate')
     .optional()
     .isFloat({ min: 0, max: 1 })
     .withMessage('Tax rate must be between 0 and 1')
 ];
-
 // Helper function to validate cart ownership
 /**
  * Validates ownership/access rights for a cart.
@@ -367,18 +334,14 @@ exports.validateCartOwnership = async (cartId, userId = null, sessionId = null) 
   if (!cart) {
     throw new Error('Cart not found');
   }
-
   if (userId && cart.user_id !== userId) {
     throw new Error('Access denied to this cart');
   }
-
   if (sessionId && cart.session_id !== sessionId) {
     throw new Error('Access denied to this cart');
   }
-
   return cart;
 };
-
 // Helper function to check if user can access cart
 /**
  * Checks if a user/session can access a specific cart.
@@ -397,14 +360,11 @@ exports.canAccessCart = (cart, userId = null, sessionId = null) => {
   if (userId) {
     return cart.user_id === userId;
   }
-
   if (sessionId) {
     return cart.session_id === sessionId;
   }
-
   return false;
 };
-
 // Validation for syncing cart
 /**
  * Validation rules for syncing local cart with server cart.
@@ -423,15 +383,11 @@ exports.syncCartValidation = [
     .isArray()
     .withMessage('Local cart items must be an array')
     .custom(async (value) => {
-      console.log('Validating localItems array:', JSON.stringify(value, null, 2));
       for (let i = 0; i < value.length; i++) {
         const item = value[i];
-        console.log(`Validating item at index ${i}:`, item);
-
         if (!item) {
           throw new Error(`Item at index ${i} is undefined or null`);
         }
-
         // Validate productId
         if (!item.productId) {
           throw new Error('Product ID is required for each item');
@@ -445,17 +401,14 @@ exports.syncCartValidation = [
         }
         // Note: Product existence and status validation is handled in the controller
         // to allow graceful handling of missing/inactive products during sync
-
         // Validate quantity
         if (!item.quantity || typeof item.quantity !== 'number' || item.quantity < 1 || item.quantity > 100) {
           throw new Error('Quantity must be between 1 and 100');
         }
-
         // Validate price
         if (!item.price || typeof item.price !== 'number' || item.price < 0) {
           throw new Error('Price must be a non-negative number');
         }
-
         // Validate selected_variants
         if (item.selected_variants !== undefined) {
           if (!Array.isArray(item.selected_variants)) {
@@ -465,21 +418,17 @@ exports.syncCartValidation = [
             // For sync validation, we only check basic structure since product may not exist
             // Full variant validation is done in the controller after product lookup
             const seenIds = new Set();
-
             for (const sel of item.selected_variants) {
               if (typeof sel !== 'object' || !sel.name || !sel.value) {
                 throw new Error('Invalid selected variant: requires name and value');
               }
-
               const variantId = Number(sel.id);
               if (isNaN(variantId) || variantId < 1) {
                 throw new Error('Invalid variant ID: must be a positive integer');
               }
-
               if (sel.additional_price !== undefined && (typeof sel.additional_price !== 'number' || sel.additional_price < 0)) {
                 throw new Error('Invalid selected variant: additional_price must be a non-negative number');
               }
-
               if (seenIds.has(variantId)) throw new Error('Duplicate variant ID');
               seenIds.add(variantId);
             }

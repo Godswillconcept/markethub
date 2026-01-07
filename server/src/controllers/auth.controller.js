@@ -12,7 +12,7 @@ const fs = require('fs');
 // Import enhanced services for refresh token functionality
 const refreshTokenService = require('../services/refresh-token.service');
 const sessionService = require('../services/session.service');
-const tokenBlacklistService = require('../services/token-blacklist-enhanced.service');
+const tokenBlacklistService = require('../services/token-blacklist.service');
 
 // Generate a random 6-digit code and expiration time (10 minutes from now)
 const generateVerificationCode = () => {

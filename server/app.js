@@ -1,16 +1,6 @@
-const path = require("path");
+﻿const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
-
 // Secure environment check (removed sensitive data logging)
-console.log("🔍 Debug: Environment configuration check...");
-console.log("🔍 Current directory:", process.cwd());
-console.log("🔍 __dirname:", __dirname);
-console.log("🔍 Looking for .env at:", path.join(__dirname, ".env"));
-console.log("🌍 NODE_ENV:", process.env.NODE_ENV || "undefined");
-console.log("🏷️ APP_NAME:", process.env.APP_NAME || "undefined");
-console.log("🌐 CORS_ORIGIN:", process.env.CORS_ORIGIN || "undefined");
-console.log("🗄️ Database:", process.env.DATABASE_URL ? "✅ Configured" : "❌ Missing");
-
 const express = require("express");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
@@ -22,10 +12,8 @@ const compression = require("compression");
 const passport = require("passport");
 const redis = require("redis");
 const { v4: uuidv4 } = require("uuid");
-
 // Import CORS middleware
 const corsMiddleware = require("./src/middlewares/cors");
-
 const logger = require("./src/utils/logger");
 const { errorHandler } = require("./src/middlewares/error");
 const { sequelize, connectDB } = require("./src/config/database");
@@ -38,7 +26,6 @@ const {
   initializePerformanceTracking,
   metricsRoute,
 } = require("./src/utils/performance");
-
 // Import routes
 const authRoutes = require("./src/routes/auth.route");
 const userRoutes = require("./src/routes/user.route");
@@ -64,13 +51,10 @@ const adminRoutes = require("./src/routes/admin");
 const supportFeedbackRoutes = require("./src/routes/support-feedback.route");
 const vendorMessageRoutes = require("./src/routes/vendor-message.route");
 const payoutRoutes = require("./src/routes/payout.route");
-
 // Initialize express app
 const app = express();
-
 // Trust first proxy (for rate limiting behind load balancer)
 app.set("trust proxy", 1);
-
 // Connect to database and initialize properly
 const initializeApp = async () => {
   try {
@@ -80,20 +64,19 @@ const initializeApp = async () => {
     logger.error("Failed to connect to database:", error);
   }
 };
-
 const db = sequelize;
-
 // Initialize app for serverless
 initializeApp();
-
 // Initialize Redis client
 let redisClient;
-
 // Check if we're in a test environment
-const isTestEnvironment = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID;
-
+const isTestEnvironment =
+  process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID;
 // Use Redis only in production or if explicitly enabled via REDIS_ENABLED (and not in test)
-if (!isTestEnvironment && (process.env.NODE_ENV === "production" || process.env.REDIS_HOST)) {
+if (
+  !isTestEnvironment &&
+  (process.env.NODE_ENV === "production" || process.env.REDIS_HOST)
+) {
   redisClient = redis.createClient({
     socket: {
       host: process.env.REDIS_HOST || "localhost",
@@ -101,7 +84,6 @@ if (!isTestEnvironment && (process.env.NODE_ENV === "production" || process.env.
     },
     password: process.env.REDIS_PASSWORD || undefined,
   });
-
   redisClient.on("error", (err) => {
     logger.error(`Redis Client Error: ${err}`);
   });
@@ -121,23 +103,18 @@ if (!isTestEnvironment && (process.env.NODE_ENV === "production" || process.env.
   };
   redisClient = mockRedis;
 }
-
 // Initialize performance tracking
 initializePerformanceTracking(db);
-
 // Initialize Passport
 initializePassport(passport);
-
 // ============================================
 // SCHEDULED CLEANUP JOBS
 // ============================================
 // Start cleanup jobs for expired tokens and sessions
-if (process.env.NODE_ENV !== 'test') {
-  const cleanupJob = require('./src/jobs/cleanup.job');
+if (process.env.NODE_ENV !== "test") {
+  const cleanupJob = require("./src/jobs/cleanup.job");
   cleanupJob.start();
-  logger.info('Scheduled cleanup jobs initialized');
 }
-
 // ============================================
 // SECURITY HEADERS WITH HELMET
 // ============================================
@@ -190,7 +167,6 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
-
 // ============================================
 // ADDITIONAL SECURITY HEADERS
 // ============================================
@@ -199,38 +175,29 @@ app.use((req, res, next) => {
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
-  
   // Remove X-Powered-By header
   res.removeHeader("X-Powered-By");
-  
   next();
 });
-
 // ============================================
 // CORS CONFIGURATION - MOST IMPORTANT
 // ============================================
-
 // Apply CORS middleware EARLY and handle preflight
 app.use(corsMiddleware);
-
 // Explicit OPTIONS handler for preflight requests
 app.options("*", corsMiddleware);
-
 // Additional CORS headers for specific routes
 app.use("/products", (req, res, next) => {
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
 });
-
 // ============================================
 // REQUEST TRACKING AND LOGGING
 // ============================================
-
 // Enhanced request tracking and logging
 app.use((req, res, next) => {
   req.id = uuidv4();
   res.setHeader("X-Request-ID", req.id);
-  
   // Add user context if authenticated
   if (req.user) {
     req.userId = req.user.id;
@@ -245,13 +212,11 @@ app.use((req, res, next) => {
     userAgent: req.get('User-Agent'),
     ip: req.ip
   });
-  
+
   next();
 });
-
 // Performance monitoring middleware
 app.use(httpRequestDurationMiddleware);
-
 // Development logging
 if (process.env.NODE_ENV === "development") {
   app.use(
@@ -259,25 +224,21 @@ if (process.env.NODE_ENV === "development") {
       stream: { write: (message) => logger.http(message.trim()) },
     })
   );
-
   // Filter and log only Ngrok tunnel requests
   app.use((req, res, next) => {
     const host = req.get("host");
     const origin = req.get("origin");
-    
-    if ((host && host.includes("ngrok")) || (origin && origin.includes("ngrok"))) {
+    if (
+      (host && host.includes("ngrok")) ||
+      (origin && origin.includes("ngrok"))
+    ) {
       const timestamp = new Date().toISOString().split("T")[1].split(".")[0];
-      console.log(
-        `\x1b[35m[NGROK] ${timestamp} | \x1b[36m${req.method}\x1b[0m ${req.originalUrl} | Origin: ${origin}`
-      );
     }
     next();
   });
 }
-
 // Initialize Passport
 app.use(passport.initialize());
-
 // ============================================
 // STATIC FILE SERVING
 // ============================================
@@ -286,15 +247,16 @@ if (process.env.NODE_ENV === "production") {
   app.use("/products", express.static(path.join(__dirname, "src", "products")));
   app.use(express.static(path.join(__dirname, "../client/dist")));
 } else {
-  app.use("/uploads", express.static(path.join(__dirname, "src/public", "Upload")));
+  app.use(
+    "/uploads",
+    express.static(path.join(__dirname, "src/public", "Upload"))
+  );
   app.use("/products", express.static(path.join(__dirname, "src", "products")));
-  
   // Logo endpoint
   app.get("/logo", (req, res) => {
     res.sendFile(path.join(__dirname, "src/public", "logo.png"));
   });
 }
-
 // ============================================
 // FILE UPLOAD MIDDLEWARE
 // ============================================
@@ -313,7 +275,6 @@ app.use(
     parseNested: true,
   })
 );
-
 // ============================================
 // RATE LIMITING
 // ============================================
@@ -325,7 +286,6 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api", limiter);
-
 // Dashboard-specific rate limiting
 // Increased from 100/min to 500/5min to accommodate multiple concurrent API calls
 // Admin dashboard makes 6 calls, vendor makes 2, cart makes 2 per page load
@@ -341,7 +301,6 @@ const dashboardLimiter = rateLimit({
 });
 app.use("/api/v1/admin/dashboard", dashboardLimiter);
 app.use("/api/v1/dashboard", dashboardLimiter); // Also apply to vendor/client dashboard routes
-
 // ============================================
 // CACHE MIDDLEWARE
 // ============================================
@@ -350,21 +309,17 @@ const cache = (duration) => {
     if (req.method !== "GET") {
       return next();
     }
-
     const key = `cache:${req.originalUrl}`;
-
     try {
       const cached = await redisClient.get(key);
       if (cached) {
         return res.status(200).json(JSON.parse(cached));
       }
-
       const originalJson = res.json;
       res.json = function (obj) {
         redisClient.set(key, JSON.stringify(obj), "EX", duration);
         return originalJson.call(this, obj);
       };
-
       next();
     } catch (error) {
       logger.error(`Cache error: ${error.message}`);
@@ -372,20 +327,18 @@ const cache = (duration) => {
     }
   };
 };
-
 // ============================================
 // BODY PARSING AND SECURITY
 // ============================================
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
-
 // Data sanitization against XSS
 app.use((req, res, next) => {
   const sanitize = (obj) => {
-    if (typeof obj === 'string') return xss.filterXSS(obj);
+    if (typeof obj === "string") return xss.filterXSS(obj);
     if (Array.isArray(obj)) return obj.map(sanitize);
-    if (obj && typeof obj === 'object') {
+    if (obj && typeof obj === "object") {
       const sanitized = {};
       for (const key in obj) {
         sanitized[xss.filterXSS(key)] = sanitize(obj[key]);
@@ -394,13 +347,11 @@ app.use((req, res, next) => {
     }
     return obj;
   };
-
   if (req.body) req.body = sanitize(req.body);
   if (req.query) req.query = sanitize(req.query);
   if (req.params) req.params = sanitize(req.params);
   next();
 });
-
 // Prevent parameter pollution
 app.use(
   hpp({
@@ -414,10 +365,8 @@ app.use(
     ],
   })
 );
-
 // Compress responses
 app.use(compression());
-
 // ============================================
 // HEALTH CHECK AND METRICS
 // ============================================
@@ -432,16 +381,12 @@ app.get("/health", (req, res) => {
     },
   });
 });
-
 app.get("/metrics", metricsRoute);
-
 // ============================================
 // API ROUTES
 // ============================================
-
 // Apply authentication and permission middleware to all API routes
 app.use("/api/v1", setUser, checkBlacklist, checkPermission);
-
 // Mount all routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
@@ -467,18 +412,20 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/feedbacks", supportFeedbackRoutes);
 app.use("/api/v1/messages", vendorMessageRoutes);
 app.use("/api/v1/payouts", payoutRoutes);
-
 // ============================================
 // SPA CATCH-ALL ROUTE (PRODUCTION)
 // ============================================
 if (process.env.NODE_ENV === "production") {
   app.get("/", (req, res) => {
-    res.status(200).json({
-      status: "success",
-      message: "Stylay API is running. Client should be accessed via Vercel.",
+    res.json({
+      message: "Express Serverless API with Sequelize",
+      endpoints: {
+        api: "/api",
+        migrate: "/api/migrate",
+        seed: "/api/seed",
+      },
     });
   });
-
   app.get("*", (req, res) => {
     // If it reached here, it's not a matched API route
     res.status(404).json({
@@ -487,19 +434,14 @@ if (process.env.NODE_ENV === "production") {
     });
   });
 }
-
 // ============================================
 // ERROR HANDLING
 // ============================================
 app.use(errorHandler);
-
-
 // Export for serverless
 module.exports = app;
-
 // Start server for local development
 const PORT = process.env.PORT || 5000;
-
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);

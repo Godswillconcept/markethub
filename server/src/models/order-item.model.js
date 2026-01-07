@@ -1,7 +1,6 @@
-// models/order_item.js
+﻿// models/order_item.js
 'use strict';
 const { Model, Op } = require('sequelize');
-
 module.exports = (sequelize, DataTypes) => {
   class OrderItem extends Model {
     static associate(models) {
@@ -27,7 +26,6 @@ module.exports = (sequelize, DataTypes) => {
         as: 'combinations'
       });
     }
-
     // Instance method to calculate total price for this item including variant prices
     calculateTotalPrice() {
       const basePrice = parseFloat(this.price) || 0;
@@ -35,28 +33,23 @@ module.exports = (sequelize, DataTypes) => {
       const totalPrice = (basePrice + variantPrice) * this.quantity;
       return parseFloat(totalPrice.toFixed(2));
     }
-
     // Calculate total additional price from all selected variants
     calculateVariantPrice() {
       if (!this.selected_variants || this.selected_variants.length === 0) {
         return 0;
       }
-
       // If selected_variants is a string, parse it first
       const variants = typeof this.selected_variants === 'string'
         ? JSON.parse(this.selected_variants)
         : this.selected_variants;
-
       if (!Array.isArray(variants)) {
         return 0;
       }
-
       return variants.reduce(
         (sum, variant) => sum + (parseFloat(variant.additional_price) || 0),
         0
       );
     }
-
     // Get all variant details for display
     async getVariantDetails() {
       if (!this.selected_variants || this.selected_variants.length === 0) {
@@ -70,44 +63,36 @@ module.exports = (sequelize, DataTypes) => {
         }
         return [];
       }
-
       // If selected_variants is a string, parse it first
       let variants;
       if (typeof this.selected_variants === 'string') {
         try {
           variants = JSON.parse(this.selected_variants);
         } catch (e) {
-          console.warn(`Failed to parse selected_variants for order item ${this.id}: ${e.message}`);
           return [];
         }
       } else {
         variants = this.selected_variants;
       }
-
       if (!Array.isArray(variants)) {
         return [];
       }
-
       const variantIds = variants.map(v => v.id);
-
       return await sequelize.models.ProductVariant.findAll({
         where: { id: variantIds },
         attributes: ['id', 'name', 'value', 'additional_price'],
         raw: true
       });
     }
-
     // Instance method to check if product is still available with all selected variants
     async checkAvailability() {
       const product = await this.getProduct();
       if (!product || product.status !== 'active') {
         return { available: false, reason: 'Product is no longer available' };
       }
-
       // Check stock for each selected variant
       if (this.selected_variants && this.selected_variants.length > 0) {
         const variants = await this.getVariantDetails();
-
         // Check if all variants exist
         for (const variant of variants) {
           if (!variant) {
@@ -127,10 +112,8 @@ module.exports = (sequelize, DataTypes) => {
           };
         }
       }
-
       return { available: true };
     }
-
     // Getter for backward compatibility - returns the first variant if multiple are selected
     get variant() {
       if (this.selected_variants && this.selected_variants.length > 0) {
@@ -142,7 +125,6 @@ module.exports = (sequelize, DataTypes) => {
       // Fallback to Sequelize's association getter
       return this.getVariant ? this.getVariant() : null;
     }
-
     // Setter for backward compatibility
     set variant(variant) {
       if (variant) {
@@ -152,7 +134,6 @@ module.exports = (sequelize, DataTypes) => {
       }
     }
   }
-
   OrderItem.init({
     id: {
       type: DataTypes.BIGINT({ unsigned: true }),
@@ -242,6 +223,5 @@ module.exports = (sequelize, DataTypes) => {
     createdAt: 'created_at',
     updatedAt: 'updated_at'
   });
-
   return OrderItem;
 };

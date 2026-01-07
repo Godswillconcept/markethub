@@ -1,6 +1,5 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
-
 // Import admin sub-routes
 const productRoutes = require('./product.route');
 const categoryRoutes = require('./category.route');
@@ -12,13 +11,10 @@ const orderRoutes = require('./order.route');
 const supplyRoutes = require('./supply.route');
 const webhookRoutes = require('./webhook.route');
 const subadminRoutes = require('./subadmin.route');
-
 // Diagnostic logging middleware
 router.use((req, res, next) => {
-  console.log(`[ADMIN ROUTES] ${req.method} ${req.originalUrl} - Reached admin routes`);
   next();
 });
-
 // Mount sub-routes
 router.use('/categories', categoryRoutes);
 router.use('/collections', collectionRoutes);
@@ -30,5 +26,4 @@ router.use('/orders', orderRoutes);
 router.use('/supplies', supplyRoutes);
 router.use('/webhooks', webhookRoutes);
 router.use('/subadmins', subadminRoutes);
-
 module.exports = router;

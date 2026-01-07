@@ -1,7 +1,6 @@
-// models/cart.js
+﻿// models/cart.js
 "use strict";
 const { Model, Op } = require("sequelize");
-
 module.exports = (sequelize, DataTypes) => {
   class Cart extends Model {
     static associate(models) {
@@ -10,13 +9,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "user_id",
         as: "user",
       });
-
       Cart.hasMany(models.CartItem, {
         foreignKey: "cart_id",
         as: "items",
       });
     }
-
     // Instance method to calculate cart totals
     async calculateTotals(transaction = null) {
       const items = await this.getItems({
@@ -29,17 +26,13 @@ module.exports = (sequelize, DataTypes) => {
         ],
         transaction,
       });
-
       let totalItems = 0;
       let totalAmount = 0;
-
       // Process each item to calculate totals
       for (const item of items) {
         totalItems += item.quantity;
-
         // Calculate item total including variants
         const basePrice = parseFloat(item.price) || 0;
-
         // Handle selected_variants which might be stored as JSON string
         let variants = item.selected_variants;
         if (typeof variants === "string") {
@@ -49,17 +42,14 @@ module.exports = (sequelize, DataTypes) => {
             variants = [];
           }
         }
-
         const variantPrice = Array.isArray(variants)
           ? variants.reduce(
               (sum, v) => sum + (parseFloat(v.additional_price) || 0),
               0
             )
           : 0;
-
         const itemTotal = (basePrice + variantPrice) * item.quantity;
         totalAmount += parseFloat(itemTotal.toFixed(2));
-
         // Update item's total price if it doesn't match
         if (Math.abs(parseFloat(item.total_price) - itemTotal) > 0.01) {
           await item.update(
@@ -68,13 +58,11 @@ module.exports = (sequelize, DataTypes) => {
           );
         }
       }
-
       return {
         totalItems,
         totalAmount: parseFloat(totalAmount.toFixed(2)),
       };
     }
-
     // Instance method to update cart totals
     async updateTotals(transaction = null) {
       const totals = await this.calculateTotals(transaction);
@@ -86,7 +74,6 @@ module.exports = (sequelize, DataTypes) => {
         { transaction }
       );
     }
-
     // Instance method to get cart with full product and variant details
     async getFullCart() {
       const cart = await Cart.findByPk(this.id, {
@@ -128,12 +115,9 @@ module.exports = (sequelize, DataTypes) => {
           },
         ],
       });
-
       if (!cart) return null;
-
       // Convert to plain object and process each item
       const plainCart = cart.get({ plain: true });
-
       // Process each item to include variant details
       for (const item of plainCart.items) {
         if (item.selected_variants && item.selected_variants.length > 0) {
@@ -143,22 +127,16 @@ module.exports = (sequelize, DataTypes) => {
             try {
               variants = JSON.parse(item.selected_variants);
             } catch (e) {
-              console.warn(
-                `Failed to parse selected_variants for item ${item.id}: ${e.message}`
-              );
               variants = [];
             }
           } else {
             variants = item.selected_variants;
           }
-
           if (!Array.isArray(variants)) {
             variants = [];
             item.selected_variants = [];
           }
-
           const variantIds = variants.map((v) => v.id);
-
           if (variantIds.length > 0) {
             // Fetch only existing fields from ProductVariant (additional_price moved off this table)
             const dbVariants = await sequelize.models.ProductVariant.findAll({
@@ -166,7 +144,6 @@ module.exports = (sequelize, DataTypes) => {
               attributes: ["id", "name", "value"],
               raw: true,
             });
-
             // Merge additional_price from the parsed selected_variants payload
             const additionalPriceMap = new Map(
               variants.map((v) => [
@@ -174,7 +151,6 @@ module.exports = (sequelize, DataTypes) => {
                 parseFloat(v.additional_price) || 0,
               ])
             );
-
             item.selected_variants = dbVariants.map((v) => ({
               ...v,
               additional_price: additionalPriceMap.get(Number(v.id)) || 0,
@@ -186,18 +162,14 @@ module.exports = (sequelize, DataTypes) => {
           item.selected_variants = [];
         }
       }
-
       return plainCart;
     }
-
     // Helper method to find a cart item by product and variants
     async findCartItem(productId, selectedVariantIds = []) {
       const items = await this.getItems();
-
       return items.find((item) => {
         // Match product ID
         if (item.product_id !== productId) return false;
-
         // If no variants specified, match items with no variants
         if (
           (!selectedVariantIds || selectedVariantIds.length === 0) &&
@@ -205,7 +177,6 @@ module.exports = (sequelize, DataTypes) => {
         ) {
           return true;
         }
-
         // If variants specified, match exact variant combination
         if (item.selected_variants && item.selected_variants.length > 0) {
           // Handle both string and array formats for selected_variants
@@ -214,33 +185,25 @@ module.exports = (sequelize, DataTypes) => {
             try {
               itemVariants = JSON.parse(item.selected_variants);
             } catch (e) {
-              console.warn(
-                `Failed to parse selected_variants for item ${item.id}: ${e.message}`
-              );
               itemVariants = [];
             }
           } else {
             itemVariants = item.selected_variants;
           }
-
           if (!Array.isArray(itemVariants)) {
             itemVariants = [];
           }
-
           const itemVariantIds = itemVariants.map((v) => v.id).sort();
           const searchVariantIds = [...selectedVariantIds].sort();
-
           return (
             itemVariantIds.length === searchVariantIds.length &&
             itemVariantIds.every((v, i) => v === searchVariantIds[i])
           );
         }
-
         return false;
       });
     }
   }
-
   Cart.init(
     {
       id: {
@@ -318,6 +281,5 @@ module.exports = (sequelize, DataTypes) => {
       ],
     }
   );
-
   return Cart;
 };

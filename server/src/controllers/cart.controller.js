@@ -1,8 +1,7 @@
-const { Cart, CartItem, Product, ProductVariant, User } = require("../models");
+﻿const { Cart, CartItem, Product, ProductVariant, User } = require("../models");
 const {sequelize } = require("../models");
 const AppError = require("../utils/appError");
 const { Op } = require("sequelize");
-
 /**
  * Get or create shopping cart for authenticated user
  * Supports both authenticated users (with user_id) and guest users (with session_id).
@@ -31,7 +30,6 @@ const getCart = async (req, res, next) => {
   try {
     const userId = req.user?.id;
     let cart;
-
     if (userId) {
       // Get or create cart for authenticated user
       [cart] = await Cart.findOrCreate({
@@ -41,13 +39,11 @@ const getCart = async (req, res, next) => {
           total_amount: 0.0,
         },
       });
-
       // Load full cart details
       cart = await cart.getFullCart();
     } else {
       // Handle guest cart using session_id
       const sessionId = req.session?.id || req.headers["x-session-id"];
-
       if (!sessionId) {
         return res.status(200).json({
           status: "success",
@@ -57,11 +53,9 @@ const getCart = async (req, res, next) => {
           },
         });
       }
-
       cart = await Cart.findOne({
         where: { session_id: sessionId },
       });
-
       if (!cart) {
         return res.status(200).json({
           status: "success",
@@ -71,11 +65,9 @@ const getCart = async (req, res, next) => {
           },
         });
       }
-
       // Load full cart details consistently
       cart = await cart.getFullCart();
     }
-
     res.status(200).json({
       status: "success",
       data: cart,
@@ -84,7 +76,6 @@ const getCart = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Add item to shopping cart
  * Validates product availability, handles quantity updates, and supports product variants.
@@ -126,7 +117,6 @@ const getCart = async (req, res, next) => {
  */
 const addToCart = async (req, res, next) => {
   const transaction = await Cart.sequelize.transaction();
-
   try {
     const userId = req.user?.id;
     const {
@@ -135,12 +125,10 @@ const addToCart = async (req, res, next) => {
       variant_id,
       selected_variants = [],
     } = req.body;
-
     // Validate required fields
     if (!product_id) {
       return next(new AppError("Product ID is required", 400));
     }
-
     // Fetch product with all variants and combinations
     const product = await Product.findByPk(product_id, {
       include: [
@@ -157,28 +145,23 @@ const addToCart = async (req, res, next) => {
         }
       ],
     });
-
     if (!product) {
       return next(new AppError("Product not found", 404));
     }
-
     if (product.status !== "active") {
       return next(new AppError("Product is not available", 400));
     }
-
     // Check if product has variants but none were selected
     if (product.variants && product.variants.length > 0) {
       if ((!selected_variants || selected_variants.length === 0) && !variant_id) {
         return next(new AppError("Please select a variant", 400));
       }
     }
-
     let finalSelectedVariants = [...selected_variants];
     let basePrice = product.price;
     let totalAdditionalPrice = 0;
     let finalVariantId = null;
     let resolvedCombinationId = null;
-
     if (finalSelectedVariants.length > 0) {
       // Validate and calculate additional price
       const variantMap = new Map(
@@ -193,14 +176,12 @@ const addToCart = async (req, res, next) => {
             new AppError("Invalid variant ID: must be a number", 400)
           );
         }
-
         if (seen.has(variantId)) {
           return next(
             new AppError("Duplicate variant ID in selected_variants", 400)
           );
         }
         seen.add(variantId);
-
         const variant = variantMap.get(variantId);
         if (!variant) {
           return next(
@@ -211,12 +192,10 @@ const addToCart = async (req, res, next) => {
         totalAdditionalPrice += sel.additional_price || 0;
       }
       finalVariantId = null;
-
       // Resolve combination_id from selected variants
       // Find the combination that matches all selected variant IDs
       if (product.combinations && product.combinations.length > 0) {
         const selectedVariantIds = finalSelectedVariants.map(v => Number(v.id)).sort();
-        
         for (const combo of product.combinations) {
           // Get variant IDs for this combination
           const comboVariantIds = await sequelize.models.VariantCombinationVariant.findAll({
@@ -224,13 +203,10 @@ const addToCart = async (req, res, next) => {
             attributes: ['variant_id'],
             raw: true
           });
-          
           const comboIds = comboVariantIds.map(cv => Number(cv.variant_id)).sort();
-          
           // Check if arrays match
           if (JSON.stringify(selectedVariantIds) === JSON.stringify(comboIds)) {
             resolvedCombinationId = combo.id;
-            
             // Check stock for this specific combination
             if (combo.stock < quantity) {
               return next(
@@ -243,7 +219,6 @@ const addToCart = async (req, res, next) => {
             break;
           }
         }
-
         if (!resolvedCombinationId) {
           return next(
             new AppError("Invalid variant combination selected", 400)
@@ -270,7 +245,6 @@ const addToCart = async (req, res, next) => {
       // Simple product (no variants selected)
       // Check default combination stock
       let defaultStock = 0;
-      
       if (product.combinations && product.combinations.length > 0) {
         // Use the first active combination as default
         const defaultCombo = product.combinations[0];
@@ -283,7 +257,6 @@ const addToCart = async (req, res, next) => {
           defaultStock = inventory.stock;
         }
       }
-
       if (defaultStock < quantity) {
         return next(
           new AppError(
@@ -293,14 +266,11 @@ const addToCart = async (req, res, next) => {
         );
       }
     }
-
     const price = basePrice + totalAdditionalPrice;
-
     // Sort variants for consistent string
     const sortedSelectedVariants = [...finalSelectedVariants].sort(
       (a, b) => a.id - b.id
     );
-
     // Get or create cart
     let cart;
     if (userId) {
@@ -325,10 +295,8 @@ const addToCart = async (req, res, next) => {
         transaction,
       });
     }
-
     // Lock the cart row to prevent concurrent updates
     await cart.reload({ lock: true, transaction });
-
     // Check if item already exists in cart
     const existingItem = await CartItem.findOne({
       where: {
@@ -338,7 +306,6 @@ const addToCart = async (req, res, next) => {
       },
       transaction,
     });
-
     if (existingItem) {
       // Update quantity if item exists
       const newQuantity = existingItem.quantity + quantity;
@@ -348,20 +315,15 @@ const addToCart = async (req, res, next) => {
         },
         { transaction }
       );
-
       await existingItem.updateTotalPrice(transaction);
-
       await transaction.commit();
-
       const item = await existingItem.getFullDetails();
-
       return res.status(200).json({
         status: "success",
         message: "Cart item updated successfully",
         data: { item },
       });
     }
-
     // Create new cart item
     const cartItem = await CartItem.create(
       {
@@ -375,12 +337,9 @@ const addToCart = async (req, res, next) => {
       },
       { transaction }
     );
-
     await transaction.commit();
-
     // Get full item details
     const item = await cartItem.getFullDetails();
-
     res.status(201).json({
       status: "success",
       message: "Item added to cart successfully",
@@ -393,7 +352,6 @@ const addToCart = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Update cart item quantity
  * Validates new quantity, checks ownership, and updates cart totals.
@@ -433,17 +391,14 @@ const addToCart = async (req, res, next) => {
  */
 const updateCartItem = async (req, res, next) => {
   const transaction = await Cart.sequelize.transaction();
-
   try {
     const { itemId } = req.params;
     const { quantity } = req.body;
     const userId = req.user?.id;
-
     // Validate quantity
     if (!quantity || quantity < 1) {
       return next(new AppError("Quantity must be at least 1", 400));
     }
-
     // Find cart item
     const cartItem = await CartItem.findByPk(itemId, {
       include: [
@@ -460,16 +415,13 @@ const updateCartItem = async (req, res, next) => {
       ],
       transaction,
     });
-
     if (!cartItem) {
       return next(new AppError("Cart item not found", 404));
     }
-
     // Check if user owns the cart (if authenticated)
     if (userId && cartItem.cart.user_id !== userId) {
       return next(new AppError("Access denied", 403));
     }
-
     // Handle guest cart access
     if (!userId) {
       const sessionId = req.session?.id || req.headers["x-session-id"];
@@ -477,7 +429,6 @@ const updateCartItem = async (req, res, next) => {
         return next(new AppError("Access denied", 403));
       }
     }
-
     // Check stock availability for the new quantity
     if (quantity > 0) {
       // Variant-level stock is managed at combination level; skip per-variant checks here
@@ -489,10 +440,8 @@ const updateCartItem = async (req, res, next) => {
         }
       }
     }
-
     // Lock the cart row to prevent concurrent updates
     await cartItem.cart.reload({ lock: true, transaction });
-
     // Update item quantity
     await cartItem.update(
       {
@@ -500,13 +449,9 @@ const updateCartItem = async (req, res, next) => {
       },
       { transaction }
     );
-
     await cartItem.updateTotalPrice(transaction);
-
     const updatedItem = await cartItem.getFullDetails();
-
     await transaction.commit();
-
     res.status(200).json({
       status: "success",
       message: "Cart item updated successfully",
@@ -519,7 +464,6 @@ const updateCartItem = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Remove item from cart
  * Validates ownership and updates cart totals after removal.
@@ -550,11 +494,9 @@ const updateCartItem = async (req, res, next) => {
  */
 const removeFromCart = async (req, res, next) => {
   const transaction = await Cart.sequelize.transaction();
-
   try {
     const { itemId } = req.params;
     const userId = req.user?.id;
-
     // Find cart item
     const cartItem = await CartItem.findByPk(itemId, {
       include: [
@@ -566,16 +508,13 @@ const removeFromCart = async (req, res, next) => {
       ],
       transaction,
     });
-
     if (!cartItem) {
       return next(new AppError("Cart item not found", 404));
     }
-
     // Check if user owns the cart (if authenticated)
     if (userId && cartItem.cart.user_id !== userId) {
       return next(new AppError("Access denied", 403));
     }
-
     // Handle guest cart access
     if (!userId) {
       const sessionId = req.session?.id || req.headers["x-session-id"];
@@ -583,15 +522,11 @@ const removeFromCart = async (req, res, next) => {
         return next(new AppError("Access denied", 403));
       }
     }
-
     // Lock the cart row to prevent concurrent updates
     await cartItem.cart.reload({ lock: true, transaction });
-
     // Delete the cart item
     await cartItem.destroy({ transaction });
-
     await transaction.commit();
-
     res.status(200).json({
       status: "success",
       message: "Item removed from cart successfully",
@@ -604,7 +539,6 @@ const removeFromCart = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Clear all items from cart
  * Removes all cart items and resets cart totals to zero.
@@ -633,18 +567,15 @@ const removeFromCart = async (req, res, next) => {
  */
 const clearCart = async (req, res, next) => {
   const transaction = await Cart.sequelize.transaction();
-
   try {
     const userId = req.user?.id;
     let cart;
-
     if (userId) {
       // Clear authenticated user's cart
       cart = await Cart.findOne({
         where: { user_id: userId },
         transaction,
       });
-
       if (!cart) {
         return next(new AppError("Cart not found", 404));
       }
@@ -654,26 +585,21 @@ const clearCart = async (req, res, next) => {
       if (!sessionId) {
         return next(new AppError("Session ID required for guest cart", 400));
       }
-
       cart = await Cart.findOne({
         where: { session_id: sessionId },
         transaction,
       });
-
       if (!cart) {
         return next(new AppError("Cart not found", 404));
       }
     }
-
     // Lock the cart row to prevent concurrent updates
     await cart.reload({ lock: true, transaction });
-
     // Delete all cart items
     await CartItem.destroy({
       where: { cart_id: cart.id },
       transaction,
     });
-
     // Reset cart totals
     await cart.update(
       {
@@ -682,9 +608,7 @@ const clearCart = async (req, res, next) => {
       },
       { transaction }
     );
-
     await transaction.commit();
-
     res.status(200).json({
       status: "success",
       message: "Cart cleared successfully",
@@ -697,7 +621,6 @@ const clearCart = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Get cart summary for checkout
  * Provides comprehensive cart information including totals, shipping, and tax calculations.
@@ -782,7 +705,6 @@ const getCartSummary = async (req, res, next) => {
   try {
     const userId = req.user?.id;
     let cart;
-
     if (userId) {
       cart = await Cart.findOne({
         where: { user_id: userId },
@@ -818,7 +740,6 @@ const getCartSummary = async (req, res, next) => {
           },
         });
       }
-
       cart = await Cart.findOne({
         where: { session_id: sessionId },
         include: [
@@ -843,12 +764,10 @@ const getCartSummary = async (req, res, next) => {
         ],
       });
     }
-
     // Get full cart details to include variant information
     if (cart) {
       cart = await cart.getFullCart();
     }
-
     if (!cart) {
       return res.status(200).json({
         status: "success",
@@ -858,13 +777,11 @@ const getCartSummary = async (req, res, next) => {
         },
       });
     }
-
     // Calculate summary
     const items = cart.items || [];
     const subtotal = parseFloat(cart.total_amount);
     const discount = 0.0; // TODO: Calculate discounts based on promotions/coupons
     const total = subtotal - discount;
-
     // Ensure items array is properly structured with all required fields
     const summary = {
       cartId: cart.id, // Explicitly include cartId
@@ -875,22 +792,18 @@ const getCartSummary = async (req, res, next) => {
       items: items.map((item) => {
         // Ensure selected_variants is properly formatted
         let selectedVariants = item.selected_variants || [];
-        
         // Handle case where selected_variants might be a string
         if (typeof selectedVariants === 'string') {
           try {
             selectedVariants = JSON.parse(selectedVariants);
           } catch (e) {
-            console.warn(`Failed to parse selected_variants for item ${item.id}: ${e.message}`);
             selectedVariants = [];
           }
         }
-        
         // Ensure it's an array
         if (!Array.isArray(selectedVariants)) {
           selectedVariants = [];
         }
-        
         return {
           product: {
             id: item.product.id,
@@ -906,7 +819,6 @@ const getCartSummary = async (req, res, next) => {
         };
       }),
     };
-
     res.status(200).json({
       status: "success",
       data: summary,
@@ -915,7 +827,6 @@ const getCartSummary = async (req, res, next) => {
     next(error);
   }
 };
-
 /**
  * Sync local cart with server cart on user login
  * Sync local cart with server cart on user login
@@ -960,16 +871,13 @@ const getCartSummary = async (req, res, next) => {
  */
 const syncCart = async (req, res, next) => {
   const transaction = await Cart.sequelize.transaction();
-
   try {
     const userId = req.user?.id;
     const { localItems } = req.body;
-
     // Must be authenticated user
     if (!userId) {
       return next(new AppError("Authentication required for cart sync", 401));
     }
-
     // Initialize sync report
     const syncReport = {
       successful_merges: [],
@@ -977,7 +885,6 @@ const syncCart = async (req, res, next) => {
       quantity_adjusted: [],
       failed_items: [],
     };
-
     // Get or create user's cart
     let [cart] = await Cart.findOrCreate({
       where: { user_id: userId },
@@ -987,10 +894,8 @@ const syncCart = async (req, res, next) => {
       },
       transaction,
     });
-
     // Lock the cart row to prevent concurrent updates
     await cart.reload({ lock: true, transaction });
-
     // Process each local cart item
     for (const localItem of localItems) {
       try {
@@ -1000,7 +905,6 @@ const syncCart = async (req, res, next) => {
           price,
           selected_variants = [],
         } = localItem;
-
         // Fetch product with variants
         const product = await Product.findByPk(productId, {
           include: [
@@ -1012,7 +916,6 @@ const syncCart = async (req, res, next) => {
           ],
           transaction,
         });
-
         if (!product || product.status !== "active") {
           syncReport.failed_items.push({
             productId,
@@ -1020,12 +923,10 @@ const syncCart = async (req, res, next) => {
           });
           continue;
         }
-
         // Sort selected variants for consistent comparison
         const sortedSelectedVariants = [...selected_variants].sort(
           (a, b) => a.id - b.id
         );
-
         // Find existing cart item with same product and variants
         const existingItem = await CartItem.findOne({
           where: {
@@ -1036,7 +937,6 @@ const syncCart = async (req, res, next) => {
           },
           transaction,
         });
-
         // Check stock availability
         let availableStock = null;
         if (sortedSelectedVariants.length > 0) {
@@ -1047,15 +947,12 @@ const syncCart = async (req, res, next) => {
           const inventory = await product.getInventory({ transaction });
           availableStock = inventory?.stock ?? null;
         }
-
         const requestedQuantity = existingItem
           ? existingItem.quantity + quantity
           : quantity;
-
         if (availableStock !== null && requestedQuantity > availableStock) {
           // Adjust quantity to maximum available
           const adjustedQuantity = availableStock;
-
           if (existingItem) {
             // Update existing item with adjusted quantity
             await existingItem.update(
@@ -1063,7 +960,6 @@ const syncCart = async (req, res, next) => {
               { transaction }
             );
             await existingItem.updateTotalPrice(transaction);
-
             syncReport.successful_merges.push({
               productId,
               oldQuantity: existingItem.quantity,
@@ -1085,13 +981,11 @@ const syncCart = async (req, res, next) => {
               },
               { transaction }
             );
-
             syncReport.new_items_added.push({
               productId,
               quantity: adjustedQuantity,
             });
           }
-
           syncReport.quantity_adjusted.push({
             productId,
             variantIds: sortedSelectedVariants.map((v) => v.id),
@@ -1108,7 +1002,6 @@ const syncCart = async (req, res, next) => {
               { transaction }
             );
             await existingItem.updateTotalPrice(transaction);
-
             syncReport.successful_merges.push({
               productId,
               oldQuantity: existingItem.quantity,
@@ -1121,7 +1014,6 @@ const syncCart = async (req, res, next) => {
               0
             );
             const totalPrice = quantity * (price + totalVariantPrice);
-
             const newItem = await CartItem.create(
               {
                 cart_id: cart.id,
@@ -1136,7 +1028,6 @@ const syncCart = async (req, res, next) => {
               },
               { transaction }
             );
-
             syncReport.new_items_added.push({
               productId,
               quantity,
@@ -1155,15 +1046,11 @@ const syncCart = async (req, res, next) => {
         });
       }
     }
-
     // Update cart totals
     await cart.updateTotals(transaction);
-
     await transaction.commit();
-
     // Get full synchronized cart
     const synchronizedCart = await cart.getFullCart();
-
     res.status(200).json({
       status: "success",
       message: "Cart synchronized successfully",
@@ -1179,7 +1066,6 @@ const syncCart = async (req, res, next) => {
     next(error);
   }
 };
-
 module.exports = {
   getCart,
   addToCart,

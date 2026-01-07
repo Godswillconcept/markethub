@@ -5,7 +5,7 @@ const { Op } = require("sequelize");
 const AppError = require("../utils/appError");
 const { User, Role, Permission } = require("../models");
 const PermissionService = require("../services/permission.service");
-const tokenBlacklistService = require("../services/token-blacklist-enhanced.service");
+const tokenBlacklistService = require("../services/token-blacklist.service");
 const logger = require("../utils/logger");
 
 /**
@@ -37,7 +37,6 @@ const setUser = (req, res, next) => {
     async (err, user, info) => {
       // Handle authentication errors gracefully
       if (err) {
-        console.warn("JWT authentication error in setUser:", err.message);
         req.user = null;
         return next();
       }
@@ -68,10 +67,6 @@ const setUser = (req, res, next) => {
             req.user = user;
           }
         } catch (error) {
-          console.warn(
-            "Failed to load user roles/permissions in setUser:",
-            error.message
-          );
           req.user = user; // Continue with basic user if loading fails
         }
       } else {
@@ -154,7 +149,6 @@ const protect = async (req, res, next) => {
           req.session = session;
         }
       } catch (sessionError) {
-        logger.warn("Session tracking failed:", sessionError);
         // Don't fail authentication if session tracking fails
       }
     }
@@ -213,15 +207,12 @@ const restrictTo = (...roles) => {
       : [];
     const requiredRoles = roles.map((role) => role.toLowerCase());
 
-    // Debug logging
-
     // Check if user has any of the required roles (case-insensitive)
     const hasRequiredRole = requiredRoles.some((role) =>
       userRoles.some((userRole) => userRole === role)
     );
 
     if (!hasRequiredRole) {
-      console.log("Access denied. User does not have required role.");
       return next(
         new AppError("You do not have permission to perform this action", 403)
       );
@@ -460,7 +451,6 @@ const loadPermissions = async (req, res, next) => {
       }
     } catch (error) {
       // If loading permissions fails, continue without them
-      console.warn("Failed to load user permissions:", error.message);
     }
   }
 
@@ -742,7 +732,6 @@ const enhancedAuth = async (req, res, next) => {
             req.session = session;
           }
         } catch (sessionError) {
-          logger.warn("Enhanced session validation failed:", sessionError);
           // Don't fail authentication if session tracking fails
         }
       }

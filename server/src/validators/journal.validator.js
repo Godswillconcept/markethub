@@ -1,4 +1,4 @@
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const { Journal } = require('../models');
 
 // Validation rules for creating a new journal
@@ -99,9 +99,18 @@ exports.updateJournal = [
   
   body('tags')
     .optional()
-    .isArray()
-    .withMessage('Tags must be an array')
-    .custom((tags) => {
+    .custom((value) => {
+      let tags = value;
+      if (typeof value === 'string') {
+        try {
+          tags = JSON.parse(value);
+        } catch (e) {
+          throw new Error('Invalid tags format');
+        }
+      }
+      if (!Array.isArray(tags)) {
+        throw new Error('Tags must be an array');
+      }
       if (tags.length > 20) {
         throw new Error('Maximum 20 tags allowed');
       }
@@ -111,7 +120,18 @@ exports.updateJournal = [
       return true;
     })
     .custom(async (tags) => {
-      if (!tags || tags.length === 0) return true;
+      // Parse tags if it's a JSON string
+      let parsedTags = tags;
+      if (typeof tags === 'string') {
+        try {
+          parsedTags = JSON.parse(tags);
+        } catch (e) {
+          // If parsing fails, the first validator will catch the error
+          return true;
+        }
+      }
+      
+      if (!parsedTags || parsedTags.length === 0) return true;
       
       try {
         // Get all existing tags from journals
@@ -133,7 +153,7 @@ exports.updateJournal = [
         });
         
         // Check if input tags exist
-        const inputTags = tags.map(tag => tag.toLowerCase());
+        const inputTags = parsedTags.map(tag => tag.toLowerCase());
         const newTags = inputTags.filter(tag => !existingTags.has(tag));
         
         // Add tag existence info to request for potential use in controller
@@ -168,7 +188,21 @@ exports.updateJournal = [
     })
 ];
 
-// Validation rules for getting a journal by ID
+// FIXED: Added proper validation for getting a journal by ID or slug
+// Previous validation array was empty, which could allow invalid inputs
+// This ensures the id parameter is properly validated before processing
 exports.getJournal = [
-  // Add any needed validation for getting a journal by ID
+  param('id')
+    .trim()
+    .notEmpty()
+    .withMessage('Journal ID or slug is required')
+    .custom((value) => {
+      // Check if it's a valid numeric ID or slug
+      const isNumericId = /^\d+$/.test(value) && parseInt(value) <= Number.MAX_SAFE_INTEGER;
+      const isSlug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+      if (!isNumericId && !isSlug) {
+        throw new Error('Invalid journal ID or slug format');
+      }
+      return true;
+    })
 ];

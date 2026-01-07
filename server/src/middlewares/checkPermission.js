@@ -1,4 +1,4 @@
-const PermissionService = require('../services/permission.service');
+﻿const PermissionService = require('../services/permission.service');
 const { 
   permissionMap, 
   publicRoutes, 
@@ -7,7 +7,6 @@ const {
   getRequiredPermission 
 } = require('../config/permission-mapping');
 const { User, Role, Permission } = require('../models');
-
 /**
  * CheckPermission Middleware
  * Automatically protects routes based on permission mappings, similar to Laravel CheckPermission
@@ -19,18 +18,13 @@ const { User, Role, Permission } = require('../models');
  * - Permission caching in session
  * - Comprehensive error handling
  */
-
 const checkPermission = async (req, res, next) => {
   try {
     const routeKey = generateRouteKey(req.method, req.originalUrl);
-    
-    
     // 1. Check if route is public
     if (isPublicRoute(req.method, req.originalUrl)) {
-      console.log("Route is public, allowing access");
       return next(); // Allow access to public routes
     }
-
     // 2. Ensure user is authenticated
     if (!req.user) {
       return res.status(401).json({
@@ -38,21 +32,16 @@ const checkPermission = async (req, res, next) => {
         message: 'Authentication required. Please log in to access this resource.'
       });
     } 
-
     // 3. Set user context if not already set
     await setUserContext(req);
-
     // 4. Get required permission for the route
     const requiredPermission = getRequiredPermission(req.method, req.originalUrl);
-    
     if (!requiredPermission) {
       // Route exists but no specific permission required - allow access to authenticated users
       return next();
     }
-
     // 5. Check if user has required permission
     const hasPermission = await checkUserPermission(req, req.user, requiredPermission);
-    
     if (!hasPermission) {
       return res.status(403).json({
         success: false,
@@ -60,14 +49,12 @@ const checkPermission = async (req, res, next) => {
         code: 'INSUFFICIENT_PERMISSIONS'
       });
     }
-
     // 6. Store permission check result in request for future middleware
     req.permissionCheck = {
       requiredPermission,
       checked: true,
       timestamp: new Date()
     };
-
     next();
   } catch (error) {
     console.error('CheckPermission middleware error:', error);
@@ -78,7 +65,6 @@ const checkPermission = async (req, res, next) => {
     });
   }
 };
-
 /**
  * Set user context, particularly vendor context
  * @param {Object} req - Express request object
@@ -89,7 +75,6 @@ async function setUserContext(req) {
     if (req.userContext && req.userContext.set) {
       return;
     }
-
     // Load full user with roles and permissions if not already loaded
     if (!req.user.roles || !Array.isArray(req.user.roles)) {
       const userWithPermissions = await User.findByPk(req.user.id, {
@@ -108,12 +93,10 @@ async function setUserContext(req) {
           }
         ]
       });
-
       if (userWithPermissions) {
         req.user = userWithPermissions;
       }
     }
-
     // Set vendor context for vendor users
     if (req.user.roles && req.user.roles.some(role => role.name === 'vendor')) {
       // Check if vendor profile exists
@@ -122,7 +105,6 @@ async function setUserContext(req) {
         where: { user_id: req.user.id },
         attributes: ['id', 'status']
       });
-
       if (vendorProfile) {
         req.vendorContext = {
           id: vendorProfile.id,
@@ -139,7 +121,6 @@ async function setUserContext(req) {
         };
       }
     }
-
     // Set admin context for admin users
     if (req.user.roles && req.user.roles.some(role => role.name === 'admin')) {
       req.adminContext = {
@@ -147,14 +128,11 @@ async function setUserContext(req) {
         permissions: await PermissionService.getUserPermissions(req.user.id)
       };
     }
-
     req.userContext = { set: true, timestamp: new Date() };
   } catch (error) {
-    console.warn('Failed to set user context:', error.message);
     // Continue without context - don't block access
   }
 }
-
 /**
  * Check if user has required permission with caching
  * @param {Object} user - User object with roles and permissions
@@ -167,23 +145,19 @@ async function checkUserPermission(req, user, requiredPermission) {
     if (req.session && req.session.userPermissions) {
       const cachedPermissions = req.session.userPermissions;
       const cacheTimestamp = req.session.permissionsTimestamp;
-      
       // Check if cache is still valid (1 hour)
       if (cacheTimestamp && (Date.now() - cacheTimestamp) < 3600000) {
         return cachedPermissions.includes(requiredPermission);
       }
     }
-
     // Use PermissionService to check permission
     const hasPermission = await PermissionService.checkPermission(user, requiredPermission);
-
     // Cache permission result in session
     if (req.session) {
       const allPermissions = await PermissionService.getUserPermissions(user.id);
       req.session.userPermissions = allPermissions.map(p => p.name);
       req.session.permissionsTimestamp = Date.now();
     }
-
     return hasPermission;
   } catch (error) {
     console.error('Permission check error:', error);
@@ -191,7 +165,6 @@ async function checkUserPermission(req, user, requiredPermission) {
     return false;
   }
 }
-
 /**
  * Helper function to get route information
  * @param {Object} req - Express request object
@@ -206,7 +179,6 @@ function getRouteInfo(req) {
     isPublic: isPublicRoute(req.method, req.originalUrl)
   };
 }
-
 /**
  * Middleware to check specific permission (convenience method)
  * @param {string} permission - Permission name to check
@@ -222,16 +194,13 @@ const requireSpecificPermission = (permission) => {
           message: 'Authentication required'
         });
       }
-
       const hasPermission = await PermissionService.checkPermission(req.user, permission);
-      
       if (!hasPermission) {
         return res.status(403).json({
           success: false,
           message: `Access denied. Required permission: ${permission}`
         });
       }
-
       next();
     } catch (error) {
       console.error('Specific permission check error:', error);
@@ -242,7 +211,6 @@ const requireSpecificPermission = (permission) => {
     }
   };
 };
-
 /**
  * Middleware to check multiple permissions (any of them)
  * @param {string[]} permissions - Array of permission names
@@ -258,18 +226,15 @@ const requireAnyPermission = (permissions) => {
           message: 'Authentication required'
         });
       }
-
       const hasAnyPermission = await Promise.any(
         permissions.map(perm => PermissionService.checkPermission(req.user, perm))
       ).then(() => true).catch(() => false);
-
       if (!hasAnyPermission) {
         return res.status(403).json({
           success: false,
           message: `Access denied. Required one of: ${permissions.join(', ')}`
         });
       }
-
       next();
     } catch (error) {
       console.error('Any permission check error:', error);
@@ -280,7 +245,6 @@ const requireAnyPermission = (permissions) => {
     }
   };
 };
-
 /**
  * Middleware to get route permission info for debugging
  * @returns {Function} Express middleware
@@ -292,7 +256,6 @@ const debugRoutePermissions = (req, res, next) => {
   }
   next();
 };
-
 module.exports = {
   checkPermission,
   requireSpecificPermission,

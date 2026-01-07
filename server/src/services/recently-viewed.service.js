@@ -1,4 +1,4 @@
-const { log } = require("console");
+﻿const { log } = require("console");
 const redis = require("../config/redis");
 const {
   UserProductView,
@@ -9,7 +9,6 @@ const {
   ProductImage,
 } = require("../models");
 const { Op } = require("sequelize");
-
 class RecentlyViewedService {
   constructor() {
     this.maxViewsPerUser = parseInt(process.env.RECENTLY_VIEWED_LIMIT) || 10;
@@ -17,7 +16,6 @@ class RecentlyViewedService {
       parseInt(process.env.VIEW_DATA_RETENTION_DAYS) || 30;
     this.redisKeyPrefix = "recent_views:";
   }
-
   /**
    * Get Redis key for user
    * @param {number} userId - User ID
@@ -26,7 +24,6 @@ class RecentlyViewedService {
   getRedisKey(userId) {
     return `${this.redisKeyPrefix}${userId}`;
   }
-
   /**
    * Track a product view for a user
    * @param {Object} params - Track parameters
@@ -37,7 +34,6 @@ class RecentlyViewedService {
    */
   async trackView({ userId, productId, metadata = {} }) {
     const transaction = await UserProductView.sequelize.transaction();
-
     try {
       // First, remove any existing view for this product by this user
       // This ensures we only have one view record per user-product combination
@@ -48,13 +44,11 @@ class RecentlyViewedService {
         },
         transaction,
       });
-
       // Hash IP address for privacy (GDPR compliance)
       const crypto = require("crypto");
       const hashedIp = metadata.ipAddress
         ? crypto.createHash("sha256").update(metadata.ipAddress).digest("hex")
         : null;
-
       // Create new view record
       const viewRecord = await UserProductView.create(
         {
@@ -69,7 +63,6 @@ class RecentlyViewedService {
         },
         { transaction }
       );
-
       // Update Redis cache (push to front of list) - only if Redis is connected
       if (redis.isConnected) {
         try {
@@ -86,13 +79,10 @@ class RecentlyViewedService {
             this.defaultRetentionDays * 24 * 60 * 60
           );
         } catch (redisError) {
-          console.warn("Redis cache update failed:", redisError.message);
           // Continue without Redis - database is already updated
         }
       }
-
       await transaction.commit();
-
       return {
         success: true,
         viewId: viewRecord.id,
@@ -103,7 +93,6 @@ class RecentlyViewedService {
       throw new Error(`Failed to track view: ${error.message}`);
     }
   }
-
   /**
    * Get recently viewed products for a user
    * NOTE: Returns ALL viewed products (including inactive ones) for browsing history
@@ -118,23 +107,15 @@ class RecentlyViewedService {
     try {
       const redisKey = this.getRedisKey(userId);
       const redisProductIds = await redis.lRange(redisKey, 0, limit - 1);
-
-      // console.log("productIds", productIds);
-      let productIds = [];
-
+      // let productIds = [];
       // Try Redis first for fast access (only if Redis is connected)
       if (redis.isConnected) {
         try {
           productIds = await redis.lRange(redisKey, 0, limit - 1);
         } catch (redisError) {
-          console.warn(
-            "Redis error, falling back to database:",
-            redisError.message
-          );
           productIds = [];
         }
       }
-
       // If Redis is empty or unavailable, fall back to database
       let dbViews;
       if (productIds.length === 0) {
@@ -144,9 +125,7 @@ class RecentlyViewedService {
           order: [["viewed_at", "DESC"]],
           limit: this.maxViewsPerUser,
         });
-
         productIds = dbViews.map((view) => view.product_id.toString());
-
         // Rebuild Redis cache - only if Redis is connected and we have data
         if (productIds.length > 0 && redis.isConnected) {
           try {
@@ -157,23 +136,17 @@ class RecentlyViewedService {
               this.defaultRetentionDays * 24 * 60 * 60
             );
           } catch (redisError) {
-            console.warn("Redis cache rebuild failed:", redisError.message);
             // Continue without Redis cache
           }
         }
       }
-
       // Convert string IDs to integers early
       const numericIds = productIds
         .map((id) => parseInt(id))
         .filter((id) => !isNaN(id));
-
       if (numericIds.length === 0) {
         return [];
       }
-
-      console.log("numericIds", numericIds);
-
       // Fetch timestamps if not already fetched from DB fallback
       if (!dbViews) {
         dbViews = await UserProductView.findAll({
@@ -181,7 +154,6 @@ class RecentlyViewedService {
           attributes: ["product_id", "viewed_at"],
         });
       }
-
       // Get ALL viewed products regardless of status
       // This shows user's complete browsing history
       // (Remove status filter - users want to see what they viewed, even if it's inactive now)
@@ -233,23 +205,19 @@ class RecentlyViewedService {
           },
         ],
       });
-
       // Sort products according to the order in numericIds (most recent first)
       // Use String(id) for map keys to handle BIGINTs (returned as strings) vs Numbers
       const productMap = new Map(products.map(p => [String(p.id), p]));
       const orderedProducts = [];
-
       for (const id of numericIds) {
         if (productMap.has(String(id))) {
           orderedProducts.push(productMap.get(String(id)));
         }
       }
-
       // Create timestamp map for adding viewed_at to response
       const timestampMap = new Map(
         dbViews.map((v) => [String(v.product_id), v.viewed_at])
       );
-
       return orderedProducts.map((product) => {
         const viewedAt = timestampMap.get(String(product.id));
         return {
@@ -261,7 +229,6 @@ class RecentlyViewedService {
       throw new Error(`Failed to get recent views: ${error.message}`);
     }
   }
-
   /**
    * Clear all recently viewed products for a user
    * @param {Object} params - Parameters
@@ -270,27 +237,22 @@ class RecentlyViewedService {
    */
   async clearRecentViews({ userId }) {
     const transaction = await UserProductView.sequelize.transaction();
-
     try {
       // Delete from database
       const deletedCount = await UserProductView.destroy({
         where: { user_id: userId },
         transaction,
       });
-
       // Clear Redis cache - only if Redis is connected
       if (redis.isConnected) {
         try {
           const redisKey = this.getRedisKey(userId);
           await redis.del(redisKey);
         } catch (redisError) {
-          console.warn("Redis cache clear failed:", redisError.message);
           // Continue - database is already cleared
         }
       }
-
       await transaction.commit();
-
       return {
         success: true,
         deletedCount,
@@ -300,7 +262,6 @@ class RecentlyViewedService {
       throw new Error(`Failed to clear recent views: ${error.message}`);
     }
   }
-
   /**
    * Get viewing statistics for a user
    * Note: Only counts ACTIVE products (via INNER JOIN in SQL)
@@ -327,7 +288,6 @@ class RecentlyViewedService {
           type: UserProductView.sequelize.QueryTypes.SELECT,
         }
       );
-
       return {
         totalViews: parseInt(stats.totalViews) || 0,
         uniqueProducts: parseInt(stats.uniqueProducts) || 0,
@@ -337,7 +297,6 @@ class RecentlyViewedService {
       throw new Error(`Failed to get view statistics: ${error.message}`);
     }
   }
-
   /**
    * Anonymize user data for GDPR compliance
    * @param {number} userId - User ID to anonymize
@@ -345,7 +304,6 @@ class RecentlyViewedService {
    */
   async anonymizeUserData(userId) {
     const transaction = await UserProductView.sequelize.transaction();
-
     try {
       // Anonymize personal data while keeping aggregate analytics
       const [affectedRows] = await UserProductView.sequelize.query(
@@ -365,20 +323,16 @@ class RecentlyViewedService {
           transaction,
         }
       );
-
       // Clear user's Redis cache - only if Redis is connected
       if (redis.isConnected) {
         try {
           const redisKey = this.getRedisKey(userId);
           await redis.del(redisKey);
         } catch (redisError) {
-          console.warn("Redis cache clear failed:", redisError.message);
           // Continue - database is already anonymized
         }
       }
-
       await transaction.commit();
-
       return {
         success: true,
         anonymizedCount: affectedRows || 0,
@@ -388,7 +342,6 @@ class RecentlyViewedService {
       throw new Error(`Failed to anonymize user data: ${error.message}`);
     }
   }
-
   /**
    * Clean up old view records based on retention policy
    * @param {number} daysToKeep - Number of days to keep records
@@ -398,7 +351,6 @@ class RecentlyViewedService {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-
       const deletedCount = await UserProductView.destroy({
         where: {
           viewed_at: {
@@ -406,7 +358,6 @@ class RecentlyViewedService {
           },
         },
       });
-
       return {
         success: true,
         deletedCount,
@@ -416,7 +367,6 @@ class RecentlyViewedService {
       throw new Error(`Failed to cleanup old views: ${error.message}`);
     }
   }
-
   /**
    * Get most viewed products across all users
    * @param {Object} params - Query parameters
@@ -428,7 +378,6 @@ class RecentlyViewedService {
     try {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
-
       const [results] = await UserProductView.sequelize.query(
         `
         SELECT
@@ -461,12 +410,10 @@ class RecentlyViewedService {
           type: UserProductView.sequelize.QueryTypes.SELECT,
         }
       );
-
       return results;
     } catch (error) {
       throw new Error(`Failed to get most viewed products: ${error.message}`);
     }
   }
 }
-
 module.exports = new RecentlyViewedService();

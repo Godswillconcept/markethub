@@ -1,5 +1,4 @@
-const { permissionMap, publicRoutes } = require("./permission");
-
+﻿const { permissionMap, publicRoutes } = require("./permission");
 /**
  * Route mapping rules - defines how to convert actual paths to permission map keys
  * This ensures consistency between what's in the URL and what's in your permission map
@@ -71,7 +70,6 @@ const ROUTE_PATTERNS = [
   { pattern: /^\/vendors\/([\w-]+)\/approve$/, template: '/vendors/:id/approve' },
   { pattern: /^\/vendors\/([\w-]+)\/reject$/, template: '/vendors/:id/reject' },
   { pattern: /^\/vendors\/initialize-onboarding$/, template: '/vendors/initialize-onboarding' },
-
   // Suggestion routes
   { pattern: /^\/suggestions$/, template: '/suggestions' },
   { pattern: /^\/suggestions\/([\w-]+)$/, template: '/suggestions/:algorithm' },
@@ -80,7 +78,6 @@ const ROUTE_PATTERNS = [
   { pattern: /^\/suggestions\/followed-vendors$/, template: '/suggestions/followed-vendors' },
   { pattern: /^\/suggestions\/recently-viewed$/, template: '/suggestions/recently-viewed' },
   { pattern: /^\/suggestions\/stats$/, template: '/suggestions/stats' },
-  
   // Generic patterns (catch-all for remaining routes)
   { pattern: /^\/filters\/products$/, template: '/filters/products' },
   { pattern: /^\/filters\/products\/([\w-]+)\/combinations$/, template: '/filters/products/:productId/combinations' },
@@ -117,10 +114,8 @@ const ROUTE_PATTERNS = [
   { pattern: /^\/admin\/webhooks\/([\w-]+)$/, template: '/admin/webhooks/:id' },
   { pattern: /^\/admin\/subadmins\/([\w-]+)$/, template: '/admin/subadmins/:id' },
   { pattern: /^\/payouts\/initiate$/, template: '/payouts/initiate' },
-  
   // Catch-all pattern for production React app routes
 ];
-
 /**
  * Generate route key from method and path using pattern matching
  * @param {string} method - HTTP method
@@ -130,12 +125,10 @@ const ROUTE_PATTERNS = [
 function generateRouteKey(method, path) {
   // Remove /api/v1 prefix if present
   let normalizedPath = path.replace(/^\/api\/v1/, "");
-  
   // Remove query parameters and trailing slashes
   normalizedPath = normalizedPath.split("?")[0].replace(/\/$/, "");
   // Remove URL-encoded newline characters if present
   normalizedPath = normalizedPath.replace(/%0A/g, "");
-  
   // Apply pattern matching to convert dynamic routes to parameterized format
   for (const { pattern, template } of ROUTE_PATTERNS) {
     if (pattern.test(normalizedPath)) {
@@ -144,10 +137,8 @@ function generateRouteKey(method, path) {
       break;
     }
   }
-  
   return `${method.toUpperCase()} ${normalizedPath}`;
 }
-
 /**
  * Check if a route is public (doesn't require authentication)
  * @param {string} method - HTTP method
@@ -156,17 +147,8 @@ function generateRouteKey(method, path) {
  */
 function isPublicRoute(method, path) {
   const routeKey = generateRouteKey(method, path);
-  
-  if (process.env.NODE_ENV === 'development') {
-    console.log("[Public Route Check]");
-    console.log("  Original Path:", path);
-    console.log("  Generated Route Key:", routeKey);
-    console.log("  Is Public:", publicRoutes.includes(routeKey));
-  }
-  
   return publicRoutes.includes(routeKey);
 }
-
 /**
  * Get required permission for a route
  * @param {string} method - HTTP method
@@ -175,17 +157,8 @@ function isPublicRoute(method, path) {
  */
 function getRequiredPermission(method, path) {
   const routeKey = generateRouteKey(method, path);
-  
-  if (process.env.NODE_ENV === 'development') {
-    console.log("[Permission Check]");
-    console.log("  Original Path:", path);
-    console.log("  Generated Route Key:", routeKey);
-    console.log("  Required Permission:", permissionMap[routeKey] || "none");
-  }
-  
   return permissionMap[routeKey] || null;
 }
-
 /**
  * Get all routes with their required permissions
  * @returns {Object} Object with route keys as keys and permissions as values
@@ -193,7 +166,6 @@ function getRequiredPermission(method, path) {
 function getAllRoutes() {
   return { ...permissionMap };
 }
-
 /**
  * Get public routes
  * @returns {Array} Array of public route keys
@@ -201,7 +173,6 @@ function getAllRoutes() {
 function getPublicRoutes() {
   return [...publicRoutes];
 }
-
 /**
  * Get routes by permission
  * @param {string} permission - Permission name
@@ -212,7 +183,6 @@ function getRoutesByPermission(permission) {
     .filter(([, perm]) => perm === permission)
     .map(([route]) => route);
 }
-
 /**
  * Get routes by resource
  * @param {string} resource - Resource name
@@ -223,7 +193,6 @@ function getRoutesByResource(resource) {
     .filter(([route]) => route.includes(`/${resource}`))
     .map(([route]) => route);
 }
-
 module.exports = {
   permissionMap,
   publicRoutes,
