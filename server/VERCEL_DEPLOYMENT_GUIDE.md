@@ -11,7 +11,7 @@ This guide explains how to deploy the Stylay API server to Vercel as a serverles
 **Solution:** Changed to a specific Node.js version:
 ```json
 "engines": {
-  "node": "18.x"
+  "node": "24.x"
 }
 ```
 
@@ -19,11 +19,11 @@ This guide explains how to deploy the Stylay API server to Vercel as a serverles
 **Problem:** Several deprecated packages were causing warnings during deployment.
 
 **Solutions Applied:**
-- `eslint`: Upgraded from `^8.32.0` to `^9.18.0`
-- `eslint-config-prettier`: Upgraded from `^8.6.0` to `^9.1.0`
-- `eslint-plugin-jest`: Upgraded from `^27.2.1` to `^28.10.0`
-- `eslint-plugin-prettier`: Upgraded from `^4.2.1` to `^5.2.1`
-- `supertest`: Upgraded from `^6.3.3` to `^7.0.0`
+- `eslint`: Upgraded from `^8.32.0` to `^8.57.1` (compatible with eslint-config-airbnb-base)
+- `eslint-config-prettier`: Upgraded from `^8.6.0` to `^8.10.0` (compatible with ESLint 8)
+- `eslint-plugin-jest`: Upgraded from `^27.2.1` to `^27.9.0` (compatible with ESLint 8)
+- `eslint-plugin-prettier`: Kept at `^4.2.1` (already compatible)
+- `supertest`: Upgraded from `^6.3.3` to `^6.3.4` (latest stable)
 - `prettier`: Upgraded from `^2.8.3` to `^3.4.2`
 - `express-rate-limit`: Upgraded from `^6.7.0` to `^7.5.0`
 - `helmet`: Upgraded from `^6.2.0` to `^8.0.0`
@@ -71,7 +71,7 @@ This guide explains how to deploy the Stylay API server to Vercel as a serverles
 
 ### Prerequisites
 1. Vercel account (free tier works)
-2. Node.js 18.x installed locally
+2. Node.js 24.x installed locally
 3. Database connection (PostgreSQL or MySQL)
 4. Redis connection (optional, for caching)
 

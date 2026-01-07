@@ -5,9 +5,9 @@
 ### 1. Node.js Version Warning
 **Warning:** `Detected "engines": { "node": ">=14.0.0" } in your package.json that will automatically upgrade when a new major Node.js Version is released.`
 
-**Fix Applied:** Changed to specific version `"node": "18.x"` in [`package.json`](package.json:120)
+**Fix Applied:** Changed to specific version `"node": "24.x"` in [`package.json`](package.json:120)
 
-**Why:** Using `>=14.0.0` causes Vercel to automatically upgrade to new major Node.js versions, which can break the application. Using a specific version (18.x) ensures stability.
+**Why:** Using `>=14.0.0` causes Vercel to automatically upgrade to new major Node.js versions, which can break the application. Using a specific version (24.x) ensures stability and meets Vercel's current requirements.
 
 ---
 
@@ -33,11 +33,11 @@
 
 | Package | Old Version | New Version | Reason |
 |---------|-------------|-------------|--------|
-| eslint | ^8.32.0 | ^9.18.0 | Version 8 is no longer supported |
-| eslint-config-prettier | ^8.6.0 | ^9.1.0 | Outdated version |
-| eslint-plugin-jest | ^27.2.1 | ^28.10.0 | Outdated version |
-| eslint-plugin-prettier | ^4.2.1 | ^5.2.1 | Outdated version |
-| supertest | ^6.3.3 | ^7.0.0 | Version 6 is deprecated |
+| eslint | ^8.32.0 | ^8.57.1 | Latest stable version compatible with eslint-config-airbnb-base |
+| eslint-config-prettier | ^8.6.0 | ^8.10.0 | Compatible with ESLint 8 |
+| eslint-plugin-jest | ^27.2.1 | ^27.9.0 | Compatible with ESLint 8 |
+| eslint-plugin-prettier | ^4.2.1 | ^4.2.1 | Already compatible |
+| supertest | ^6.3.3 | ^6.3.4 | Latest stable version |
 | prettier | ^2.8.3 | ^3.4.2 | Version 2 is deprecated |
 | express-rate-limit | ^6.7.0 | ^7.5.0 | Outdated version |
 | helmet | ^6.2.0 | ^8.0.0 | Outdated version |
