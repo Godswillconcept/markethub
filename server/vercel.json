@@ -3,15 +3,15 @@
   "rewrites": [
     {
       "source": "/api/migrate",
-      "destination": "/api/migrate.js"
+      "destination": "api/migrate.js"
     },
     {
       "source": "/api/seed",
-      "destination": "/api/seed.js"
+      "destination": "api/seed.js"
     },
     {
       "source": "/(.*)",
-      "destination": "/api/index.js"
+      "destination": "api/index.js"
     }
   ],
   "env": {
