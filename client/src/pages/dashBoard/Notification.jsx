@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import ToggleField from "./ToggleField.jsx";
 import ProfileInput from "./ProfileInput.jsx";
 
@@ -94,7 +95,7 @@ function Notification() {
         </h4>
         <div className="space-y-4">
           <ToggleField
-            label="Notify me when there are new features or updates to the website or app."
+            label="Notify me when there are new features or updates to website or app."
             checked={notifications.updates}
             onChange={() => toggleNotification("updates")}
           />
@@ -105,6 +106,23 @@ function Notification() {
           />
         </div>
       </div>
+
+      {/* Notification History Section */}
+      <hr className="my-6" />
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">
+          Notification History
+        </h3>
+        <Link
+          to="/settings/notifications"
+          className="text-sm font-medium text-black hover:underline"
+        >
+          View All Notifications
+        </Link>
+      </div>
+      <p className="mb-6 text-sm text-gray-600">
+        View your recent notifications and manage your notification history.
+      </p>
 
       {/* Footer */}
       <div className="mt-8 flex justify-end space-x-4">

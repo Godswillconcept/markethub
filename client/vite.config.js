@@ -13,6 +13,11 @@ export default defineConfig({
   server: {
     port: 5173, // Default port
     host: true, // Allow external access
+    // Restrict file system access to prevent Vite from accessing server-side files
+    fs: {
+      strict: true,
+      allow: ['.']
+    },
     proxy: {
       // Proxy API requests to backend server
       '/api': {

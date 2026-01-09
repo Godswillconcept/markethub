@@ -12,6 +12,7 @@ const compression = require("compression");
 const passport = require("passport");
 const redis = require("redis");
 const { v4: uuidv4 } = require("uuid");
+const http = require("http");
 // Import CORS middleware
 const corsMiddleware = require("./src/middlewares/cors");
 const logger = require("./src/utils/logger");
@@ -21,6 +22,7 @@ const { initializePassport } = require("./src/config/passport");
 const { checkPermission } = require("./src/middlewares/checkPermission");
 const { setUser } = require("./src/middlewares/auth");
 const checkBlacklist = require("./src/middlewares/check-blacklist");
+const { initializeWebSocket } = require("./src/config/websocket");
 const {
   httpRequestDurationMiddleware,
   initializePerformanceTracking,
@@ -51,8 +53,10 @@ const adminRoutes = require("./src/routes/admin");
 const supportFeedbackRoutes = require("./src/routes/support-feedback.route");
 const vendorMessageRoutes = require("./src/routes/vendor-message.route");
 const payoutRoutes = require("./src/routes/payout.route");
+const notificationRoutes = require("./src/routes/notification.route");
 // Initialize express app
 const app = express();
+const server = http.createServer(app);
 // Trust first proxy (for rate limiting behind load balancer)
 app.set("trust proxy", 1);
 // Connect to database and initialize properly
@@ -412,6 +416,7 @@ app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/feedbacks", supportFeedbackRoutes);
 app.use("/api/v1/messages", vendorMessageRoutes);
 app.use("/api/v1/payouts", payoutRoutes);
+app.use("/api/v1/notifications", notificationRoutes);
 // ============================================
 // SPA CATCH-ALL ROUTE (PRODUCTION)
 // ============================================
@@ -438,16 +443,19 @@ if (process.env.NODE_ENV === "production") {
 // ERROR HANDLING
 // ============================================
 app.use(errorHandler);
+// Initialize WebSocket server
+const io = initializeWebSocket(server);
 // Export for serverless
-module.exports = app;
+module.exports = { app, server, io };
 // Start server for local development
 const PORT = process.env.PORT || 5000;
 if (require.main === module) {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔍 Environment: ${process.env.NODE_ENV || "development"}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/health`);
     console.log(`📊 Metrics: http://localhost:${PORT}/metrics`);
     console.log(`🌐 CORS Origins:`, process.env.CORS_ORIGIN);
+    console.log(`🔌 WebSocket server initialized`);
   });
 }

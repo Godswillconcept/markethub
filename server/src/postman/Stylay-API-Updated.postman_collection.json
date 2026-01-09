@@ -3249,9 +3249,258 @@
           ]
         }
       ]
+},
+{
+  "name": "Notifications",
+  "description": "Notification management endpoints with real-time WebSocket support",
+  "item": [
+    {
+      "name": "Create Notification",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 1,\n  \"type\": \"order_update\",\n  \"message\": \"Your order #12345 has been updated\",\n  \"items\": [\n    {\n      \"type\": \"order_id\",\n      \"value\": \"12345\"\n    },\n    {\n      \"type\": \"status\",\n      \"value\": \"shipped\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications"]
+        },
+        "description": "Create a new notification for a user. Supports notification items for structured data."
+      }
     },
     {
-      "name": "Cart Management",
+      "name": "Get Notifications",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications?page=1&limit=10&type=order_update&is_read=false&sort=created_at&order=DESC",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "type",
+              "value": "order_update",
+              "description": "Filter by notification type (optional)"
+            },
+            {
+              "key": "is_read",
+              "value": "false",
+              "description": "Filter by read status (optional)"
+            },
+            {
+              "key": "sort",
+              "value": "created_at",
+              "description": "Sort field: created_at, updated_at"
+            },
+            {
+              "key": "order",
+              "value": "DESC",
+              "description": "Sort order: ASC, DESC"
+            }
+          ]
+        },
+        "description": "Get paginated list of notifications for authenticated user with optional filters"
+      }
+    },
+    {
+      "name": "Get Notification by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/1",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications", "1"]
+        },
+        "description": "Get a specific notification by ID"
+      }
+    },
+    {
+      "name": "Mark as Read",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/1/read",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications", "1", "read"]
+        },
+        "description": "Mark a specific notification as read"
+      }
+    },
+    {
+      "name": "Mark All as Read",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/read-all",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications", "read-all"]
+        },
+        "description": "Mark all notifications for authenticated user as read"
+      }
+    },
+    {
+      "name": "Delete Notification",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/1",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications", "1"]
+        },
+        "description": "Delete a specific notification by ID"
+      }
+    },
+    {
+      "name": "Delete All Notifications",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications?type=order_update&is_read=false",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications"],
+          "query": [
+            {
+              "key": "type",
+              "value": "order_update",
+              "description": "Filter by notification type (optional)"
+            },
+            {
+              "key": "is_read",
+              "value": "false",
+              "description": "Filter by read status (optional)"
+            }
+          ]
+        },
+        "description": "Delete multiple notifications with optional filters"
+      }
+    },
+    {
+      "name": "Get Unread Count",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/unread-count",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications", "unread-count"]
+        },
+        "description": "Get count of unread notifications for authenticated user"
+      }
+    },
+    {
+      "name": "Get Notification Stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/stats",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "notifications", "stats"]
+        },
+        "description": "Get notification statistics grouped by type"
+      }
+    }
+  ]
+},
+{
+  "name": "Cart Management",
       "description": "Cart operations",
       "item": [
         {

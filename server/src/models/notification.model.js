@@ -38,9 +38,18 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       defaultValue: 0
     },
+    metadata: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
     created_at: {
       type: DataTypes.DATE,
       allowNull: false,
+      defaultValue: sequelize.NOW
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
       defaultValue: sequelize.NOW
     }
   }, {

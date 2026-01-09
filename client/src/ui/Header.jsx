@@ -11,6 +11,7 @@ import { useUser } from "../Features/authentication/useUser.js";
 import { useUnifiedCart } from "../Features/cart/useUnifiedCart.js";
 import UserDropdown from "./UserDropdown.jsx";
 import SearchBox from "./SearchBox.jsx";
+import NotificationDropdown from "../components/NotificationDropdown.jsx";
 
 const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -116,6 +117,9 @@ const Header = () => {
                   </span>
                 )}
               </NavLink>
+
+              {/* Notification Dropdown - Only show when user is logged in */}
+              {user && <NotificationDropdown />}
 
               {/* User Account Dropdown */}
               {user ? (
