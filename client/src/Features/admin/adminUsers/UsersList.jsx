@@ -19,7 +19,7 @@ const headers = [
 function UsersList() {
   const navigate = useNavigate();
   const { users, total, isLoading, error } = useUsersList();
-  
+
   const [filters, setFilters] = useState({
     status: "All",
     sortby: "All",

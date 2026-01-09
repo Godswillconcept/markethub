@@ -222,6 +222,7 @@ export function useUnifiedCart() {
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cart"] });
+      await queryClient.invalidateQueries({ queryKey: ["cartSummary"] });
       await queryClient.refetchQueries({ queryKey: ["cart"] });
     },
   });
@@ -280,6 +281,7 @@ export function useUnifiedCart() {
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cart"] });
+      await queryClient.invalidateQueries({ queryKey: ["cartSummary"] });
       await queryClient.refetchQueries({ queryKey: ["cart"] });
     },
   });
@@ -335,6 +337,7 @@ export function useUnifiedCart() {
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cart"] });
+      await queryClient.invalidateQueries({ queryKey: ["cartSummary"] });
       await queryClient.refetchQueries({ queryKey: ["cart"] });
     },
   });
@@ -390,6 +393,7 @@ export function useUnifiedCart() {
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cart"] });
+      await queryClient.invalidateQueries({ queryKey: ["cartSummary"] });
       await queryClient.refetchQueries({ queryKey: ["cart"] });
     },
   });
@@ -481,10 +485,6 @@ export function useUnifiedCart() {
 
   // Calculate cart count and total
   const cartCount = useMemo(() => {
-    console.log("cart count", serverCart?.data?.items.length);
-    console.log("serverCart", serverCart?.data);
-    console.log("serverCart items", serverCart?.data?.items);
-    console.log("localCartItems", localCartItems.length);
     return serverCart?.data?.items.length || localCartItems.length;
   }, [serverCart?.data?.items.length, localCartItems]);
 

@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import Table from "../Table";
 import Pagination from "../Pagination";
 import { useState } from "react";
@@ -23,12 +23,17 @@ function SubAdmin() {
   const [subAdminToEdit, setSubAdminToEdit] = useState(null);
   const { isLoading, subAdmins, count } = useSubAdmin();
   const { deactivateSubAdminApi, isDeactivating } = useDeactivateSubAdmin();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentPage = !searchParams.get("page")
     ? 1
     : Number(searchParams.get("page"));
 
   if (isLoading) return <Spinner />;
+
+  const setCurrentPage = (page) => {
+    searchParams.set("page", page.toString());
+    setSearchParams(searchParams);
+  };
 
   const handleEdit = (subAdmin) => {
     setSubAdminToEdit(subAdmin);
@@ -48,13 +53,8 @@ function SubAdmin() {
 
   // Render each row in the table
   const renderSubAdminRow = (subAdmin) => [
-    <td key="name" className="px-6 py-4 text-sm">
-      <Link
-        to={`/sub-admin/${subAdmin.id}`}
-        className="text-blue-600 hover:text-blue-800 hover:underline"
-      >
-        {subAdmin.first_name} {subAdmin.last_name}
-      </Link>
+    <td key="name" className="px-6 py-4 text-sm font-medium text-gray-900">
+      {subAdmin.first_name} {subAdmin.last_name}
     </td>,
     <td key="email" className="px-6 py-4 text-sm text-gray-500">
       {subAdmin.email}
@@ -72,7 +72,7 @@ function SubAdmin() {
         {subAdmin.is_active ? "Active" : "Inactive"}
       </span>
     </td>,
-    <td key="action" className="px-6 py-4">
+    <td key="action" className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
       <Menu>
         <MenuButton className="px-4 py-2 text-sm font-medium">
           <HiOutlineDotsHorizontal />
@@ -84,7 +84,7 @@ function SubAdmin() {
           <div className="py-1">
             <MenuItem>
               <Link
-                to={`/sub-admin/${subAdmin.id}`}
+                to={`/admin/sub-admins/${subAdmin.id}`}
                 className="block w-full px-4 py-2 text-left text-sm text-gray-700 data-[focus]:bg-gray-100"
               >
                 View
@@ -139,6 +139,9 @@ function SubAdmin() {
               renderRow={renderSubAdminRow}
               className="rounded-lg bg-white"
               theadClassName="bg-gray-50"
+              onRowClick={(subAdmin) =>
+                navigate(`/admin/sub-admins/${subAdmin.id}`)
+              }
             />
           </div>
 
@@ -147,7 +150,7 @@ function SubAdmin() {
             totalItems={count}
             itemsPerPage={PAGE_SIZE}
             currentPage={currentPage}
-            // onPageChange={setCurrentPage} // Pagination component usually handles setSearchParams or takes a handler
+            onPageChange={setCurrentPage}
           />
         </div>
       </div>

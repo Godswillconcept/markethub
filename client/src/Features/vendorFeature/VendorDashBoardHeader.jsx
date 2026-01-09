@@ -159,11 +159,32 @@ const VendorDashboardHeader = () => {
           {/* Navigation Items */}
           <div className="px-6 py-6">
             <nav className="space-y-1">
+              {/* Home and Account links specifically for mobile */}
+              <NavLink
+                to="/"
+                onClick={closeMobileMenu}
+                className="group flex items-center rounded-lg px-4 py-3 text-base font-medium text-gray-600 transition-all duration-200 hover:bg-gray-50 hover:text-gray-900"
+              >
+                <BiHome className="mr-3 h-5 w-5" />
+                <span className="truncate">Home</span>
+              </NavLink>
+              <NavLink
+                to="/settings"
+                onClick={closeMobileMenu}
+                className="group flex items-center rounded-lg px-4 py-3 text-base font-medium text-gray-600 transition-all duration-200 hover:bg-gray-50 hover:text-gray-900"
+              >
+                <BiUser className="mr-3 h-5 w-5" />
+                <span className="truncate">Account</span>
+              </NavLink>
+
+              <div className="my-4 border-t border-gray-100" />
+
               {navigationItems.map((item, index) => (
                 <NavLink
                   key={item.name}
                   to={item.to}
                   onClick={closeMobileMenu}
+                  end={item.to === "/vendor/dashboard"}
                   className={({ isActive }) =>
                     `group flex items-center rounded-lg px-4 py-3 text-base font-medium transition-all duration-200 ${
                       isActive
@@ -172,7 +193,7 @@ const VendorDashboardHeader = () => {
                     }`
                   }
                   style={{
-                    animationDelay: `${index * 50}ms`,
+                    animationDelay: `${(index + 2) * 50}ms`,
                     animation: isMobileMenuOpen
                       ? "slideInFromRight 0.3s ease-out forwards"
                       : "none",
@@ -187,14 +208,20 @@ const VendorDashboardHeader = () => {
             </nav>
           </div>
 
-          {/* Panel Footer */}
+          {/* Panel Footer - Logout */}
           <div className="absolute right-0 bottom-0 left-0 border-t border-gray-200 p-6">
             <button
-              onClick={closeMobileMenu}
-              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-black p-3 text-white transition-colors duration-200 hover:bg-gray-800 focus:ring-2 focus:ring-black focus:ring-offset-2 focus:outline-none"
+              onClick={() => {
+                logout();
+                closeMobileMenu();
+              }}
+              disabled={isPending}
+              className="flex w-full items-center justify-center space-x-2 rounded-lg bg-red-600 p-3 text-white transition-colors duration-200 hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
             >
-              <User className="h-5 w-5" />
-              <span className="font-medium">Account Settings</span>
+              <BiLogOut className="h-5 w-5" />
+              <span className="font-medium">
+                {isPending ? "Logging out..." : "Logout"}
+              </span>
             </button>
           </div>
         </div>

@@ -13,18 +13,30 @@ class CleanupService {
    */
   async cleanupExpiredTokens() {
     try {
-      const [refreshTokenCount, sessionCount, blacklistCount] = await Promise.all([
-        refreshTokenService.cleanupExpiredTokens(),
-        sessionService.cleanupExpiredSessions(),
-        tokenBlacklistService.cleanup()
-      ]);
+      logger.info('Starting hourly cleanup job');
+      
+      // Execute sequentially instead of in parallel to reduce connection usage
+      const refreshTokenCount = await refreshTokenService.cleanupExpiredTokens();
+      logger.info(`Cleaned up ${refreshTokenCount} expired refresh tokens`);
+      
+      const sessionCount = await sessionService.cleanupExpiredSessions();
+      logger.info(`Cleaned up ${sessionCount} expired sessions`);
+      
+      const blacklistCount = await tokenBlacklistService.cleanup();
+      logger.info(`Cleaned up ${blacklistCount} expired blacklist entries`);
+      
+      const totalCount = refreshTokenCount + sessionCount + blacklistCount;
+      logger.info(`Hourly cleanup completed: ${totalCount} total records removed`);
+      
       return {
-        refreshTokenCount,
-        sessionCount,
-        blacklistCount
+        success: true,
+        refreshTokens: refreshTokenCount,
+        sessions: sessionCount,
+        blacklist: blacklistCount,
+        total: totalCount
       };
     } catch (error) {
-      logger.error('Error during token cleanup:', error);
+      logger.error('Error in cleanup service:', error);
       throw error;
     }
   }

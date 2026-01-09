@@ -92,7 +92,7 @@ export default function AdminDashboard() {
         {/* Stat cards row */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <AdminStatCard
-            title="Total Vendors"
+            title="Total Designers"
             value={totalVendors}
             delta="+20% from last month"
             highlight

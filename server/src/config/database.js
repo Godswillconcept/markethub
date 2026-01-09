@@ -11,10 +11,10 @@ const getBaseConfig = (env) => ({
     updatedAt: "updated_at",
   },
   pool: {
-    max: 5,
-    min: 0,
-    acquire: 30000,
-    idle: 10000,
+    max: 3,              // Reduced from 5 to 3 to leave buffer for cleanup
+    min: 0,              // Minimum connections to maintain
+    acquire: 30000,      // Max time to get connection (30s)
+    idle: 5000           // Reduced from 10000 to 5000 for faster release
   },
   seederStorage: "sequelize",
   dialectOptions: {

@@ -22,8 +22,6 @@ const ProductCard = memo(function ProductCard({ product }) {
   } = product;
   
   const categoryName = (Category?.name || category?.name) || "Uncategorized";
-  console.log('[ProductCard] Product thumbnail from API:', thumbnail);
-  console.log('[ProductCard] Product ID:', id);
   const { addToWishList, isAddingToWishList } = useAddWishList();
   function handleAddToWishList(e) {
     e.stopPropagation(); // Prevent click from bubbling to parent

@@ -62,6 +62,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.JSON,
       allowNull: true
     },
+    replies: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: []
+    },
     reference_number: {
       type: DataTypes.STRING(20),
       allowNull: false,

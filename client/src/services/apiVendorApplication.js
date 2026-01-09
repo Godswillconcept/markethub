@@ -1,7 +1,13 @@
 import { PAGE_SIZE } from "../utils/constants.js";
 import axiosInstance from "./axios.js";
 
-export async function getVendorApplications({ page, limit = PAGE_SIZE, search, status }) {
+export async function getVendorApplications({
+  page,
+  limit = PAGE_SIZE,
+  search,
+  status,
+  sortBy,
+}) {
   try {
     const params = { page, limit };
     if (search && search.length >= 2) {
@@ -29,7 +35,7 @@ export async function getVendorApplicationById(vendorId) {
   } catch (error) {
     throw new Error(
       error.response?.data?.message ||
-      "Failed to get vendor application details",
+        "Failed to get vendor application details",
     );
   }
 }

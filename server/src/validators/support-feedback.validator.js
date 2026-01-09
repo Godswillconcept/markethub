@@ -28,7 +28,9 @@ const createFeedbackValidator = [
     .escape(),
   body('description')
     .isLength({ min: 20, max: 2000 })
-    .withMessage('Description must be between 20-2000 characters'),
+    .withMessage('Description must be between 20-2000 characters')
+    .trim()
+    .escape(),
   body('preferred_support_method')
     .isIn(['Email', 'Phone', 'Chat'])
     .withMessage('Invalid preferred support method')
@@ -38,7 +40,9 @@ const createFeedbackValidator = [
     .optional()
     .isEmail()
     .withMessage('Invalid email format')
-    .normalizeEmail(),
+    .normalizeEmail()
+    .trim()
+    .escape(),
   body('contact_phone')
     .optional()
     .custom((value) => {
@@ -48,7 +52,9 @@ const createFeedbackValidator = [
         throw new Error('Invalid international phone number');
       }
       return true;
-    }),
+    })
+    .trim()
+    .escape(),
   body().custom((value, { req }) => {
     if (!req.body.contact_email && !req.body.contact_phone) {
       throw new Error('At least one contact method (email or phone) is required');
@@ -69,6 +75,66 @@ const updateFeedbackValidator = [
     .withMessage('Invalid status')
 ];
 
+const getAllFeedbacksValidator = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer')
+    .toInt(),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100')
+    .toInt(),
+  query('status')
+    .optional()
+    .isIn(['open', 'in_progress', 'resolved', 'closed'])
+    .withMessage('Invalid status value'),
+  query('issue_type')
+    .optional()
+    .isIn([
+      'Order Not Delivered',
+      'Wrong Item Received',
+      'Payment Issue',
+      'Return/Refund Request',
+      'Account Issue',
+      'Technical Issue',
+      'Other'
+    ])
+    .withMessage('Invalid issue type'),
+  query('sort_by')
+    .optional()
+    .isIn(['created_at', 'status', 'issue_type'])
+    .withMessage('Invalid sort field'),
+  query('date_from')
+    .optional()
+    .isISO8601()
+    .withMessage('Invalid date format for date_from'),
+  query('date_to')
+    .optional()
+    .isISO8601()
+    .withMessage('Invalid date format for date_to')
+    .custom((value, { req }) => {
+      if (req.query.date_from && value < req.query.date_from) {
+        throw new Error('date_to must be after date_from');
+      }
+      return true;
+    })
+];
+
+const addReplyValidator = [
+  param('id').isInt().withMessage('Invalid feedback ID'),
+  body('reply_content')
+    .isLength({ min: 10, max: 2000 })
+    .withMessage('Reply content must be between 10 and 2000 characters')
+    .trim()
+    .escape(),
+  body('update_status')
+    .optional()
+    .isIn(['open', 'in_progress', 'resolved', 'closed'])
+    .withMessage('Invalid status value')
+];
+
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -81,5 +147,7 @@ module.exports = {
   createFeedbackValidator,
   getFeedbackValidator,
   updateFeedbackValidator,
+  getAllFeedbacksValidator,
+  addReplyValidator,
   validate
 };

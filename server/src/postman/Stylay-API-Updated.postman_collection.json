@@ -6600,6 +6600,220 @@
           }
         },
         {
+          "name": "List All Feedback - Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/feedbacks?page=1&limit=20&status=open&sort_by=created_at",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "feedbacks"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Items per page (default: 20, max: 100)"
+                },
+                {
+                  "key": "status",
+                  "value": "open",
+                  "description": "Filter by status: open, in_progress, resolved, closed"
+                },
+                {
+                  "key": "issue_type",
+                  "value": "",
+                  "description": "Filter by issue type: Order Not Delivered, Wrong Item Received, Payment Issue, Return/Refund Request, Account Issue, Technical Issue, Other"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "created_at",
+                  "description": "Sort by: created_at, status, issue_type"
+                },
+                {
+                  "key": "date_from",
+                  "value": "",
+                  "description": "Filter from date (ISO 8601 format)"
+                },
+                {
+                  "key": "date_to",
+                  "value": "",
+                  "description": "Filter to date (ISO 8601 format)"
+                }
+              ]
+            },
+            "description": "List all feedback with pagination and filtering (Admin only)"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/feedbacks?page=1&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "feedbacks"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"feedbacks\": [\n      {\n        \"id\": 1,\n        \"subject\": \"Order not delivered\",\n        \"order_number\": \"ORD-123-ABC\",\n        \"issue_type\": \"Order Not Delivered\",\n        \"description\": \"My order has not arrived after 10 days.\",\n        \"status\": \"open\",\n        \"user\": {\n          \"id\": 123,\n          \"name\": \"John Doe\",\n          \"email\": \"john@example.com\"\n        },\n        \"created_at\": \"2024-01-08T10:00:00.000Z\",\n        \"updated_at\": \"2024-01-08T10:00:00.000Z\"\n      }\n    ],\n    \"pagination\": {\n      \"total\": 100,\n      \"page\": 1,\n      \"limit\": 20,\n      \"pages\": 5\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Statistics - Admin",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/feedbacks/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "feedbacks", "stats"]
+            },
+            "description": "Get feedback statistics (Admin only)"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/feedbacks/stats",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "feedbacks", "stats"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"total_feedbacks\": 500,\n    \"by_status\": {\n      \"open\": 50,\n      \"in_progress\": 30,\n      \"resolved\": 350,\n      \"closed\": 70\n    },\n    \"by_issue_type\": {\n      \"Order Not Delivered\": 150,\n      \"Wrong Item Received\": 100,\n      \"Payment Issue\": 80,\n      \"Return/Refund Request\": 60,\n      \"Account Issue\": 40,\n      \"Technical Issue\": 50,\n      \"Other\": 20\n    },\n    \"open_vs_closed_ratio\": {\n      \"open\": 16,\n      \"closed\": 84,\n      \"percentage\": {\n        \"open\": 16,\n        \"closed\": 84\n      }\n    },\n    \"average_resolution_time_hours\": 24.5,\n    \"volume_by_date\": [\n      {\n        \"date\": \"2024-01-08\",\n        \"count\": 20\n      },\n      {\n        \"date\": \"2024-01-07\",\n        \"count\": 18\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Add Reply - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reply_content\": \"Thank you for your feedback. We are looking into this issue.\",\n  \"update_status\": \"in_progress\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/feedbacks/1/reply",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "feedbacks", "1", "reply"]
+            },
+            "description": "Add a reply to feedback and optionally update status (Admin only)"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reply_content\": \"Thank you for your feedback. We are looking into this issue.\",\n  \"update_status\": \"in_progress\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/admin/feedbacks/1/reply",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "v1", "admin", "feedbacks", "1", "reply"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Reply added successfully\",\n  \"data\": {\n    \"id\": 1,\n    \"replies\": [\n      {\n        \"admin_id\": 5,\n        \"content\": \"Thank you for your feedback. We are looking into this issue.\",\n        \"created_at\": \"2024-01-08T12:00:00.000Z\"\n      }\n    ],\n    \"status\": \"in_progress\",\n    \"updated_at\": \"2024-01-08T12:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
           "name": "Delete Feedback",
           "request": {
             "method": "DELETE",

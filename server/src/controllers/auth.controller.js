@@ -1221,6 +1221,9 @@ exports.refreshToken = async (req, res, next) => {
         // Validate refresh token and session
         const validation = await refreshTokenService.validateRefreshToken(refresh_token, session_id);
         
+        // FIX: Revoke the old refresh token BEFORE creating new one
+        await refreshTokenService.revokeRefreshToken(refresh_token);
+        
         // Generate new access token
         const newAccessToken = signToken(validation.userId);
         

@@ -26,7 +26,10 @@ export function useVendorApplications() {
     },
     keepPreviousData: true,
     onSuccess: (data) => {
-      queryClient.setQueryData(["vendor-applications", page, search, status], data);
+      queryClient.setQueryData(
+        ["vendor-applications", page, search, status],
+        data,
+      );
     },
   });
 
@@ -37,7 +40,11 @@ export function useVendorApplications() {
     queryClient.prefetchQuery({
       queryKey: ["vendor-applications", page + 1, search, status],
       queryFn: async () => {
-        const res = await getVendorApplications({ page: page + 1, search, status });
+        const res = await getVendorApplications({
+          page: page + 1,
+          search,
+          status,
+        });
         return res;
       },
     });
@@ -47,7 +54,11 @@ export function useVendorApplications() {
     queryClient.prefetchQuery({
       queryKey: ["vendor-applications", page - 1, search, status],
       queryFn: async () => {
-        const res = await getVendorApplications({ page: page - 1, search, status });
+        const res = await getVendorApplications({
+          page: page - 1,
+          search,
+          status,
+        });
         return res;
       },
     });

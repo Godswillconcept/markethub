@@ -5,7 +5,7 @@ import { getAllVendorsInput } from '../../../services/apiAdminProduct.js';
 
 export const useSelectVendor = (searchTerm = '') => {
     return useQuery({
-        queryKey: ['vendors', searchTerm],
+        queryKey: ['vendorSearch', searchTerm],
         queryFn: async () => {
             // Pass search term to API for server-side filtering
             const data = await getAllVendorsInput(searchTerm);

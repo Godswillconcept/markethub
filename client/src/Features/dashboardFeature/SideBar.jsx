@@ -34,7 +34,7 @@ const navigation = [
   },
   { to: "/settings/recent", label: "Recently Viewed", icon: FiClock },
   { to: "/settings/addresses", label: "Addresses", icon: FiMapPin },
-  { to: "/settings/followed", label: "Followed Vendors", icon: FiUsers },
+  { to: "/settings/followed", label: "Followed Designers", icon: FiUsers },
   { to: "/settings/wishlist", label: "Wishlist", icon: FiHeart },
   { to: "/settings/support", label: "Support", icon: FiHelpCircle },
 ];
@@ -50,7 +50,13 @@ function Sidebar({ isOpen, setIsOpen }) {
   const navItems = [
     ...navigation,
     ...(isVendor
-      ? [{ to: "/vendor/dashboard", label: "Vendor Dashboard", icon: FiUsers }]
+      ? [
+          {
+            to: "/vendor/dashboard",
+            label: "Designer Dashboard",
+            icon: FiUsers,
+          },
+        ]
       : []),
     ...(isAdmin
       ? [{ to: "/admin/dashboard", label: "Admin Dashboard", icon: FiShield }]

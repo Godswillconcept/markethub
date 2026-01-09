@@ -140,20 +140,14 @@ const createJournal = async (req, res) => {
     const tagCheck = await checkExistingTags(tags);
     // Handle uploaded files from middleware
     const uploadedImages = req.uploadedFiles || [];
-    // Convert uploaded files to the expected format
-    const uploadedImageObjects = uploadedImages.map(file => ({
-      url: file.url,
-      filename: file.filename,
-      originalname: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype
-    }));
-    // Merge uploaded images with any featured_images from request body
+    // Extract only URLs from uploaded files
+    const uploadedImageUrls = uploadedImages.map(file => file.url);
+    // Merge uploaded image URLs with any featured_images from request body
     const allFeaturedImages = [];
     if (featured_images && Array.isArray(featured_images)) {
       allFeaturedImages.push(...featured_images);
     }
-    allFeaturedImages.push(...uploadedImageObjects);
+    allFeaturedImages.push(...uploadedImageUrls);
     const journal = await Journal.create({
       title,
       content,
@@ -223,20 +217,14 @@ const updateJournal = async (req, res) => {
     }
     // Handle uploaded files from middleware
     const uploadedImages = req.uploadedFiles || [];
-    // Convert uploaded files to the expected format
-    const uploadedImageObjects = uploadedImages.map(file => ({
-      url: file.url,
-      filename: file.filename,
-      originalname: file.originalname,
-      size: file.size,
-      mimetype: file.mimetype
-    }));
-    // Merge uploaded images with any featured_images from request body
+    // Extract only URLs from uploaded files
+    const uploadedImageUrls = uploadedImages.map(file => file.url);
+    // Merge uploaded image URLs with any featured_images from request body
     let allFeaturedImages = [];
     if (featured_images && Array.isArray(featured_images)) {
       allFeaturedImages.push(...featured_images);
     }
-    allFeaturedImages.push(...uploadedImageObjects);
+    allFeaturedImages.push(...uploadedImageUrls);
     // Determine final featured images
     const finalFeaturedImages = allFeaturedImages.length > 0 ? allFeaturedImages : (featured_images === null ? null : journal.featured_images);
     // Update journal

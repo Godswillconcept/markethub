@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,10 +19,15 @@ function VendorProductDetail() {
   const productId = productFromState?.id || urlProductId;
 
   // Fetch analytics data using the hook
-  const { data: productAnalysis, isLoading, isError, error } =
-    useVendorProductAnalysis(productId);
+  const {
+    data: productAnalysis,
+    isLoading,
+    isError,
+    error,
+  } = useVendorProductAnalysis(productId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
   const {
     register,
     formState: { errors },
@@ -35,14 +40,27 @@ function VendorProductDetail() {
   const analytics = productAnalysis?.analytics;
   const reviewsData = analytics?.reviews;
 
+  console.log("product images VENDOR", product);
+  // Initialize selected image when product data is available
+  useEffect(() => {
+    if (product?.images && product.images.length > 0) {
+      // Set the first image as the default selected image
+      setSelectedImage(getImageUrl(product.images[0].image_url));
+    } else if (product?.thumbnail) {
+      // Fallback to thumbnail if no images array
+      setSelectedImage(getImageUrl(product.thumbnail));
+    }
+  }, [product]);
+
   // Format date - check both date_uploaded and created_at
-  const formattedDate = product?.date_uploaded || product?.created_at
-    ? new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }).format(new Date(product.date_uploaded || product.created_at))
-    : "";
+  const formattedDate =
+    product?.date_uploaded || product?.created_at
+      ? new Intl.DateTimeFormat("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        }).format(new Date(product.date_uploaded || product.created_at))
+      : "";
 
   // Show loading state
   if (isLoading) {
@@ -152,7 +170,12 @@ function VendorProductDetail() {
               <div className="h-full w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm lg:h-[395px] lg:w-[950px]">
                 <div className="aspect-[4/3] overflow-hidden">
                   <img
-                    src={getImageUrl(product.thumbnail) || "/placeholder.png"}
+                    key={selectedImage} // Add key to force re-render on change
+                    src={
+                      selectedImage ||
+                      getImageUrl(product.thumbnail) ||
+                      "/placeholder.png"
+                    }
                     alt={product.name}
                     className="h-full w-full object-cover"
                   />
@@ -161,10 +184,17 @@ function VendorProductDetail() {
 
               {/* Image Thumbnails */}
               <div className="grid grid-cols-3 gap-3 lg:flex lg:w-32 lg:flex-col">
-                {product.images?.slice(0, 3).map((image, index) => (
+                {product.images?.map((image, index) => (
                   <div
                     key={index}
-                    className="h-full w-full overflow-hidden rounded-lg border-black shadow-md transition-all lg:h-[124px] lg:w-[216px]"
+                    onClick={() =>
+                      setSelectedImage(getImageUrl(image.image_url))
+                    }
+                    className={`h-full w-full cursor-pointer overflow-hidden rounded-lg shadow-md transition-all hover:opacity-80 lg:h-[124px] lg:w-[216px] ${
+                      selectedImage === getImageUrl(image.image_url)
+                        ? "ring-2 ring-black"
+                        : "border border-gray-200"
+                    }`}
                   >
                     <img
                       src={getImageUrl(image.image_url)}
@@ -202,7 +232,9 @@ function VendorProductDetail() {
                     Category
                   </label>
                   <p className="text-sm font-semibold text-gray-900">
-                    {(product?.Category?.name || product?.category?.name) || "Uncategorized"}
+                    {product?.Category?.name ||
+                      product?.category?.name ||
+                      "Uncategorized"}
                   </p>
                 </div>
 

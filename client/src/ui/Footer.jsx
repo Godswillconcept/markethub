@@ -4,7 +4,6 @@ import {
   FaChevronRight,
   FaTwitter,
   FaEnvelope,
-
 } from "react-icons/fa";
 import { NavLink } from "react-router";
 import { useUser } from "../Features/authentication/useUser.js";
@@ -39,7 +38,7 @@ const footerData = {
       links: [
         { text: "Shipping Policy", href: "#" },
         { text: "Frequently asked", href: "#" },
-        { text: "Join Us as Vendors", href: "/vendor/apply" },
+        { text: "Join Us as Designer", href: "/vendor/apply" },
       ],
     },
     {
@@ -61,7 +60,7 @@ function Footer() {
   const filteredLinkColumns = linkColumns.map((column) => ({
     ...column,
     links: column.links.filter((link) => {
-      if (link.text === "Join Us as Vendors") {
+      if (link.text === "Join Us as Designer") {
         return hasRole(user, "customer");
       }
       return true;
@@ -74,23 +73,23 @@ function Footer() {
         {/* Left Section */}
         <div className="flex-1">
           {/* Logo */}
-         <NavLink to="/">
-           <img src={logo.src} alt={logo.alt} className="mb-6 h-20 w-auto" />
-         </NavLink>
+          <NavLink to="/">
+            <img src={logo.src} alt={logo.alt} className="mb-6 h-20 w-auto" />
+          </NavLink>
 
           {/* Socials */}
-            <div className="mb-6 flex space-x-4">
-              {socials.map((social, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  aria-label={social.label}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-black transition-colors hover:bg-neutral-300"
-                >
-                  <social.icon />
-                </button>
-              ))}
-            </div>
+          <div className="mb-6 flex space-x-4">
+            {socials.map((social, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={social.label}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-black transition-colors hover:bg-neutral-300"
+              >
+                <social.icon />
+              </button>
+            ))}
+          </div>
 
           {/* Newsletter */}
           <form className="relative flex max-w-sm">

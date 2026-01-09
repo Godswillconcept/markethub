@@ -54,11 +54,7 @@ function JournalDetail() {
     : [];
 
   // Format date
-  const formattedDate = formatDate(
-    blog.created_at,
-    { month: "long" },
-    "en-US"
-  );
+  const formattedDate = formatDate(blog.created_at, { month: "long" }, "en-US");
 
   // Split content into paragraphs
   const paragraphs = blog.content
@@ -212,11 +208,7 @@ function JournalDetail() {
             <p className="text-sm text-gray-500">
               Last updated:{" "}
               {blog.updated_at
-                ? formatDate(
-                    blog.updated_at,
-                    { month: "long" },
-                    "en-US"
-                  )
+                ? formatDate(blog.updated_at, { month: "long" }, "en-US")
                 : "N/A"}
             </p>
             <button className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800">

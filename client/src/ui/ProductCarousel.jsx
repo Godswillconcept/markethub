@@ -12,20 +12,21 @@ function ProductCarousel({
     md: 3,
     lg: 4,
     xl: 5,
-  }, newArrival = [], title = "" }) {
+  },
+  newArrival = [],
+  title = "",
+}) {
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
     align: "start",
     containScroll: "trimSnaps",
-    slidesToScroll: 5,
+    slidesToScroll: 2,
     breakpoints: {
       "(min-width: 1280px)": { slidesToScroll: 5 },
       "(min-width: 1024px)": { slidesToScroll: 4 },
       "(min-width: 768px)": { slidesToScroll: 3 },
-      "(min-width: 640px)": { slidesToScroll: 2 },
     },
   });
-
 
   const [prevBtnDisabled, setPrevBtnDisabled] = useState(true);
   const [nextBtnDisabled, setNextBtnDisabled] = useState(true);
@@ -57,9 +58,11 @@ function ProductCarousel({
         {/* Title / Item Count */}
         <div className="mb-6 text-center">
           {title}
-          {title === "New Arrivals" && <span className="text-xl font-semibold">
-            ({newArrival?.length})
-          </span>}
+          {title === "New Arrivals" && (
+            <span className="text-xl font-semibold">
+              ({newArrival?.length})
+            </span>
+          )}
         </div>
 
         {/* Embla Carousel Viewport */}
@@ -101,4 +104,3 @@ function ProductCarousel({
 }
 
 export default ProductCarousel;
-

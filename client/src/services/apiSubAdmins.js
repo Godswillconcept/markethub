@@ -1,18 +1,19 @@
 import { PAGE_SIZE } from "../utils/constants";
 import axiosInstance from "./axios";
 
+// Get all Sub-Admins
 export async function getSubAdmins({ page, limit = PAGE_SIZE }) {
   try {
     const { data } = await axiosInstance.get("/admin/subadmins", {
       params: { page, limit },
     });
-    // console.log("axios response", data.data);
     return data.data;
   } catch (error) {
     throw new Error(error.response?.data?.message || "Failed to get subadmins");
   }
 }
 
+// Get Sub-Admin Details by ID
 export async function getSubAdminDetails(id) {
   try {
     const { data } = await axiosInstance.get(`/admin/subadmins/${id}`);
@@ -24,6 +25,7 @@ export async function getSubAdminDetails(id) {
   }
 }
 
+// Create a new Sub-Admin
 export async function createSubAdmin(subAdminData) {
   try {
     const { data } = await axiosInstance.post("/admin/subadmins", subAdminData);
@@ -35,6 +37,7 @@ export async function createSubAdmin(subAdminData) {
   }
 }
 
+// Update a Sub-Admin
 export async function updateSubAdmin({ id, ...subAdminData }) {
   try {
     const { data } = await axiosInstance.patch(
@@ -49,6 +52,22 @@ export async function updateSubAdmin({ id, ...subAdminData }) {
   }
 }
 
+// update sub-admin permissions
+export async function updateSubAdminPermissions({ id, ...permissions }) {
+  try {
+    const { data } = await axiosInstance.patch(
+      `/admin/subadmins/${id}/permissions`,
+      permissions,
+    );
+    return data.data;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message || "Failed to update subadmin permissions",
+    );
+  }
+}
+
+// Deactivate Sub-Admin
 export async function deactivateSubAdmin(id) {
   try {
     // Assuming a patch request to update the status or a specific endpoint

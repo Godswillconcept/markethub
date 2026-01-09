@@ -10,7 +10,7 @@ function RandomVendor() {
     return (
       <div className="mx-auto hidden w-full px-4 py-10 lg:block">
         <div className="flex h-60 items-center justify-center">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-accent border-t-transparent"></div>
+          <div className="border-accent h-12 w-12 animate-spin rounded-full border-4 border-t-transparent"></div>
         </div>
       </div>
     );
@@ -19,38 +19,37 @@ function RandomVendor() {
   if (error || !dailyVendor) {
     return (
       <div className="mx-auto hidden w-full px-4 py-10 text-center lg:block">
-        <p className="text-red-500">Failed to load featured vendor. Please try again later.</p>
+        <p className="text-red-500">
+          Failed to load featured Designer. Please try again later.
+        </p>
       </div>
     );
   }
 
   // Safe destructuring after null check
   const {
-    User: {
-      first_name = '',
-      last_name = '',
-      profile_image,
-      country
-    } = {},
-    store: {
-      business_name,
-      description: bio
-    } = {}
+    User: { first_name = "", last_name = "", profile_image, country } = {},
+    store: { business_name, description: bio } = {},
   } = dailyVendor;
 
   // const { first_name = '', last_name = '', profile_image, country } = dailyVendor.User || {};
   // const { business_name, description: bio } = dailyVendor.store || {};
-  const displayName = `${first_name} ${last_name}`.trim() || 'Vendor';
+  const displayName = `${first_name} ${last_name}`.trim() || "Designer";
 
   return (
     <div className="mx-auto hidden w-full px-4 py-10 lg:block">
-      <h2 className="mb-8 text-center text-2xl font-bold text-gray-900">Vendor of the Day</h2>
+      <h2 className="mb-8 text-center text-2xl font-bold text-gray-900">
+        Designer of the Day
+      </h2>
 
       <div className="flex flex-col items-center gap-6 rounded-xl bg-white p-6 shadow-lg sm:flex-row">
         {/* Vendor Image */}
         <div className="flex-shrink-0 overflow-hidden rounded-xl">
           <img
-            src={getImageUrl(profile_image) || getPlaceholder(first_name, last_name)}
+            src={
+              getImageUrl(profile_image) ||
+              getPlaceholder(first_name, last_name)
+            }
             alt={displayName}
             className="h-60 w-80 rounded-xl border-4 border-white object-cover"
             onError={(e) => {
@@ -68,7 +67,7 @@ function RandomVendor() {
           </div>
 
           {bio && (
-            <p className="text-base leading-relaxed text-gray-600 line-clamp-4">
+            <p className="line-clamp-4 text-base leading-relaxed text-gray-600">
               {bio}
             </p>
           )}
@@ -76,7 +75,7 @@ function RandomVendor() {
           <div className="mt-2">
             <Link
               to={`/vendor/${dailyVendor.id}`}
-              className="inline-flex items-center text-lg font-semibold text-accent hover:underline"
+              className="text-accent inline-flex items-center text-lg font-semibold hover:underline"
             >
               View profile
               <svg
@@ -100,8 +99,9 @@ function RandomVendor() {
 }
 
 // Helper function to generate placeholder image
-function getPlaceholder(firstName = '', lastName = '') {
-  const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'U';
+function getPlaceholder(firstName = "", lastName = "") {
+  const initials =
+    `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "U";
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff&size=200`;
 }
 

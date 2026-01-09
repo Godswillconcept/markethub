@@ -42,6 +42,18 @@ export async function getVendorProductByOverview(productId) {
     }
 }
 
+// export async function getAdminProductAnalysis(productId) {
+//     try {
+//         const { data } = await axiosInstance.get(`/admin/products/${productId}/analytics`);
+
+//         console.log("Admin product detail api", data);
+
+//         return data.data;
+//     } catch (error) {
+//         throw new Error(error.response?.data?.message || "Failed to get product by id");
+//     }
+// }
+
 export async function followVendorList({ page, limit = PAGE_SIZE }) {
     try {
         const { data } = await axiosInstance.get("/vendors/user/following", {

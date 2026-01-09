@@ -17,7 +17,7 @@ const Header = () => {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
 
   const { user } = useUser();
-  console.log("logged in user", user)
+  console.log("logged in user", user);
 
   const { cartCount: cartItemCount } = useUnifiedCart();
 
@@ -27,7 +27,7 @@ const Header = () => {
       user,
       profileImage: user?.user?.profile_image || user?.profile_image,
       hasNestedUser: !!user?.user,
-      hasDirectUser: !!user?.profile_image
+      hasDirectUser: !!user?.profile_image,
     });
   }, [user]);
 
@@ -36,7 +36,7 @@ const Header = () => {
     { name: "Men", href: "/categories/men/products" },
     { name: "Women", href: "/categories/women/products" },
     { name: "Kiddies", href: "/categories/kiddies/products" },
-    { name: "Vendors", href: "/vendors" },
+    { name: "Designers", href: "/vendors" },
     { name: "Journal", href: "/journals" },
     // ...(hasRole(user, 'admin') ? [{ name: "Admin", href: "/admin-dashboard" }] : []),
     // ...(hasRole(user, 'vendor') ? [{ name: "Vendor Dashboard", href: "/vendor-dashboard" }] : []),
@@ -49,8 +49,6 @@ const Header = () => {
   const toggleSearch = () => {
     setIsSearchExpanded(!isSearchExpanded);
   };
-
-
 
   return (
     <>
@@ -80,9 +78,10 @@ const Header = () => {
                     key={item.name}
                     to={item.href}
                     className={({ isActive }) =>
-                      `px-3 py-2 text-sm font-medium transition-colors duration-200 hover:text-gray-600 ${isActive
-                        ? 'text-black font-semibold border-b-2 border-black'
-                        : 'text-gray-900'
+                      `px-3 py-2 text-sm font-medium transition-colors duration-200 hover:text-gray-600 ${
+                        isActive
+                          ? "border-b-2 border-black font-semibold text-black"
+                          : "text-gray-900"
                       }`
                     }
                   >
@@ -95,7 +94,7 @@ const Header = () => {
             {/* Right Section */}
             <div className="flex items-center space-x-4">
               {/* Desktop Search */}
-            <SearchBox className="hidden md:block w-64" />
+              <SearchBox className="hidden w-64 md:block" />
 
               {/* Mobile Search Icon */}
               <button
@@ -120,7 +119,7 @@ const Header = () => {
 
               {/* User Account Dropdown */}
               {user ? (
-                 <UserDropdown />
+                <UserDropdown />
               ) : (
                 <NavLink
                   to="/login"
@@ -134,7 +133,7 @@ const Header = () => {
 
           {/* Mobile Search Expanded */}
           {isSearchExpanded && (
-            <div className="pb-4 md:hidden px-4">
+            <div className="px-4 pb-4 md:hidden">
               <SearchBox
                 autoFocus
                 onProductSelect={() => setIsSearchExpanded(false)}
@@ -151,15 +150,17 @@ const Header = () => {
       >
         {/* Backdrop */}
         <div
-          className={`fixed inset-0 bg-black transition-opacity duration-300 ease-in-out ${isMobileMenuOpen ? "opacity-50" : "opacity-0"
-            }`}
+          className={`fixed inset-0 bg-black transition-opacity duration-300 ease-in-out ${
+            isMobileMenuOpen ? "opacity-50" : "opacity-0"
+          }`}
           onClick={toggleMobileMenu}
         />
 
         {/* Drawer */}
         <div
-          className={`fixed top-0 bottom-0 left-0 w-80 max-w-[85vw] transform bg-white shadow-xl transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-            }`}
+          className={`fixed top-0 bottom-0 left-0 w-80 max-w-[85vw] transform bg-white shadow-xl transition-transform duration-300 ease-in-out ${
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
         >
           {/* Drawer Header */}
           <div className="flex items-center justify-between border-b border-gray-200 p-4">
@@ -180,7 +181,8 @@ const Header = () => {
                 key={item.name}
                 to={item.href}
                 className={({ isActive }) =>
-                  `block rounded-md px-4 py-3 text-base font-medium transition-colors duration-200 hover:bg-gray-100 ${isActive ? 'text-black font-semibold' : 'text-gray-900'
+                  `block rounded-md px-4 py-3 text-base font-medium transition-colors duration-200 hover:bg-gray-100 ${
+                    isActive ? "font-semibold text-black" : "text-gray-900"
                   }`
                 }
                 onClick={toggleMobileMenu}

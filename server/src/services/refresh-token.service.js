@@ -108,7 +108,18 @@ class RefreshTokenService {
         device_info: deviceInfo,
         ip_address: deviceInfo.ip,
         user_agent: deviceInfo.userAgent,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        is_active: true // Explicitly set is_active to true
+      });
+      
+      // DIAGNOSTIC LOG: Verify token was created with is_active: true
+      logger.info(`Refresh token created successfully`, {
+        userId,
+        tokenId: refreshRecord.id,
+        tokenHash,
+        sessionId: session.id,
+        is_active: refreshRecord.is_active,
+        expiresAt: refreshRecord.expires_at
       });
       return {
         token: refreshToken,
@@ -173,16 +184,35 @@ class RefreshTokenService {
   async validateRefreshToken(refreshToken, sessionId) {
     try {
       const tokenHash = RefreshToken.generateTokenHash(refreshToken);
+      
+      // DIAGNOSTIC LOG: Log token hash being validated
+      logger.info(`Validating refresh token`, {
+        tokenHash,
+        sessionId
+      });
+      
       // Check if token is blacklisted
       const isBlacklisted = await tokenBlacklistService.isTokenBlacklisted(refreshToken);
       if (isBlacklisted) {
+        logger.warn(`Token is blacklisted`, { tokenHash });
         throw new Error('Refresh token has been revoked');
       }
       // Find the refresh token record
       const refreshRecord = await RefreshToken.findByTokenHash(tokenHash);
       if (!refreshRecord) {
+        logger.warn(`Token not found in database`, { tokenHash });
         throw new Error('Invalid refresh token');
       }
+      
+      // DIAGNOSTIC LOG: Log token record details
+      logger.info(`Token record found`, {
+        tokenId: refreshRecord.id,
+        userId: refreshRecord.user_id,
+        is_active: refreshRecord.is_active,
+        expires_at: refreshRecord.expires_at,
+        isExpired: refreshRecord.isExpired()
+      });
+      
       // Check if token is expired
       if (refreshRecord.isExpired()) {
         await refreshRecord.destroy();
@@ -190,6 +220,12 @@ class RefreshTokenService {
       }
       // Check if token is active
       if (!refreshRecord.is_active) {
+        logger.error(`Token is not active - THIS IS THE ERROR`, {
+          tokenId: refreshRecord.id,
+          userId: refreshRecord.user_id,
+          is_active: refreshRecord.is_active,
+          expires_at: refreshRecord.expires_at
+        });
         throw new Error('Refresh token is not active');
       }
       // Validate session

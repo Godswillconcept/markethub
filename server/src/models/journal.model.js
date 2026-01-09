@@ -22,13 +22,24 @@ module.exports = (sequelize, DataTypes) => {
     // Instance method to get featured images URLs
     getFeaturedImageUrls() {
       if (!this.featured_images) return [];
-      return this.featured_images.map(img => img.url);
+      return this.featured_images.map(img => {
+        // Handle both string URLs and object formats
+        if (typeof img === 'string') {
+          return img;
+        }
+        return img.url;
+      });
     }
 
     // Instance method to get primary featured image
     getPrimaryFeaturedImage() {
       if (!this.featured_images || this.featured_images.length === 0) return null;
-      return this.featured_images[0].url;
+      const firstImage = this.featured_images[0];
+      // Handle both string URLs and object formats
+      if (typeof firstImage === 'string') {
+        return firstImage;
+      }
+      return firstImage.url;
     }
   }
 

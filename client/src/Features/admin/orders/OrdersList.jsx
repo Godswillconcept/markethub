@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from "react";
 import AdminFilterBar from "../AdminFilterBar.jsx";
 import { useAdminOrders } from "./useAdminOrders.js";
 import { LoadingSpinner } from "../../../ui/Loading/LoadingSpinner.jsx";
-import { formatDateUS } from "../../../utils/helper.js";
+import { formatDateUS, safeRender } from "../../../utils/helper.js";
 
 const headers = [
   { key: "ord", label: "ORD NO", className: "w-16" },
@@ -195,7 +195,7 @@ const OrdersList = () => {
         to={`/admin/orders/${order.id}`}
         className="text-blue-600 hover:text-blue-800 hover:underline"
       >
-        {order.user.first_name + " " + order.user.last_name}
+        {safeRender(order.user.first_name)} {safeRender(order.user.last_name)}
       </Link>
     </td>,
     <td key="address" className="px-6 py-4 text-sm text-gray-500">
@@ -218,7 +218,10 @@ const OrdersList = () => {
           order.order_status,
         )}`}
       >
-        <span className={`mr-1.5 h-2 w-2 rounded-full ${getStatusDotClass(order.order_status)}`} aria-hidden="true"></span>
+        <span
+          className={`mr-1.5 h-2 w-2 rounded-full ${getStatusDotClass(order.order_status)}`}
+          aria-hidden="true"
+        ></span>
         {order.order_status}
       </span>
     </td>,

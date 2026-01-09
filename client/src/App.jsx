@@ -58,7 +58,6 @@ import EditAddressPage from "./Features/dashboardFeature/EditAddressPage.jsx";
 // import SearchMain from "./Features/productFeatures/SearchMain";
 // import SearchLayout from "./layouts/SearchLayout";
 
-
 // Admin Imports (These are still imported directly to be used inside AdminLayout route children,
 // to fully lazy load admin children they should also be lazy loaded, but starting with the Layout)
 import AdminDashboard from "./Features/admin/dashboard/AdminDashboard.jsx";
@@ -78,16 +77,21 @@ import Earnings from "./Features/admin/adminVendorEarnings/Earnings.jsx";
 import Feedback from "./Features/admin/FeedBack.jsx";
 import FeedbackDetail from "./Features/admin/FeedbackDetail.jsx";
 import AdminNotification from "./Features/admin/AdminNotification.jsx";
-import SubAdmin from "./Features/admin/SubAdmin.jsx";
+import SubAdmin from "./Features/admin/subAdmin/SubAdmin.jsx";
 import SubAdminDetails from "./Features/admin/subAdmin/SubAdminDetails.jsx";
 import AdminJournal from "./Features/admin/AdminJournal.jsx";
+import AdminJournalDetail from "./Features/admin/AdminJournalDetail.jsx";
 import JournalDetailPage from "./pages/JournalDetailPage.jsx";
 import NotFoundPage from "./pages/NotFoundPage.jsx";
 
 // Lazy Loaded Components
-const AuthLayout = lazy(() => import("./Features/authentication/AuthLayout.jsx"));
+const AuthLayout = lazy(
+  () => import("./Features/authentication/AuthLayout.jsx"),
+);
 const AdminLayout = lazy(() => import("./Features/admin/AdminLayout.jsx"));
-const VendorDashboardPage = lazy(() => import("./pages/VendorDashboardPage.jsx"));
+const VendorDashboardPage = lazy(
+  () => import("./pages/VendorDashboardPage.jsx"),
+);
 const VendorDashboard = lazy(
   () => import("./Features/vendorFeature/VendorDashboard.jsx"),
 );
@@ -107,188 +111,213 @@ function App() {
       <BrowserRouter>
         <AuthProvider>
           <CartProvider>
-          <Suspense fallback={<Spinner />}>
-            <Routes>
-              {/* index/landing page */}
-              <Route index element={<LandingPage />} />
-              {/* authentication pages Start */}
-              <Route element={<AuthLayout />}>
-                <Route path="signup" element={<SignupPage />} />
-                <Route path="login" element={<LoginPage />} />
-                <Route
-                  path="forgot-password"
-                  element={<ForgotPasswordPage />}
-                />
-                <Route path="check-email" element={<CheckEmailPage />} />
-                <Route
-                  path="reset-password/:reset_token"
-                  element={<SetUpPasswordPage />}
-                />
-                <Route
-                  path="verify-email"
-                  element={<EmailVerification />}
-                />
-              </Route>
-              {/* authentication pages End */}
-              {/* Admin Routes Start - Protected with admin role */}
-              <Route
-                element={
-                  <ProtectedRoute requiredRole="admin">
-                    <AdminLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route
-                  path="/admin/applications"
-                  element={<VendorsApplication />}
-                />
-                <Route
-                  path="/admin/applications/:id"
-                  element={<ApplicantDetail />}
-                />
-                <Route path="/admin/vendors" element={<VendorList />} />
-                 <Route path="/admin/users" element={<UsersList />} />
-                 <Route path="/admin/users/:id" element={<AdminUsersDetailPage />} />
-                <Route
-                  path="/admin/vendors/:id"
-                  element={<VendorDetailPage />}
-                />
-                <Route
-                  path="/admin/vendor-products"
-                  element={<VendorProducts />}
-                />
-                <Route
-                  path="/admin/vendor-products/:productId"
-                  element={<AdminVendorProductDetail />}
-                />
-                <Route path="/admin/orders" element={<OrdersList />} />
-                <Route path="/admin/orders/:id" element={<OrderDetail />} />
-                <Route path="/admin/earnings" element={<Earnings />} />
-                <Route path="/admin/feedbacks" element={<Feedback />} />
-                <Route
-                  path="/admin/feedback/:id"
-                  element={<FeedbackDetail />}
-                />
-                <Route
-                  path="/admin/notifications"
-                  element={<AdminNotification />}
-                />
-                <Route path="/admin/sub-admins" element={<SubAdmin />} />
-                <Route
-                  path="/admin/sub-admins/:id"
-                  element={<SubAdminDetails />}
-                />
-                <Route path="/admin/journals" element={<AdminJournal />} />
-                <Route
-                  path="/admin/collections"
-                  element={<AdminProductCollection />}
-                />
-                <Route
-                  path="/admin/collections/:id"
-                  element={<CollectionDetail />}
-                />
-              </Route>
-              {/* Admin Routes End - Protected with admin role */}
-              {/* Product pages with MainLayout Start*/}
-              <Route element={<MainLayout />}>
-                <Route path="/products" element={<ProductsPage />} />
+            <Suspense fallback={<Spinner />}>
+              <Routes>
+                {/* index/landing page */}
+                <Route index element={<LandingPage />} />
+                {/* authentication pages Start */}
+                <Route element={<AuthLayout />}>
+                  <Route path="signup" element={<SignupPage />} />
+                  <Route path="login" element={<LoginPage />} />
+                  <Route
+                    path="forgot-password"
+                    element={<ForgotPasswordPage />}
+                  />
+                  <Route path="check-email" element={<CheckEmailPage />} />
+                  <Route
+                    path="reset-password/:reset_token"
+                    element={<SetUpPasswordPage />}
+                  />
+                  <Route path="verify-email" element={<EmailVerification />} />
+                </Route>
+                {/* authentication pages End */}
 
-                {/* Category routes with nested product routes */}
-                <Route path="/categories">
-                  <Route path=":categoryId">
-                    <Route index element={<CategoryPage />} />
-                    <Route
-                      path="products"
-                      element={<CategoryPage showAllProducts />}
-                    />
+                {/* Admin Routes Start - Protected with admin role */}
+                <Route
+                  element={
+                    <ProtectedRoute requiredRole="admin">
+                      <AdminLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                  <Route
+                    path="/admin/applications"
+                    element={<VendorsApplication />}
+                  />
+                  <Route
+                    path="/admin/applications/:id"
+                    element={<ApplicantDetail />}
+                  />
+                  <Route path="/admin/vendors" element={<VendorList />} />
+                  <Route path="/admin/users" element={<UsersList />} />
+                  <Route
+                    path="/admin/users/:id"
+                    element={<AdminUsersDetailPage />}
+                  />
+                  <Route
+                    path="/admin/vendors/:id"
+                    element={<VendorDetailPage />}
+                  />
+                  <Route
+                    path="/admin/vendor-products"
+                    element={<VendorProducts />}
+                  />
+                  <Route
+                    path="/admin/vendor-products/:productId"
+                    element={<AdminVendorProductDetail />}
+                  />
+                  <Route path="/admin/orders" element={<OrdersList />} />
+                  <Route path="/admin/orders/:id" element={<OrderDetail />} />
+                  <Route path="/admin/earnings" element={<Earnings />} />
+                  <Route path="/admin/feedbacks" element={<Feedback />} />
+                  <Route
+                    path="/admin/feedback/:id"
+                    element={<FeedbackDetail />}
+                  />
+                  <Route
+                    path="/admin/notifications"
+                    element={<AdminNotification />}
+                  />
+                  <Route path="/admin/sub-admins" element={<SubAdmin />} />
+                  <Route
+                    path="/admin/sub-admins/:id"
+                    element={<SubAdminDetails />}
+                  />
+                  <Route path="/admin/journals" element={<AdminJournal />} />
+                  <Route
+                    path="/admin/journals/:journalId"
+                    element={<AdminJournalDetail />}
+                  />
+                  <Route
+                    path="/admin/collections"
+                    element={<AdminProductCollection />}
+                  />
+                  <Route
+                    path="/admin/collections/:id"
+                    element={<CollectionDetail />}
+                  />
+                </Route>
+                {/* Admin Routes End - Protected with admin role */}
+
+                {/* Product pages with MainLayout Start*/}
+                <Route element={<MainLayout />}>
+                  <Route path="/products" element={<ProductsPage />} />
+
+                  {/* Category routes with nested product routes */}
+                  <Route path="/categories">
+                    <Route path=":categoryId">
+                      <Route index element={<CategoryPage />} />
+                      <Route
+                        path="products"
+                        element={<CategoryPage showAllProducts />}
+                      />
+                    </Route>
                   </Route>
                 </Route>
-              </Route>
-              {/* Product pages with MainLayout End */}
-              {/* Other public pages Start*/}
-              <Route path="/products/:slug" element={<ProductDetailPage />} />
-              <Route path="/landing" element={<LandingPage />} />
-              <Route path="/journals" element={<JournalPage />} />
-              <Route path="/journals/:slug" element={<JournalDetailPage />} />
-              <Route path="/vendor/apply" element={<VendorFormPage />} />
-              <Route path="/vendors" element={<VendorPage />} />
-              <Route path="/vendor/:vendorId" element={<VendorDetailsPage />} />
-              {/* cart pages */}
-              <Route path="/cart" element={<CartPage />}>
-                <Route index element={<Cart />} />
-                <Route path="summary" element={<CartSummary />} />
-                <Route path="payment" element={<PaymentSummary />} />
-                <Route path="verify" element={<PaymentVerificationPage />} />
-                <Route path="verify/:reference" element={<PaymentVerificationPage />} />
-              </Route>
-              <Route path="/payment/verify" element={<PaymentVerificationPage />} />
-              <Route path="/payment/verify/:reference" element={<PaymentVerificationPage />} />
-              <Route path="/feedback" element={<Feedback />} />
-              {/* Other public pages End*/}
-              {/* Vendor Dashboard - Protected with vendor role Start */}
-              <Route
-                path="/vendor/dashboard"
-                element={
-                  <ProtectedRoute requiredRole="vendor">
-                    <VendorDashboardPage />
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<VendorDashboard />} />
-
-                {/* Product routes */}
-                <Route path="products">
-                  <Route index element={<VendorDashboard />} />
-                  <Route path=":productId" element={<VendorProductDetail />} />
-                </Route>
-
-                {/* Earnings */}
-                <Route path="earnings" element={<VendorEarningPage />} />
-
-                {/* Profile */}
-                <Route path="profile" element={<VendorProfile />} />
-              </Route>
-              {/* Vendor Dashboard - Protected with vendor role End */}
-              {/* Dashboard - Protected for authenticated users Start */}
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <DashboardLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="notifications" element={<Notification />} />
-                <Route path="password" element={<PasswordPage />} />
-
-                {/* Order routes - specific before general */}
-                <Route path="orders/:orderId" element={<OrderDetailPage />} />
-                <Route path="orders" element={<OrderPage />} />
-
-                <Route path="pending-reviews">
-                  <Route index element={<PendingReviewsPage />} />
-                  <Route path=":productId" element={<PendingRateReviewsPage />} />
-                </Route>
-
-                <Route path="recent" element={<RecentPage />} />
-                <Route path="addresses" element={<AddressesPage />} />
-                <Route path="addresses/new" element={<NewAddressPage />} />
+                {/* Product pages with MainLayout End */}
+                {/* Other public pages Start*/}
+                <Route path="/products/:slug" element={<ProductDetailPage />} />
+                <Route path="/landing" element={<LandingPage />} />
+                <Route path="/journals" element={<JournalPage />} />
+                <Route path="/journals/:slug" element={<JournalDetailPage />} />
+                <Route path="/vendor/apply" element={<VendorFormPage />} />
+                <Route path="/vendors" element={<VendorPage />} />
                 <Route
-                  path="addresses/edit/:id"
-                  element={<EditAddressPage />}
+                  path="/vendor/:vendorId"
+                  element={<VendorDetailsPage />}
                 />
-                <Route path="followed" element={<FollowedPage />} />
-                <Route path="wishlist" element={<WishListPage />} />
-                <Route path="support" element={<SupportPage />} />
-                <Route index element={<ProfilePage />} />
-              </Route>
-              {/* Dashboard - Protected for authenticated users End */}
-              {/* Not Found Route */}
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Suspense>
+                {/* cart pages */}
+                <Route path="/cart" element={<CartPage />}>
+                  <Route index element={<Cart />} />
+                  <Route path="summary" element={<CartSummary />} />
+                  <Route path="payment" element={<PaymentSummary />} />
+                  <Route path="verify" element={<PaymentVerificationPage />} />
+                  <Route
+                    path="verify/:reference"
+                    element={<PaymentVerificationPage />}
+                  />
+                </Route>
+                <Route
+                  path="/payment/verify"
+                  element={<PaymentVerificationPage />}
+                />
+                <Route
+                  path="/payment/verify/:reference"
+                  element={<PaymentVerificationPage />}
+                />
+                <Route path="/feedback" element={<Feedback />} />
+                {/* Other public pages End*/}
+                {/* Vendor Dashboard - Protected with vendor role Start */}
+                <Route
+                  path="/vendor/dashboard"
+                  element={
+                    <ProtectedRoute requiredRole="vendor">
+                      <VendorDashboardPage />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<VendorDashboard />} />
+
+                  {/* Product routes */}
+                  <Route path="products">
+                    <Route index element={<VendorDashboard />} />
+                    <Route
+                      path=":productId"
+                      element={<VendorProductDetail />}
+                    />
+                  </Route>
+
+                  {/* Earnings */}
+                  <Route path="earnings" element={<VendorEarningPage />} />
+
+                  {/* Profile */}
+                  <Route path="profile" element={<VendorProfile />} />
+                </Route>
+                {/* Vendor Dashboard - Protected with vendor role End */}
+
+                {/* Dashboard - Protected for authenticated users Start */}
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardLayout />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="profile" element={<ProfilePage />} />
+                  <Route path="notifications" element={<Notification />} />
+                  <Route path="password" element={<PasswordPage />} />
+
+                  {/* Order routes - specific before general */}
+                  <Route path="orders/:orderId" element={<OrderDetailPage />} />
+                  <Route path="orders" element={<OrderPage />} />
+
+                  <Route path="pending-reviews">
+                    <Route index element={<PendingReviewsPage />} />
+                    <Route
+                      path=":productId"
+                      element={<PendingRateReviewsPage />}
+                    />
+                  </Route>
+
+                  <Route path="recent" element={<RecentPage />} />
+                  <Route path="addresses" element={<AddressesPage />} />
+                  <Route path="addresses/new" element={<NewAddressPage />} />
+                  <Route
+                    path="addresses/edit/:id"
+                    element={<EditAddressPage />}
+                  />
+                  <Route path="followed" element={<FollowedPage />} />
+                  <Route path="wishlist" element={<WishListPage />} />
+                  <Route path="support" element={<SupportPage />} />
+                  <Route index element={<ProfilePage />} />
+                </Route>
+                {/* Dashboard - Protected for authenticated users End */}
+                {/* Not Found Route */}
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
           </CartProvider>
         </AuthProvider>
       </BrowserRouter>
@@ -300,14 +329,30 @@ function App() {
         toastOptions={{
           success: {
             duration: 3000,
+            style: {
+              backgroundColor: "#22c55e", // green-500
+              color: "#fff",
+            },
+            iconTheme: {
+              primary: "#fff",
+              secondary: "#22c55e",
+            },
           },
           error: {
             duration: 5000,
+            style: {
+              backgroundColor: "#ef4444", // red-500
+              color: "#fff",
+            },
+            iconTheme: {
+              primary: "#fff",
+              secondary: "#ef4444",
+            },
           },
           style: {
             fontSize: "16px",
             maxWidth: "500px",
-            padding: "16px 24px",
+            padding: "10px 18px",
             backgroundColor: "var(--color-grey-0)",
             color: "var(--color-grey-700)",
           },

@@ -1,7 +1,7 @@
-
 import { useState, useMemo } from "react";
 import { useRecentOrders } from "./useRecentOrders.js";
 import { getImageUrl } from "../../../utils/imageUtil.js";
+import { safeRender } from "../../../utils/helper.js";
 
 export default function RecentOrders() {
   const { recentOrders = [], isLoading, error } = useRecentOrders();
@@ -31,10 +31,14 @@ export default function RecentOrders() {
     if (searchQuery) {
       filtered = filtered.filter(
         (o) =>
-          o.user?.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          o.user?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          o.user?.first_name
+            ?.toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          o.user?.last_name
+            ?.toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
           o.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          o.id?.toString().includes(searchQuery)
+          o.id?.toString().includes(searchQuery),
       );
     }
 
@@ -50,15 +54,19 @@ export default function RecentOrders() {
   }, [ordersWithProducts, sortBy, searchQuery]);
 
   if (isLoading)
-    return <p className="text-center text-gray-500">Loading recent orders...</p>;
+    return (
+      <p className="text-center text-gray-500">Loading recent orders...</p>
+    );
   if (error)
-    return <p className="text-center text-red-500">Failed to load recent orders.</p>;
+    return (
+      <p className="text-center text-red-500">Failed to load recent orders.</p>
+    );
 
   // Pagination logic
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
   const paginatedOrders = filteredOrders.slice(
     (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    currentPage * itemsPerPage,
   );
 
   const getStatusStyle = (status) => {
@@ -147,13 +155,15 @@ export default function RecentOrders() {
                         className="h-8 w-12 rounded object-cover"
                       />
                     </td>
-                    <td className="py-3">{r.title}</td>
+                    <td className="py-3">{safeRender(r.title)}</td>
                     <td className="py-3">{r.qty}</td>
-                    <td className="py-3">₦{r.total_amount?.toLocaleString() || "0"}</td>
+                    <td className="py-3">
+                      ₦{r.total_amount?.toLocaleString() || "0"}
+                    </td>
                     <td className="py-3">
                       <span
                         className={`rounded-full px-3 py-1 text-xs ${getStatusStyle(
-                          r.order_status || "pending"
+                          r.order_status || "pending",
                         )}`}
                       >
                         {r.order_status || "Pending"}
@@ -199,7 +209,7 @@ export default function RecentOrders() {
               setItemsPerPage(parseInt(e.target.value));
               setCurrentPage(1);
             }}
-            className="form-select border rounded px-2 py-1"
+            className="form-select rounded border px-2 py-1"
           >
             <option>5</option>
             <option>10</option>

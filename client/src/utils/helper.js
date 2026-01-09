@@ -32,7 +32,14 @@ export function getRandomVendor(items) {
  * @param {string} locale - Locale to use for formatting (default: "en-NG")
  * @returns {string} Formatted date string
  */
-export function formatDate(dateInput, options = {}, locale = "en-NG") {
+
+/**
+ * Formats a date string to a human-readable format
+ * @param {string|Date} dateInput - Date string or Date object
+ * @param {object} options - Intl.DateTimeFormat options
+ * @returns {string} Formatted date string
+ */
+export function formatDate(dateInput, options = {}) {
   if (!dateInput) return "—";
 
   try {
@@ -46,26 +53,89 @@ export function formatDate(dateInput, options = {}, locale = "en-NG") {
       ...options,
     };
 
-    return new Intl.DateTimeFormat(locale, defaultOptions).format(date);
+    return new Intl.DateTimeFormat("en-NG", defaultOptions).format(date);
+  } catch {
+    return dateInput; // Return original on error
+  }
+}
+
+
+/**
+ * Formats a date string to a human-readable format (GB locale)
+ * @param {string|Date} dateInput - Date string or Date object
+ * @returns {string} Formatted date string
+ */
+export function formatDateGB(dateInput) {
+  if (!dateInput) return "—";
+
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return dateInput; // Return original if invalid
+
+    const options = {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    };
+
+    return new Intl.DateTimeFormat("en-GB", options).format(date);
   } catch {
     return dateInput; // Return original on error
   }
 }
 
 /**
- * Formats a date string to US English format (Jan 1, 2023)
+ * Formats a date string to a human-readable format (US locale)
  * @param {string|Date} dateInput - Date string or Date object
- * @returns {string} Formatted date string in US English format
+ * @returns {string} Formatted date string
  */
 export function formatDateUS(dateInput) {
-  return formatDate(dateInput, {}, "en-US");
+  if (!dateInput) return "—";
+
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return dateInput; // Return original if invalid
+
+    const options = {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+
+    return new Intl.DateTimeFormat("en-US", options).format(date);
+  } catch {
+    return dateInput; // Return original on error
+  }
 }
 
 /**
- * Formats a date string to British English format (1 Jan 2023)
- * @param {string|Date} dateInput - Date string or Date object
- * @returns {string} Formatted date string in British English format
+ * Safely renders a value, handling potential object children that would crash React
+ * @param {any} value - The value to render
+ * @param {string} fallback - Fallback if value is null/undefined
+ * @returns {string|any} Safe rendering value
  */
-export function formatDateGB(dateInput) {
-  return formatDate(dateInput, { day: "2-digit", month: "short", year: "numeric" }, "en-GB");
+export function safeRender(value, fallback = "") {
+  if (value === null || value === undefined) return fallback;
+
+  // If it's a primitive (string, number, boolean), it's safe
+  if (typeof value !== "object") return value;
+
+  // If it's an array, React can handle it if its elements are safe
+  if (Array.isArray(value)) return value;
+
+  // It's a non-null object, which will crash React if rendered directly
+  // Try to find a meaningful string property
+  if (value.business_name) return value.business_name;
+  if (value.name) return value.name;
+  if (value.filename) return value.filename;
+  if (value.originalname) return value.originalname;
+  if (value.url) return value.url;
+  if (value.title) return value.title;
+
+  // Fallback to JSON stringification for debugging/visibility
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[Object]";
+  }
 }

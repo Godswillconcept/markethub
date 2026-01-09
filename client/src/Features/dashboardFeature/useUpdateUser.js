@@ -98,10 +98,10 @@ export function useUpdateUser() {
         mutationFn: updateUserApi,
         onMutate: async (newUserData) => {
             // Cancel outgoing refetches to prevent overwriting optimistic update
-            await queryClient.cancelQueries({ queryKey: ["user"] });
+            await queryClient.cancelQueries({ queryKey: ["currentUser"] });
 
             // Snapshot the previous value
-            const previousUser = queryClient.getQueryData(["user"]);
+            const previousUser = queryClient.getQueryData(["currentUser"]);
 
             // Optimistically update the cache
             // Preserve existing profile_image if not being updated
@@ -112,7 +112,7 @@ export function useUpdateUser() {
                 profile_image: newUserData.profile_image || previousUser?.profile_image
             };
 
-            queryClient.setQueryData(["user"], optimisticUpdate);
+            queryClient.setQueryData(["currentUser"], optimisticUpdate);
 
             // Return context with previous value
             return { previousUser };
@@ -121,7 +121,7 @@ export function useUpdateUser() {
             console.log("✅ Update successful, API response:", data);
 
             // Get the complete user data from cache
-            const currentCache = queryClient.getQueryData(["user"]);
+            const currentCache = queryClient.getQueryData(["currentUser"]);
 
             // Merge API response with current cache to ensure we don't lose any fields
             // Most importantly, preserve the profile_image if the API doesn't return it
@@ -135,7 +135,7 @@ export function useUpdateUser() {
             console.log("📦 Merged user data:", mergedData);
 
             // Update React Query cache with merged data
-            queryClient.setQueryData(["user"], mergedData);
+            queryClient.setQueryData(["currentUser"], mergedData);
 
             toast.success("Profile updated successfully");
         },
@@ -144,14 +144,14 @@ export function useUpdateUser() {
 
             // Rollback to previous value on error
             if (context?.previousUser) {
-                queryClient.setQueryData(["user"], context.previousUser);
+                queryClient.setQueryData(["currentUser"], context.previousUser);
             }
 
             toast.error(error.message || "Failed to update profile");
         },
         onSettled: () => {
             // Always refetch after error or success to ensure cache is in sync
-            queryClient.invalidateQueries({ queryKey: ["user"] });
+            queryClient.invalidateQueries({ queryKey: ["currentUser"] });
         },
     });
 

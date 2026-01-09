@@ -12,7 +12,7 @@ import { useAdminProductView } from "./useAdminProductDetail.js";
 import AdminProductStatsCard from "./AdminProductStatsCard.jsx";
 import { useProductAnalysis } from "./useProductAnalysis.js";
 import { formatCurrency } from "../../../utils/formatCurrency.js";
-import { formatDate } from "../../../utils/helper.js";
+import { formatDate, safeRender } from "../../../utils/helper.js";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import AdminCreateProduct from "./AdminCreateProduct.jsx";
@@ -46,18 +46,19 @@ const AdminVendorProductDetail = () => {
   } = product || {};
 
   // Log for debugging
-  console.log('Product object keys:', Object.keys(product));
-  console.log('Product data:', JSON.stringify(product, null, 2));
-  console.log('Category:', category);
-  console.log('Created at:', created_at);
-  const { productAnalysis = {}, isLoading: isLoadingAnalysis } = useProductAnalysis(productId);
+  console.log("Product object keys:", Object.keys(product));
+  console.log("Product data:", JSON.stringify(product, null, 2));
+  console.log("Category:", category);
+  console.log("Created at:", created_at);
+  const { productAnalysis = {}, isLoading: isLoadingAnalysis } =
+    useProductAnalysis(productId);
   const { analytics, product: productStats } = productAnalysis || {};
-  
+
   // Get stock from analytics or default to 0
   const stockQuantity = productStats?.stock || 0;
-  
+
   // Get status from product or analytics
-  const productStatus = productStats?.status || status || 'unknown';
+  const productStatus = productStats?.status || status || "unknown";
 
   const colorValues = variants
     ?.filter((variant) => variant.name === "color")
@@ -115,7 +116,7 @@ const AdminVendorProductDetail = () => {
                 </Link>
                 <span className="mx-2">/</span>
                 <Link to={`#`} className="hover:underline">
-                  {category?.name}
+                  {safeRender(category?.name || category)}
                 </Link>
               </nav>
             </div>
@@ -136,10 +137,13 @@ const AdminVendorProductDetail = () => {
                 <TrashIcon className="h-5 w-5" />
                 <span>Remove Product</span>
               </button>
-              <button disabled className="flex items-center space-x-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-              <TagIcon className="h-5 w-5" />
-              <span>Tag/Change Vendor</span>
-            </button>
+              <button
+                disabled
+                className="flex items-center space-x-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <TagIcon className="h-5 w-5" />
+                <span>Tag/Change Vendor</span>
+              </button>
             </div>
           </div>
         </div>
@@ -188,7 +192,11 @@ const AdminVendorProductDetail = () => {
                     <span className="font-semibold text-gray-700">
                       Vendor:{" "}
                     </span>
-                    <span className="text-black">{vendor?.store?.business_name || 'N/A'}</span>
+                    <span className="text-black">
+                      {safeRender(
+                        vendor?.store?.business_name || vendor?.name || vendor,
+                      )}
+                    </span>
                   </div>
                   <span className="inline-flex items-center rounded-lg bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
                     {productStatus}
@@ -198,19 +206,29 @@ const AdminVendorProductDetail = () => {
                   <span className="font-semibold text-gray-700">
                     Category:{" "}
                   </span>
-                  <span className="text-black">{category?.name || category || 'Uncategorized'}</span>
+                  <span className="text-black">
+                    {safeRender(category?.name || category, "Uncategorized")}
+                  </span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">
                     Date Added:{" "}
                   </span>
                   <span className="text-gray-900">
-                    {date_uploaded ? formatDate(date_uploaded) : created_at ? formatDate(created_at) : updated_at ? formatDate(updated_at) : 'N/A'}
+                    {date_uploaded
+                      ? formatDate(date_uploaded)
+                      : created_at
+                        ? formatDate(created_at)
+                        : updated_at
+                          ? formatDate(updated_at)
+                          : "N/A"}
                   </span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Price: </span>
-                  <span className="font-bold text-gray-900">{price ? formatCurrency(price) : 'N/A'}</span>
+                  <span className="font-bold text-gray-900">
+                    {price ? formatCurrency(price) : "N/A"}
+                  </span>
                 </div>
               </div>
 
@@ -220,7 +238,7 @@ const AdminVendorProductDetail = () => {
                   <span className="font-semibold text-gray-700">
                     SKU / Product ID:{" "}
                   </span>
-                  <span className="text-gray-900">{sku || 'N/A'}</span>
+                  <span className="text-gray-900">{sku || "N/A"}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">
@@ -323,7 +341,9 @@ const AdminVendorProductDetail = () => {
                   Last Purchase Date
                 </p>
                 <p className="text-lg font-bold text-gray-900">
-                  {analytics?.last_sale_date ? formatDate(analytics.last_sale_date) : 'No sales yet'}
+                  {analytics?.last_sale_date
+                    ? formatDate(analytics.last_sale_date)
+                    : "No sales yet"}
                 </p>
               </div>
               <div className="rounded-full bg-blue-100 p-3 text-blue-600">

@@ -1,12 +1,14 @@
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import Table from "../Table.jsx";
 import Pagination from "../Pagination.jsx";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 // import { getStatusClasses } from "../../utils/helper";
 import AdminFilterBar from "../AdminFilterBar.jsx";
 import { useVendorList } from "./useVendorList.js";
 import { LoadingSpinner } from "../../../ui/Loading/LoadingSpinner.jsx";
 import { PAGE_SIZE } from "../../../utils/constants.js";
+import { formatCurrency } from "../../../utils/formatCurrency.js";
+import { safeRender } from "../../../utils/helper.js";
 
 const headers = [
   { key: "sn", label: "SN", className: "w-16" },
@@ -31,6 +33,10 @@ const VendorList = () => {
   const [searchTerm, setSearchTerm] = useState(
     searchParams.get("search") || "",
   );
+
+  const currentPage = !searchParams.get("page")
+    ? 1
+    : Number(searchParams.get("page"));
 
   // Debounce search term and update URL
   useEffect(() => {
@@ -68,7 +74,7 @@ const VendorList = () => {
         { value: "all", label: "Default" },
         { value: "approved_at", label: "Date Approved" },
         { value: "date_joined", label: "Date Joined" },
-        { value: "vendor_name", label: "Vendor Name" },
+        { value: "vendor_name", label: "Designer Name" },
         { value: "business_name", label: "Business Name" },
         { value: "total_earnings", label: "Total Earnings" },
         { value: "product_tags_count", label: "Product Tags" },
@@ -110,20 +116,33 @@ const VendorList = () => {
     setSearchParams(searchParams);
   };
 
-  // Sync currentPage with URL params
-  const currentPage = !searchParams.get("page") ? 1 : Number(searchParams.get("page"));
   const itemsPerPage = PAGE_SIZE; // Use PAGE_SIZE constant
-  
+
   const setCurrentPage = (page) => {
     searchParams.set("page", page.toString());
     setSearchParams(searchParams);
   };
 
+  // Apply client-side status filtering as fallback since backend filtering is broken
+  const filteredVendors = useMemo(() => {
+    if (!vendors) return [];
+
+    // If a specific status is selected, filter client-side as backend isn't filtering properly
+    if (filters.status !== "all") {
+      return vendors.filter(
+        (vendor) =>
+          vendor.status?.toLowerCase() === filters.status.toLowerCase(),
+      );
+    }
+
+    return vendors;
+  }, [vendors, filters.status]);
+
   // Use server-side data directly for display (already paginated by server)
-  const currentItems = vendors || [];
-  
-  // Use total from API response for pagination
-  const totalItems = total || 0;
+  const currentItems = filteredVendors || [];
+
+  // Calculate total items based on filtered results
+  const totalItems = filteredVendors?.length || 0;
 
   if (isLoading)
     return (
@@ -134,57 +153,58 @@ const VendorList = () => {
   if (error)
     return (
       <div className="flex h-screen items-center justify-center text-red-500">
-        Error loading Vendors data
+        Error loading Designers data
       </div>
     );
 
   // Render each row in the table
   const renderVendorRow = (vendor, index) => {
     const serialNumber = (currentPage - 1) * itemsPerPage + index + 1;
+
     return [
-    <td key="sn" className="px-6 py-4 text-sm font-medium text-gray-900">
-      {serialNumber}
-    </td>,
-    <td key="vendor_name" className="px-6 py-4 text-sm">
-      <Link
-        to={`/admin/vendors/${vendor.vendor_id}`}
-        className="text-blue-600 hover:text-blue-800 hover:underline"
+      <td key="sn" className="px-6 py-4 text-sm font-medium text-gray-900">
+        {serialNumber}
+      </td>,
+      <td key="vendor_name" className="px-6 py-4 text-sm">
+        <Link
+          to={`/admin/vendors/${vendor.vendor_id}`}
+          className="text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {safeRender(vendor.vendor_name)}
+        </Link>
+      </td>,
+      <td key="email" className="px-6 py-4 text-sm text-gray-500">
+        {safeRender(vendor.email)}
+      </td>,
+      <td key="product_tags_count" className="px-6 py-4 text-sm text-gray-500">
+        {safeRender(vendor.product_tags_count)}
+      </td>,
+      <td
+        key="total_earnings"
+        className="px-6 py-4 text-sm font-medium text-gray-900"
       >
-        {vendor.vendor_name}
-      </Link>
-    </td>,
-    <td key="email" className="px-6 py-4 text-sm text-gray-500">
-      {vendor.email}
-    </td>,
-    <td key="product_tags_count" className="px-6 py-4 text-sm text-gray-500">
-      {vendor.product_tags_count}
-    </td>,
-    <td
-      key="total_earnings"
-      className="px-6 py-4 text-sm font-medium text-gray-900"
-    >
-      ${vendor.total_earnings?.toLocaleString()}
-    </td>,
-    <td key="status" className="px-6 py-4">
-      <span
-        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold leading-5 ${
-          vendor.status?.toLowerCase() === 'approved'
-            ? 'bg-green-100 text-green-800'
-            : vendor.status?.toLowerCase() === 'pending'
-            ? 'bg-yellow-100 text-yellow-800'
-            : vendor.status?.toLowerCase() === 'rejected'
-            ? 'bg-red-100 text-red-800'
-            : vendor.status?.toLowerCase() === 'suspended'
-            ? 'bg-orange-100 text-orange-800'
-            : vendor.status?.toLowerCase() === 'deactivated'
-            ? 'bg-gray-100 text-gray-800'
-            : 'bg-gray-100 text-gray-800'
-        }`}
-      >
-        {vendor.status?.charAt(0).toUpperCase() + vendor.status?.slice(1)}
-      </span>
-    </td>,
-  ];
+        {formatCurrency(vendor.total_earnings)}
+      </td>,
+      <td key="status" className="px-6 py-4">
+        <span
+          className={`inline-flex rounded-full px-3 py-1 text-xs leading-5 font-semibold ${
+            vendor.status?.toLowerCase() === "approved"
+              ? "bg-green-100 text-green-800"
+              : vendor.status?.toLowerCase() === "pending"
+                ? "bg-yellow-100 text-yellow-800"
+                : vendor.status?.toLowerCase() === "rejected"
+                  ? "bg-red-100 text-red-800"
+                  : vendor.status?.toLowerCase() === "suspended"
+                    ? "bg-orange-100 text-orange-800"
+                    : vendor.status?.toLowerCase() === "deactivated"
+                      ? "bg-gray-100 text-gray-800"
+                      : "bg-gray-100 text-gray-800"
+          }`}
+        >
+          {vendor.status?.charAt(0).toUpperCase() + vendor.status?.slice(1)}
+        </span>
+      </td>,
+    ];
   };
 
   return (
@@ -192,7 +212,7 @@ const VendorList = () => {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Designers</h1>
         </div>
 
         {/* Action Bar */}
@@ -213,7 +233,7 @@ const VendorList = () => {
             data={currentItems}
             renderRow={renderVendorRow}
             onRowClick={(vendor) =>
-              navigate(`/admin-vendors/${vendor.vendor_id}`)
+              navigate(`/admin/vendors/${vendor.vendor_id}`)
             }
             className="rounded-lg bg-white"
             theadClassName="bg-gray-50"

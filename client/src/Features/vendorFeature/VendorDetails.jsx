@@ -8,7 +8,7 @@ import { useVendor } from "./useVendor.js";
 import { useFollowVendorCombine } from "./useFollowVendorCombine.js";
 import { useFollowVendorList } from "./useFollowVendorList.js";
 import { useUser } from "../authentication/useUser.js";
-import {getImageUrl} from '../../utils/imageUtil.js'
+import { getImageUrl } from "../../utils/imageUtil.js";
 
 function VendorDetails() {
   const navigate = useNavigate();
@@ -22,8 +22,6 @@ function VendorDetails() {
     error: productsError,
     total,
   } = useVendorProducts(vendorId, PAGE_SIZE);
-  console.log("vendor products", products);
-  console.log("total", total);
 
   // Only fetch followed vendors list if user exists
   const { followedVendorIds, isLoading: isLoadingFollowed } =
@@ -51,7 +49,7 @@ function VendorDetails() {
   }
 
   if (!vendor) {
-    return <div>Vendor not found</div>;
+    return <div>Designer not found</div>;
   }
 
   const { first_name, last_name, country, profile_image } = vendor?.User || {};
@@ -74,7 +72,10 @@ function VendorDetails() {
       <div className="mt-6 mb-6 flex flex-col items-center gap-6 rounded-lg p-6 shadow-lg md:flex-row md:items-start md:justify-center">
         <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-neutral-700 md:h-40 md:w-40">
           <img
-            src={getImageUrl(profile_image) || getPlaceholder(first_name, last_name)}
+            src={
+              getImageUrl(profile_image) ||
+              getPlaceholder(first_name, last_name)
+            }
             alt={name || "Vendor"}
             className="h-full w-full object-cover"
             onError={(e) => {
@@ -143,7 +144,7 @@ function VendorDetails() {
             products={products}
             showViewMore={false}
           />
-          <Pagination count={total} limit={PAGE_SIZE}/>
+          <Pagination count={total} limit={PAGE_SIZE} />
         </>
       )}
     </div>

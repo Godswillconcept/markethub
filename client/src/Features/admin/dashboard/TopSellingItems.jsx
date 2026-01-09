@@ -1,10 +1,10 @@
-
 import { useTopItem } from "./useTopItem.js";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import Modal from "../../../ui/Modal.jsx";
 import { getImageUrl } from "../../../utils/imageUtil.js";
 import DateRangeFilter from "../../../ui/DateRangeFilter.jsx";
+import { safeRender } from "../../../utils/helper.js";
 // import Modal from "./Modal";
 
 function TopSellingItems() {
@@ -51,8 +51,10 @@ function TopSellingItems() {
           {top2?.map((item) => (
             <div
               key={item.id}
-              className="rounded-md border border-gray-200 p-2 hover:shadow-sm cursor-pointer"
-              onClick={() => navigate(`/admin/vendor-products/${item.product.id}`)}
+              className="cursor-pointer rounded-md border border-gray-200 p-2 hover:shadow-sm"
+              onClick={() =>
+                navigate(`/admin/vendor-products/${item.product.id}`)
+              }
             >
               <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded bg-gray-100">
                 <img
@@ -63,10 +65,16 @@ function TopSellingItems() {
                 />
               </div>
               <div className="px-1">
-                <p className="text-xs font-medium text-gray-800">{item.product.name}</p>
+                <p className="text-xs font-medium text-gray-800">
+                  {safeRender(item.product.name)}
+                </p>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">{item.product.sold_units} Sales</p>
-                  <span className="text-xs font-medium text-green-600">+68%</span>
+                  <p className="text-xs text-gray-500">
+                    {item.product.sold_units} Sales
+                  </p>
+                  <span className="text-xs font-medium text-green-600">
+                    +68%
+                  </span>
                 </div>
               </div>
             </div>
@@ -100,8 +108,10 @@ function TopSellingItems() {
             {topProduct?.map((item, index) => (
               <div
                 key={item.id}
-                className="rounded-md border border-gray-200 p-3 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/admin/vendor-products/${item.product.id}`)}
+                className="cursor-pointer rounded-md border border-gray-200 p-3 transition-shadow hover:shadow-md"
+                onClick={() =>
+                  navigate(`/admin/vendor-products/${item.product.id}`)
+                }
               >
                 <div className="mb-2 flex h-32 w-full items-center justify-center overflow-hidden rounded bg-gray-100">
                   <img
@@ -113,11 +123,15 @@ function TopSellingItems() {
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-gray-400">#{index + 1}</span>
-                    <span className="text-xs font-medium text-green-600">+68%</span>
+                    <span className="text-xs font-semibold text-gray-400">
+                      #{index + 1}
+                    </span>
+                    <span className="text-xs font-medium text-green-600">
+                      +68%
+                    </span>
                   </div>
-                  <p className="text-sm font-medium text-gray-800 line-clamp-2">
-                    {item.product.name}
+                  <p className="line-clamp-2 text-sm font-medium text-gray-800">
+                    {safeRender(item.product.name)}
                   </p>
                   <p className="text-sm text-gray-600">
                     {item.product.sold_units} Sales

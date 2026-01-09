@@ -1,13 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { createReviews, deleteReview, getUserProductReview, updateReviews } from "../../services/apiProduct.js";
-// import {
-//     createReviews,
-//     updateReviews,
-//     getReviewById,
-//     getUserProductReview,
-//     deleteReview
-// } from "../services/apiProduct";
 
 // Hook to fetch a review by ID
 export function useReviewById(reviewId, enabled = true) {

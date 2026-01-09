@@ -163,7 +163,7 @@ const VendorsApplication = () => {
         {/* Header Section */}
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">
-            Vendors Application
+            Designer's Application
           </h1>
         </div>
 
@@ -176,7 +176,7 @@ const VendorsApplication = () => {
           onResetFilters={handleResetFilters}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
-          searchPlaceholder="Search vendors"
+          searchPlaceholder="Search designers"
         />
 
         {/* Vendors Application Table */}

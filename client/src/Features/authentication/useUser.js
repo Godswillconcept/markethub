@@ -20,7 +20,7 @@ export function useUser() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isSessionValid, setIsSessionValid] = useState(false);
-  
+
   const token = localStorage.getItem("token");
   const sessionId = localStorage.getItem("session_id");
 
@@ -40,18 +40,18 @@ export function useUser() {
       if (event.key === 'auth_event') {
         try {
           const authEvent = JSON.parse(event.newValue);
-          
+
           switch (authEvent.type) {
             case 'token_refreshed':
               console.log('[useUser] Token refreshed in another tab, invalidating user query');
-              queryClient.invalidateQueries({ queryKey: ["user"] });
+              queryClient.invalidateQueries({ queryKey: ["currentUser"] });
               setIsSessionValid(true);
               break;
-              
+
             case 'logout':
               console.log('[useUser] Logout detected in another tab, clearing user data');
-              queryClient.setQueryData(["user"], null);
-              queryClient.removeQueries(["user"]);
+              queryClient.setQueryData(["currentUser"], null);
+              queryClient.removeQueries(["currentUser"]);
               setIsSessionValid(false);
               navigate("/login");
               break;
@@ -67,7 +67,7 @@ export function useUser() {
   }, [queryClient, navigate]);
 
   const { data: user, isLoading, error, refetch } = useQuery({
-    queryKey: ["user"],
+    queryKey: ["currentUser"],
     queryFn: currentUser,
     // Only enable query if we have a complete auth session
     enabled: hasValidAuthSession(),
@@ -99,7 +99,7 @@ export function useUser() {
       localStorage.removeItem("refreshToken");
       localStorage.removeItem("session_id");
       localStorage.removeItem("session_activity");
-      queryClient.removeQueries(["user"]);
+      queryClient.removeQueries(["currentUser"]);
       setIsSessionValid(false);
       toast.error("Your session has expired. Please log in again.");
       navigate("/login");

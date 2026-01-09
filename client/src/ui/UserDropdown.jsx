@@ -9,11 +9,18 @@ import { hasRole } from "../utils/auth.js";
 import { getPlaceholder } from "../utils/helper.js";
 import { getImageUrl } from "../utils/imageUtil.js";
 
-export const DropdownItem = ({ to, onClick, children, className = "", icon: Icon }) => (
+export const DropdownItem = ({
+  to,
+  onClick,
+  children,
+  className = "",
+  icon: Icon,
+}) => (
   <Menu.Item>
     {({ active }) => {
-      const baseClasses = `${active ? "bg-gray-100 text-gray-900" : "text-gray-700"
-        } group flex w-full items-center rounded-md px-3 py-2 text-sm ${className}`;
+      const baseClasses = `${
+        active ? "bg-gray-100 text-gray-900" : "text-gray-700"
+      } group flex w-full items-center rounded-md px-3 py-2 text-sm ${className}`;
 
       const content = (
         <>
@@ -28,14 +35,16 @@ export const DropdownItem = ({ to, onClick, children, className = "", icon: Icon
         <NavLink
           to={to}
           className={baseClasses}
-          onClick={() => console.log('[UserDropdown] Navigation clicked:', { to, children })}
+          onClick={() =>
+            console.log("[UserDropdown] Navigation clicked:", { to, children })
+          }
         >
           {content}
         </NavLink>
       ) : (
         <button
           onClick={() => {
-            console.log('[UserDropdown] Button clicked:', { children });
+            console.log("[UserDropdown] Button clicked:", { children });
             if (onClick) onClick();
           }}
           className={baseClasses}
@@ -52,14 +61,14 @@ const UserDropdown = ({ children }) => {
   const { user } = useUser();
   const { logout, isPending } = useLogout();
 
-  console.log('[UserDropdown] Render:', {
+  console.log("[UserDropdown] Render:", {
     hasUser: !!user,
     userRoles: user?.user?.roles || user?.roles || [],
-    userName: user?.user?.first_name || user?.first_name
+    userName: user?.user?.first_name || user?.first_name,
   });
 
   if (!user) {
-    console.log('[UserDropdown] No user data, returning null');
+    console.log("[UserDropdown] No user data, returning null");
     return null;
   }
 
@@ -77,7 +86,7 @@ const UserDropdown = ({ children }) => {
               alt={`${user.first_name} ${user.last_name}`}
               className="h-8 w-8 rounded-full object-cover"
             />
-            <span className="hidden sm:inline font-medium text-sm text-gray-700">
+            <span className="hidden text-sm font-medium text-gray-700 sm:inline">
               {user?.user?.first_name || user?.first_name}
             </span>
           </Menu.Button>
@@ -92,7 +101,7 @@ const UserDropdown = ({ children }) => {
           leaveFrom="transform opacity-100 scale-100"
           leaveTo="transform opacity-0 scale-95"
         >
-          <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+          <Menu.Items className="ring-opacity-5 absolute right-0 z-50 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none">
             <div className="py-1">
               {children ? (
                 children
@@ -113,7 +122,7 @@ const UserDropdown = ({ children }) => {
                   {/* Vendor Dashboard Link */}
                   {hasRole(user, "vendor") && (
                     <DropdownItem to="/vendor/dashboard" icon={MdDashboard}>
-                      Vendor Dashboard
+                      Designer Dashboard
                     </DropdownItem>
                   )}
 

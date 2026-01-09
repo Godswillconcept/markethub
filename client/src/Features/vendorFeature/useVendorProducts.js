@@ -15,11 +15,11 @@ export function useVendorProducts(vendorId, limit = 10) {
         data,
         error,
     } = useQuery({
-        queryKey: ["vendors", vendorId, page],
+        queryKey: ["vendor-products", vendorId, page],
         queryFn: () => getVendorProducts(vendorId, { page, limit }),
         enabled: !!vendorId, // Only run query when slug exists
         onSuccess: (data) => {
-            queryClient.setQueryData(["vendors", vendorId, page], data);
+            queryClient.setQueryData(["vendor-products", vendorId, page], data);
         },
     });
 
@@ -29,14 +29,14 @@ export function useVendorProducts(vendorId, limit = 10) {
 
     if (page < pageCount && vendorId) {
         queryClient.prefetchQuery({
-            queryKey: ["vendors", vendorId, page + 1],
+            queryKey: ["vendor-products", vendorId, page + 1],
             queryFn: () => getVendorProducts(vendorId, { page: page + 1, limit }),
         });
     }
 
     if (page > 1 && vendorId) {
         queryClient.prefetchQuery({
-            queryKey: ["vendors", vendorId, page - 1],
+            queryKey: ["vendor-products", vendorId, page - 1],
             queryFn: () => getVendorProducts(vendorId, { page: page - 1, limit }),
         });
     }

@@ -1,9 +1,8 @@
-
 import { useTopVendor } from "./useTopVendor.js";
 import { useState } from "react";
 import Modal from "../../../ui/Modal.jsx";
 import DateRangeFilter from "../../../ui/DateRangeFilter.jsx";
-
+import { safeRender } from "../../../utils/helper.js";
 
 const TopSellingVendor = () => {
   // Date range state with default to current month
@@ -30,7 +29,9 @@ const TopSellingVendor = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Sort vendors and select top 3
-  const sortedVendors = [...topVendor].sort((a, b) => b.stats.total_units_sold - a.stats.total_units_sold);
+  const sortedVendors = [...topVendor].sort(
+    (a, b) => b.stats.total_units_sold - a.stats.total_units_sold,
+  );
   const top3Vendors = sortedVendors.slice(0, 3);
 
   // Find the max units for scaling progress bars
@@ -42,7 +43,9 @@ const TopSellingVendor = () => {
         <div className="rounded-lg bg-white p-4">
           {/* Header */}
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-gray-800">Top Selling Vendor</h2>
+            <h2 className="text-sm font-bold text-gray-800">
+              Top Selling Designer
+            </h2>
             <DateRangeFilter
               startDate={dateRange.startDate}
               endDate={dateRange.endDate}
@@ -55,14 +58,17 @@ const TopSellingVendor = () => {
             <div className="text-center text-sm text-gray-500">Loading...</div>
           )}
           {error && (
-            <div className="text-center text-sm text-red-500">Error loading vendors</div>
+            <div className="text-center text-sm text-red-500">
+              Error loading designers
+            </div>
           )}
 
           {/* Vendor List - Fixed Layout */}
           {!isLoading && !error && (
             <div className="space-y-3">
               {top3Vendors.map((vendor, index) => {
-                const progress = (vendor.stats.total_units_sold / maxUnits) * 100;
+                const progress =
+                  (vendor.stats.total_units_sold / maxUnits) * 100;
 
                 // Optional: Add subtle color difference by rank
                 const barColor =
@@ -88,10 +94,12 @@ const TopSellingVendor = () => {
                         <span className="text-xs font-bold text-gray-800">
                           {vendor.stats.total_units_sold}
                         </span>
-                        <span className="text-xs font-bold text-black">Units</span>
+                        <span className="text-xs font-bold text-black">
+                          Units
+                        </span>
                       </div>
-                      <span className="text-xs text-gray-500 truncate">
-                        {vendor.business_name || vendor.name}
+                      <span className="truncate text-xs text-gray-500">
+                        {safeRender(vendor.business_name || vendor.name)}
                       </span>
                     </div>
                   </div>
@@ -118,18 +126,20 @@ const TopSellingVendor = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="All Top-Selling Vendors"
+        title="All Top-Selling Designers"
       >
         {isLoading ? (
           <div className="text-center text-gray-500">Loading...</div>
         ) : error ? (
-          <div className="text-center text-red-500">Error loading vendors</div>
+          <div className="text-center text-red-500">
+            Error loading designers
+          </div>
         ) : (
           <div className="space-y-3">
             {sortedVendors.map((vendor, index) => (
               <div
                 key={vendor.id}
-                className="flex items-center gap-4 rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                className="flex items-center gap-4 rounded-lg border border-gray-200 p-4 transition-shadow hover:shadow-md"
               >
                 {/* Rank Badge */}
                 <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600">
@@ -137,9 +147,9 @@ const TopSellingVendor = () => {
                 </div>
 
                 {/* Vendor Info */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-gray-800 truncate">
-                    {vendor.business_name || vendor.name}
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-base font-semibold text-gray-800">
+                    {safeRender(vendor.business_name || vendor.name)}
                   </h3>
                   <p className="text-sm text-gray-500">
                     Total Sales: {vendor.stats.total_units_sold} units
@@ -147,12 +157,12 @@ const TopSellingVendor = () => {
                 </div>
 
                 {/* Progress Bar (Horizontal) */}
-                <div className="hidden sm:block w-32 flex-shrink-0">
+                <div className="hidden w-32 flex-shrink-0 sm:block">
                   <div className="relative h-3 overflow-hidden rounded-full bg-gray-200">
                     <div
-                      className="absolute left-0 top-0 h-full rounded-full bg-blue-500 transition-all duration-500"
+                      className="absolute top-0 left-0 h-full rounded-full bg-blue-500 transition-all duration-500"
                       style={{
-                        width: `${(vendor.stats.total_units_sold / sortedVendors[0].stats.total_units_sold) * 100}%`
+                        width: `${(vendor.stats.total_units_sold / sortedVendors[0].stats.total_units_sold) * 100}%`,
                       }}
                     ></div>
                   </div>
@@ -161,7 +171,7 @@ const TopSellingVendor = () => {
             ))}
           </div>
         )}
-      </Modal >
+      </Modal>
     </>
   );
 };

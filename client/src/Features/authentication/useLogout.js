@@ -29,9 +29,9 @@ export function useLogout() {
             }));
 
             // Clear React Query cache
-            queryClient.removeQueries({ queryKey: ["user"] });
+            queryClient.removeQueries({ queryKey: ["currentUser"] });
             queryClient.removeQueries({ queryKey: ["cart"] });
-            
+
             // Clear Redux cart state
             dispatch(clearCart());
 
@@ -42,7 +42,7 @@ export function useLogout() {
             console.error('❌ Logout error:', error);
             const errorMessage = error?.response?.data?.message || error?.message || 'Logout failed';
             toast.error(errorMessage);
-            
+
             // Even if API call fails, clear local auth data and use AuthContext logout
             authLogout();
         }

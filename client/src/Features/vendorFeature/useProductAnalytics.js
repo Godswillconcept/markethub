@@ -1,15 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
-import { getProductAnalytics } from "../../services/apiVendors.js";
+import { getVendorProductByOverview } from "../../services/apiVendors.js";
 
 export function useProductAnalytics(productId) {
-    const { data, isLoading, } = useQuery({
+    const {
+        data: productAnalysis,
+        isLoading,
+        isError,
+        error,
+    } = useQuery({
         queryKey: ["product-analytics", productId],
-        queryFn: () => getProductAnalytics(productId),
+        queryFn: () => getVendorProductByOverview(productId),
+        enabled: !!productId && productId !== 'undefined', // Only run query if productId is valid
     });
 
     return {
-        analytics: data?.data || {},
+        productAnalysis: productAnalysis || {}, // ✅ default to object
         isLoading,
-
+        isError,
+        error,
     };
 }
