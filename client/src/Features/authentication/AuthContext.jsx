@@ -78,6 +78,33 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [queryClient, navigate]);
 
+  // Listen for token-refreshed custom event (same-tab sync)
+  useEffect(() => {
+    const handleTokenRefreshed = (event) => {
+      console.log("[AuthContext] Token refreshed event received in same tab", event.detail);
+      
+      // Update React state with new tokens
+      if (event.detail.token) {
+        setToken(event.detail.token);
+      }
+      
+      // Update session ID if it was refreshed
+      const newSessionId = localStorage.getItem("session_id");
+      if (newSessionId) {
+        setSessionId(newSessionId);
+      }
+      
+      // Invalidate user query to fetch fresh data
+      queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+      
+      // Update session nonce to trigger re-renders
+      setSessionNonce((n) => n + 1);
+    };
+
+    window.addEventListener("token-refreshed", handleTokenRefreshed);
+    return () => window.removeEventListener("token-refreshed", handleTokenRefreshed);
+  }, [queryClient]);
+
   const {
     data: user,
     isLoading,
@@ -214,8 +241,13 @@ export function AuthProvider({ children }) {
   // Derive authentication state
   // Handle both flat and nested user structures defensively
   const normalizedUser = user?.user || user;
-  const isAuthenticated =
-    !!(normalizedUser && normalizedUser.id) && isSessionValid;
+  
+  // isAuthenticated depends only on session validity, not on user data being loaded
+  // This breaks the circular dependency where isAuthenticated waited for user data
+  const isAuthenticated = isSessionValid;
+  
+  // isUserLoaded tracks when user data is available
+  const isUserLoaded = !!(normalizedUser && normalizedUser.id);
 
   const value = {
     user,
@@ -223,6 +255,7 @@ export function AuthProvider({ children }) {
     error,
     isAuthenticated,
     isSessionValid,
+    isUserLoaded,
     forceRefreshUser,
     setAuth,
     logout,
@@ -234,11 +267,12 @@ export function AuthProvider({ children }) {
       hasUser: !!user,
       isAuthenticated,
       isSessionValid,
+      isUserLoaded,
       isLoading,
       hasError: !!error,
       nonce: sessionNonce,
     });
-  }, [user, isAuthenticated, isSessionValid, isLoading, error, sessionNonce]);
+  }, [user, isAuthenticated, isSessionValid, isUserLoaded, isLoading, error, sessionNonce]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

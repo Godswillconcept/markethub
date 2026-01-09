@@ -1,10 +1,12 @@
 import { useAuth } from "./AuthContext.jsx";
+import { useUser } from "./useUser.js";
 import { Navigate, useLocation } from "react-router-dom";
 import { FiLoader } from "react-icons/fi";
 import { isTokenExpired } from "../../services/axios.js";
 
 export default function ProtectedRoute({ children, requiredRole = null }) {
   const { user, isLoading, isAuthenticated, isSessionValid } = useAuth();
+  const { isRefreshing } = useUser();
   const location = useLocation();
 
   // Check for valid session even if user data is loading
@@ -17,6 +19,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
   console.log('[ProtectedRoute] Authentication state:', {
     path: location.pathname,
     isLoading,
+    isRefreshing,
     isAuthenticated,
     isSessionValid,
     hasToken: !!token,
@@ -26,10 +29,10 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
     hasValidSession
   });
 
-  if (isLoading) {
-    // Show loading state while checking authentication
+  if (isLoading || isRefreshing) {
+    // Show loading state while checking authentication or refreshing token
     // Don't redirect immediately as this could be during initial load or token refresh
-    console.log('[ProtectedRoute] Authentication loading, showing spinner');
+    console.log('[ProtectedRoute] Authentication loading or refreshing, showing spinner');
     return (
       <div className="flex h-screen items-center justify-center">
         <FiLoader className="h-8 w-8 animate-spin" />
@@ -38,6 +41,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
   }
 
   // Check if user is authenticated and session is valid
+  // Only redirect when both isLoading and isRefreshing are false
   if (!isAuthenticated || !isSessionValid) {
     // If context says not authenticated, but we have a valid token in localStorage,
     // it might be a race condition where context hasn't updated its state yet.
@@ -54,6 +58,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
     console.log('[ProtectedRoute] Authentication failed:', {
       isAuthenticated,
       isSessionValid,
+      isRefreshing,
       hasToken: !!token,
       hasSessionId: !!sessionId,
       tokenExpired,

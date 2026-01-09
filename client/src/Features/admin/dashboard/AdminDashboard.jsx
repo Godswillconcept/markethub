@@ -60,7 +60,7 @@ export default function AdminDashboard() {
     monthlySales,
   } = stats;
   const { user } = useUser();
-  const userData = user.user;
+  const userData = user?.user || user || {};
   const { first_name, last_name, profile_image } = userData;
   console.log(first_name, last_name, profile_image);
 

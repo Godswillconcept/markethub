@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
-import Tags from "@yaireo/tagify/dist/react.tagify";
+import Tags from "@yaireo/tagify/react";
 import "@yaireo/tagify/dist/tagify.css";
 import "./TagifyTags.css";
 import axiosInstance from "../../services/axios.js";

@@ -20,6 +20,7 @@ export function useUser() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [isSessionValid, setIsSessionValid] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const token = localStorage.getItem("token");
   const sessionId = localStorage.getItem("session_id");
@@ -65,6 +66,26 @@ export function useUser() {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [queryClient, navigate]);
+
+  // Listen for token-refreshed custom event (same-tab sync)
+  useEffect(() => {
+    const handleTokenRefreshStarted = () => {
+      console.log('[useUser] Token refresh started event received, setting isRefreshing to true');
+      setIsRefreshing(true);
+    };
+
+    const handleTokenRefreshed = () => {
+      console.log('[useUser] Token refreshed event received in same tab, setting isRefreshing to false');
+      setIsRefreshing(false);
+    };
+
+    window.addEventListener('token-refresh-started', handleTokenRefreshStarted);
+    window.addEventListener('token-refreshed', handleTokenRefreshed);
+    return () => {
+      window.removeEventListener('token-refresh-started', handleTokenRefreshStarted);
+      window.removeEventListener('token-refreshed', handleTokenRefreshed);
+    };
+  }, []);
 
   const { data: user, isLoading, error, refetch } = useQuery({
     queryKey: ["currentUser"],
@@ -122,6 +143,7 @@ export function useUser() {
     error,
     isAuthenticated: !!user && isSessionValid,
     isSessionValid,
+    isRefreshing,
     forceRefreshUser,
   };
 }

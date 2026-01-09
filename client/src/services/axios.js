@@ -89,6 +89,10 @@ const refreshTokenWithRetry = async () => {
 
   isRefreshing = true;
 
+  // Dispatch custom event to notify components that token refresh is starting
+  const tokenRefreshStartedEvent = new CustomEvent('token-refresh-started');
+  window.dispatchEvent(tokenRefreshStartedEvent);
+
   const tryRefresh = async (attempt = 1) => {
     try {
       const refreshToken = localStorage.getItem("refreshToken");
@@ -128,18 +132,34 @@ const refreshTokenWithRetry = async () => {
 
       console.log("[Axios] ✅ Token refreshed successfully");
       
-      // Notify other tabs about token refresh
+      // Notify other tabs about token refresh via localStorage event
       window.localStorage.setItem('auth_event', JSON.stringify({
         type: 'token_refreshed',
         timestamp: Date.now(),
         token: access.token
       }));
 
+      // Dispatch custom event to trigger React state updates in the same tab
+      const tokenRefreshedEvent = new CustomEvent('token-refreshed', {
+        detail: {
+          token: access.token,
+          refreshToken: refresh.token,
+          timestamp: Date.now()
+        }
+      });
+      window.dispatchEvent(tokenRefreshedEvent);
+
       return access.token;
     } catch (error) {
       console.error(`[Axios] ❌ Token refresh attempt ${attempt} failed:`, error.message);
       
       if (attempt < MAX_RETRY_ATTEMPTS) {
+        // If it's a client error (4xx), don't retry - the token is invalid/expired
+        if (error.response && error.response.status >= 400 && error.response.status < 500) {
+          console.error("[Axios] Client error during refresh (invalid token?), aborting retries.");
+          throw error;
+        }
+
         // Exponential backoff: delay = base * 2^attempt
         const delay = BASE_RETRY_DELAY * Math.pow(2, attempt - 1);
         console.log(`[Axios] Retrying in ${delay}ms...`);
@@ -181,7 +201,11 @@ const refreshTokenWithRetry = async () => {
     }
   };
 
-  return tryRefresh();
+  try {
+    return await tryRefresh();
+  } finally {
+    isRefreshing = false;
+  }
 };
 
 /**
